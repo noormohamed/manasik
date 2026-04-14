@@ -1,0 +1,799 @@
+.rtl-switch {
+    position: fixed;
+    right: 0;
+    bottom: 50px;
+    z-index: 999;
+    border: none;
+    background-color: var(--optionalColor);
+    color: #fff;
+    font-size: 14px;
+    padding: 3px 10px;
+}
+
+[dir="rtl"] {
+    .ms-3 {
+        margin-left: 0 !important;
+        margin-right: 1rem;
+    }
+
+    .location-track {
+        margin-right: 0; 
+        margin-left: -426px; 
+
+        .col-lg-3 {
+            &:nth-child(1) {
+                .form-group {
+                    &::before {
+                        right: auto;
+                        left: 25px;
+                    }
+                }
+            }
+            &:nth-child(2) {
+                .form-group {
+                    &::before {
+                        right: auto;
+                        left: 16px;
+                    }
+                }
+            }
+            &:nth-child(3) {
+                .form-group {
+                    &::before {
+                        right: auto;
+                        left: 23px;
+                    }
+                }
+            }
+        }
+    }
+
+    .benefits-single-item {
+        &::before {
+            right: auto; 
+            left: -60px; 
+        }
+    }
+
+    .destination-slider {
+        .swiper-button-prev {
+            left: 50px;
+            right: auto;
+        }
+        .swiper-button-next {
+          right: auto;
+          left: 0;
+        }
+    }
+
+    .section-title {
+         
+        &.left-title { 
+            margin-right: 0;
+            text-align: right;
+        }
+    }
+    .most-popular-tab {
+        padding: 0;
+
+        .nav-item {
+            margin-right: 0;
+            margin-left: 15px;
+
+            &:last-child {
+                margin-left: 0;
+            }
+        }
+    }
+
+    .most-popular-single-item {
+        .most-popular-single-content {
+            .most-popular-single-star {
+                padding: 0;
+            }
+            .most-popular-single-location {
+                i {
+                    margin-right: 0;
+                    margin-left: 8px;
+                }
+            }
+        }
+    }
+
+    .works-single-item {
+        .works-single-img {
+            .count {
+                right: auto; 
+                left: -17px; 
+            }
+        }
+    }
+
+    .discount-single-item {
+        .discount {
+            left: auto; 
+            right: 30px; 
+        }
+    }
+
+    .choose-content {
+        .choose-content-list {
+            li {
+                .ms-40 {
+                    margin-left: 0;
+                    margin-right: 30px;
+                }
+            }
+        }
+    }
+
+    .author-single-item {
+        .rate {
+            span { 
+                margin-left: 0;
+                margin-right: 5px;
+            }
+        }
+    }
+
+    .ms-4 {
+        margin-left: 0 !important;
+        margin-right: 1.5rem !important;
+    }
+
+    .banner-content-two {
+        .banner-content-wrap { 
+            margin-left: 0;
+            margin-right: 90px;
+        }
+        .ms-140 {
+            margin-left: 0;
+            margin-right: 140px;
+        }
+    }
+
+    .banner-buy-sell-two { 
+        margin-right: 0; 
+        margin-left: -291px; 
+
+        .banner-buy-sell-tabs {
+            margin-left: 0;
+            margin-right: 20px;
+            padding: 0;
+
+            .nav-item {
+                margin-right: 0;
+                margin-left: 10px;
+
+                &:last-child {
+                    margin-left: 0;
+                }
+            }
+        }
+        .buy-sell-form {
+            .form-group {
+                .form-control {
+                    padding-left: 0;
+                    padding-right: 40px;
+                }
+            }
+        }
+    }
+
+
+    .house-listing-single-item {
+        .house-listing-single-img {
+            img {
+                border-radius: 0 20px 20px 0;
+            }
+        }
+        .house-listing-single-content {
+            border-radius: 20px 0 0 20px;
+            border: 1px solid rgba(17, 24, 39, 0.14);
+            border-left: 1px solid rgba(17, 24, 39, 0.14);
+
+            .house-listing-fe-list {
+                padding-right: 0;
+
+                li {
+                    margin-right: 0;
+                    margin-left: 20px;
+                
+                    span {
+                        margin-left: 0;
+                        margin-right: 10px;
+                    }
+                }
+            }
+        }
+    }
+
+    .ms-2 {
+        margin-left: 0 !important;
+        margin-right: 0.5rem !important;
+    }
+
+    .why-choose-tofy-content {
+        ul {
+            li {
+                .ms-30 {
+                    margin-left: 0;
+                    margin-right: 30px;
+                }
+            }
+        }
+    }
+
+    .top-author-single-item {
+        .top-author-single-img {
+            .listing {
+                left: auto;
+                right: 35px;
+            }
+            .social-link {
+                right: auto;
+                left: 40px;
+            }
+        }
+        .top-author-single-content {
+            ul {
+                li {
+                    margin-right: 0;
+                    margin-left: 30px;
+
+                    a {
+                        margin-left: 0;
+                        margin-right: 10px;
+                    }
+
+                    &:last-child {
+                        margin-left: 0;
+                    }
+                }
+            }
+        }
+    }
+
+    .funfact-single-item {
+        .funfact-single-content {
+            margin-left: 0;
+            margin-right: 18px;
+        }
+    }
+
+    .testimonial-slide-two {
+        .swiper-button-prev {
+            right: auto;
+            left: 50px;
+        }
+        .swiper-button-next {
+            right: auto;
+            left: 0;
+        }
+    }
+
+    .faq-accordion-wrap {
+        .accordion {
+            .accordion__item {
+                .accordion__button {
+                    text-align: right;
+                    padding-left: 0; 
+                    padding-right: 55px; 
+
+                    span {
+                        &::before {
+                            left: auto; 
+                            right: 0; 
+                        }
+                    }
+                    &:before {
+                        left: auto; 
+                        right: 14px; 
+                    }
+                    &::after {
+                        left: auto; 
+                        right: 19px; 
+                    }
+                }
+            }
+        }
+    }
+ 
+    .backtotop {
+        right: auto; 
+        left: 30px; 
+    }
+
+    .banner-content {
+        &.style-three { 
+            margin-left: 0;
+            margin-right: 170px;
+
+            .location-track { 
+                margin-left: 0; 
+                margin-right: -160px;
+            }
+        }
+    }
+
+    .destination-content {
+        .destination-content-list {
+            li {
+                .ms-35 {
+                    margin-left: 0;
+                    margin-right: 35px;
+                }
+            }
+        }
+    }
+    
+    .how-its-work-single-item {
+        .ms-30 {
+            margin-left: 0;
+            margin-right: 30px;
+        }
+    }
+
+    .blog-single-item {
+        .blog-single-content {
+            ul {
+                li {
+                    margin-right: 0;
+                    margin-left: 20px;
+
+                    padding-right: 0; 
+                    padding-left: 20px; 
+
+                    &::before {
+                        left: 0;
+                        right: auto;
+                    }
+                }
+            }
+        }
+    }
+
+    .page-banner-content {
+        ul {
+            &.style-two {
+                li {
+                    margin-right: 0;
+                    margin-left: 26px;
+
+                    &:last-child {
+                        margin-left: 0;
+                    }
+
+                    span {
+                        margin-left: 0;
+                        margin-right: 8px;
+                    }
+                }
+            }
+        }
+    }
+
+    .filter-drop {
+        li {
+            margin-left: 0;
+            margin-right: 20px;
+
+            .opacity-btn {
+                svg {
+                    margin-left: 0;
+                    margin-right: 4px;
+                }
+            }
+        }
+    }
+
+    .page-banner-content {
+        ul {
+            li { 
+                margin-right: 0;
+                margin-left: 10px;
+                padding-right: 0; 
+                padding-left: 10px; 
+
+                &::before {
+                    right: auto;
+                    left: 0;
+                }
+            }
+        }
+    }
+
+    .stay-details-content {
+        .post-info {
+            .share-save {
+                li {
+                    margin-right: 0;
+                    margin-left: 30px;
+
+                    &:last-child {
+                        margin-left: 0;
+                    }
+                }
+            }
+            .fe-list {
+                li {
+                    margin-right: 0;
+                    margin-left: 25px;
+
+                    &:last-child {
+                        margin-left: 0;
+                    }
+                }
+            }
+        }
+    }
+
+    .box-title {
+        &::before {
+            left: auto; 
+            right: 0; 
+        }
+    }
+
+    .me-2 {
+        margin-right: 0 !important;
+        margin-left: 0.5rem !important;
+    }
+
+    .end-0 {
+        right: auto !important;
+        left: 0 !important;
+    }
+
+    .blog-details-content {
+        .post-info {
+            .date {
+                margin-right: 0;
+                margin-left: 30px;
+            }
+            ul {
+                li {
+                    margin-right: 0;
+                    margin-left: 20px;
+                    padding-right: 0; 
+                    padding-left: 20px; 
+
+                    &:before {
+                        right: auto;
+                        left: 0;
+                    }
+                }
+            }
+        }
+    }
+
+    .text-end {
+        text-align: initial !important;
+        text-align: left !important;
+    }
+
+    .ms-md-4 {
+        margin-left: 0 !important;
+        margin-right: 1.5rem !important;
+    }
+
+    .blog-details-content {
+        .tag-share {
+            .tag-list {
+                li {
+                    margin-right: 0;
+                    margin-left: 10px;
+
+                    &:last-child {
+                        margin-left: 0;
+                    }
+                }
+            }
+            .social-link {
+                li {
+                    margin-right: 0;
+                    margin-left: 10px;
+
+                    &:last-child {
+                        margin-left: 0;
+                    }
+                }
+            }
+        }
+    }
+
+    .author-content {
+        .social-link {
+            li {
+                margin-right: 0;
+                margin-left: 10px;
+
+                &:last-child {
+                    margin-left: 0;
+                }
+            }
+        }
+    }
+
+    .comment-list {
+        ul {
+            li {
+                .reply {
+                    right: auto;
+                    left: 30px;
+                }
+            }
+        }
+    }
+
+    .choosing-listing-categories-content {
+        .choosing-form {
+            h4 {
+                &::before {
+                    left: auto;
+                    right: 0;
+                }
+            }
+
+            .border-style {
+                &::before {
+                    left: auto;
+                    right: 0;
+                }
+            }
+        }
+        .choosing-btn {
+            .white-btn {
+                margin-right: 0;
+                margin-left: 25px;
+            }
+        }
+        .form-group {
+            .property {
+                svg {
+                    margin-right: 0;
+                    margin-left: 5px;
+                }
+            }
+        }
+        .form-control.form-select { 
+            padding-right: 35px;
+        }
+
+        .form-check {
+            padding-left: 0; 
+            padding-right: 1.5em; 
+    
+            .form-check-input {
+                float: right;
+                margin-left: 0;
+                margin-right: -1.5em;
+            }
+
+            .form-check-label {
+                margin-left: 0;
+                margin-right: 12px;
+            }
+        }
+    }
+
+    .chackout-content {
+        .pay-with {
+            &::before {
+                left: auto;
+                right: 0;
+            }
+        }
+    }
+
+    .account-content {
+        .account-tabs {
+            .nav-item {
+                margin-right: 0;
+                margin-left: 25px;
+
+                &:last-child {
+                    margin-left: 0;
+                }
+            }
+        }
+    }
+
+    .flight-accordion {
+        .accordion {
+            .accordion__item {
+                .accordion__heading {
+                    .accordion__button {
+                        text-align: right;
+                        padding: 30px 50px 30px 30px;
+                        
+                        &::before {
+                            margin-right: 0;
+                            margin-left: 10px;
+                        }
+                        .ms-70 {
+                            margin-left: 0;
+                            margin-right: 70px;
+                        }
+                    }
+                }
+
+                .accordion__panel {
+                    .flight-schedule {
+                        li {
+                            &::before {
+                                left: auto; 
+                                right: 15px; 
+                            }
+                        }
+                        &::before {
+                            right: auto;
+                            left: -105px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+
+
+
+
+
+  
+    // Responsive Style
+    @media only screen and (max-width : 767px) {
+        .location-track { 
+            margin-left: 0 !important;
+        }
+        .banner-content-two {
+            .banner-content-wrap { 
+                margin-right: 0;
+                .ms-140 { 
+                    margin-right: 0;
+                }
+            }
+        }
+        .banner-buy-sell-two {
+            margin-left: 0;
+        }
+
+        .banner-content {
+            &.style-three {
+                margin-right: 0;
+
+                .location-track {
+                    margin-right: 0;
+                }
+            }
+        }
+
+        .filter-drop {
+            li { 
+                margin-right: 0;
+            }
+        }
+    }
+
+    @media only screen and (min-width : 768px) and (max-width : 991px) {
+        .location-track { 
+            margin-left: 0 !important;
+        }
+        .banner-buy-sell-two {
+            margin-left: 0;
+        }
+        .banner-content-two {
+            .banner-content-wrap {
+                margin-right: 0;
+            }
+        }
+
+        .banner-buy-sell-two {
+            .buy-sell-form {
+                .form-group {
+                    .default-btn {
+                        padding: 16px 20px;
+                        font-size: 14px;
+                    }
+                }
+            }
+        }
+
+        .banner-content {
+            &.style-three {
+                margin-right: 0;
+
+                .location-track {
+                    margin-right: 0;
+                }
+            }
+        }
+
+        .filter-drop {
+            li { 
+                margin-right: 0;
+            }
+        }
+    }
+
+    @media only screen and (min-width : 992px) and (max-width : 1199px) {
+
+ 
+        .banner-buy-sell-two {
+            .buy-sell-form {
+                .form-group {
+                    .default-btn {
+                        padding: 16px 20px;
+                        font-size: 14px;
+                    }
+                }
+            }
+        } 
+
+        .banner-content {
+            .location-track { 
+                margin-left: -465px;
+            }
+            &.style-three {
+                h1 {
+                    font-size: 40px;
+                    line-height: 1.4;
+                }
+                .location-track {
+                    margin-right: -540px;
+                }
+            }
+        }
+
+        .track-form-area {
+            .location-track {
+                margin-left: 0;
+            }
+        }
+         
+    }
+
+    @media only screen and (min-width : 1200px) and (max-width : 1399px) {
+
+ 
+        .banner-buy-sell-two {
+            .buy-sell-form {
+                .form-group {
+                    .default-btn {
+                        padding: 16px 20px;
+                        font-size: 14px;
+                    }
+                }
+            }
+        } 
+
+        .banner-content {
+            &.style-three {
+                h1 {
+                    font-size: 45px;
+                    line-height: 1.4;
+                }
+                .location-track {
+                    margin-right: -540px;
+                }
+            }
+        }
+
+    }
+
+    @media only screen and (min-width : 1400px) and (max-width : 1600px) {
+
+        .banner-content {
+            &.style-three {
+                .location-track {
+                    margin-right: -400px;
+                }
+            }
+        }
+
+    }
+}
+
+

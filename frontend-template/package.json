@@ -1,0 +1,39 @@
+{
+  "name": "sado",
+  "version": "1.1",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:visual": "playwright test visual-auth.spec.ts --headed --workers=1",
+    "test:e2e:report": "playwright show-report"
+  },
+  "dependencies": {
+    "@logto/react": "^4.0.9",
+    "@types/react": "^18.2.45",
+    "@types/react-dom": "^18.2.18",
+    "aos": "^2.3.4",
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^14.0.4",
+    "fslightbox-react": "^1.7.6",
+    "next": "^14.0.4",
+    "react": "18.2.0",
+    "react-accessible-accordion": "^5.0.0",
+    "react-dom": "18.2.0",
+    "sharp": "^0.33.1",
+    "swiper": "^11.0.5",
+    "typescript": "^5.3.3"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.1",
+    "@types/aos": "^3.0.7",
+    "@types/fslightbox-react": "^1.7.7",
+    "@types/node": "^25.1.0"
+  }
+}

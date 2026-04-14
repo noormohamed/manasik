@@ -1,0 +1,9 @@
+{
+  "/authentication/page": "app/authentication/page.js",
+  "/pay-done/page": "app/pay-done/page.js",
+  "/home-3/page": "app/home-3/page.js",
+  "/home-2/page": "app/home-2/page.js",
+  "/author/page": "app/author/page.js",
+  "/not-found": "app/not-found.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js"
+}

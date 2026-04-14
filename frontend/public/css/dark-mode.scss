@@ -1,0 +1,756 @@
+:root { 
+	--darkTextColor: #adb5bd;
+}
+
+html.dark {
+    body {
+        background-color: #000000;
+        color: var(--darkTextColor);
+    }
+    .h1, .h2, .h3, .h4, .h5, .h6, h1, h2, h3, h4, h5, h6 {
+        color: #ffffff;
+    }
+    a {
+        color: var(--darkTextColor);
+    }
+    .bg-shape {
+        &::before {
+            filter: invert(1);
+        }
+    }
+    .form-control {
+        background-color: transparent !important;
+        color: #ffffff !important;
+        border-color: #555 !important;
+        &:focus {
+            border-color: var(--mainColor) !important;
+        }
+    }
+    .navbar {
+        background-color: #1b1f22;
+
+        .navbar-nav {
+            .nav-item {
+                .nav-link {
+                    color: #ffffff;
+                    &:hover {
+                        color: var(--mainColor);
+                    }
+                }
+                .dropdown-menu {
+                    background-color: #1b1f22;
+                    li .dropdown-item {
+                        color: #ffffff;
+                        &:hover {
+                            color: var(--mainColor);
+                        }
+                    }
+                }
+            }
+        }
+
+        .others-options {
+            ul {
+                li {
+                    .account {
+                        i {
+                            color: #fff;
+                        }
+                    }
+                }
+            }
+            .search-icon {
+                img {
+                    filter: brightness(100);
+                }
+            }
+        }
+    }
+    .navbar-toggler {
+        .icon-bar {
+            background: #fff;
+        }
+    }
+    .main-logo {
+        display: none !important;
+    }
+    .white-logo {
+        display: block !important;
+    }
+    .main-content-text {
+        p {
+            color: var(--darkTextColor);
+        }
+        ul {
+            li {
+                color: var(--darkTextColor);
+            }
+        }
+        ol {
+            li {
+                color: var(--darkTextColor);
+            }
+        }
+    }
+    #preloader {
+        background-color: #313e3e;
+    }
+    .offcanvas {
+        background-color: #181818;
+    }
+    .for-mobile-navbar .offcanvas-header .close-btn {
+        color: var(--whiteColor);
+    }
+    .for-mobile-navbar .offcanvas-header {
+        border-color: rgba(255, 255, 255, 0.2);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-button {
+        color: var(--whiteColor);
+    }
+    .for-mobile-navbar .others-options ul li .call-us .call {
+        color: var(--whiteColor);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body {
+        background-color: #272727;
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-link {
+        color: var(--whiteColor);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-button {
+        color: var(--whiteColor);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-collapse .accordion-body {
+        background-color: #272727;
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-link {
+        color: var(--whiteColor);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-link.active {
+        color: var(--mainColor);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-button.active {
+        color: var(--mainColor);
+    }
+    .for-mobile-navbar .offcanvas-body .accordion .accordion-item .accordion-collapse .accordion-body .accordion-item .accordion-button.active {
+        color: var(--mainColor);
+    }
+    .navbar.sticky {
+        background-color: #1b1f22 !important;
+    }
+    .navbar .navbar-nav .nav-item .nav-link.dropdown-toggle::after {
+        color: var(--mainColor) !important;
+    }
+    .navbar .navbar-nav .nav-item .dropdown-menu li .dropdown-item.active {
+        color: var(--mainColor) !important;
+    }
+    .navbar .others-options ul li .search-icon i {
+        color: var(--whiteColor);
+    }
+    .mega-menu .dropdown-menu .nav-item .sub-menu-title {
+        color: var(--whiteColor);
+    }
+    .mega-menu .dropdown-menu .nav-item .sub-menu li a {
+        color: var(--whiteColor);
+    }
+    .bg-color-f7f2ff {
+        background-color: #000000;
+    }
+    .banner-bg-3::before {
+        background-color: #000000;
+    }
+    .banner-content.style-three .banner-btn .bg-transparent span {
+        color: var(--whiteColor);
+        border-color: var(--whiteColor);
+    }
+    .banner-content.style-three .location-track {
+        background-color: #0a0a0a;
+    }
+    .location-track .form-group .title {
+        color: var(--whiteColor);
+    }
+    .location-track .form-group .form-select {
+        background-color: transparent;
+        color: var(--darkTextColor);
+    }
+    .location-track .form-group .booking-date {
+        background-color: transparent;
+        color: var(--darkTextColor);
+    }
+    .banner-content.style-three .location-track .form-group i {
+        color: var(--whiteColor);
+    }
+    .benefits-single-item.style-three {
+        border-color: #1e1e1e;
+    }
+    .mokup-1 {
+        filter: invert(1);
+    }
+    .mokup-2 {
+        filter: invert(1);
+    }
+    .mokup-3 {
+        filter: invert(1);
+    }
+    .mokup-4 {
+        filter: invert(1);
+    }
+    .mokup-5 {
+        filter: invert(1);
+    }
+    .mokup-6 {
+        filter: invert(1);
+    }
+    .mokup-7 {
+        filter: invert(1);
+    }
+    .mokup-8 {
+        filter: invert(1);
+    }
+    .mokup-9 {
+        filter: invert(1);
+    }
+    .mokup-10 {
+        filter: invert(1);
+    }
+    .mokup-11 {
+        filter: invert(1);
+    }
+    .mokup-12 {
+        filter: invert(1);
+    }
+    .mokup-13 {
+        filter: invert(1);
+    }
+    .mokup-14 {
+        filter: invert(1);
+    }
+    .mokup-15 {
+        filter: invert(1);
+    }
+    .destination-content .destination-content-list li .count {
+        background-color: #1b1f22;
+    }
+    .destination-content .destination-content-btn .bg-transparent span {
+        color: var(--whiteColor);
+    }
+    .bg-color-f3f4f6 {
+        background-color: #1b1f22;
+    }
+    .most-popular-single-item .most-popular-single-content {
+        background-color: #1b1f22;
+    }
+    .most-popular-single-item .most-popular-single-content h3 a {
+        color: var(--whiteColor);
+    }
+    .most-popular-single-item .most-popular-single-content .most-popular-single-price span .title {
+        color: var(--whiteColor);
+    }
+    .default-btn {
+        color: var(--whiteColor);
+    }
+    .default-btn.white-btn {
+        background-color: #1b1f22;
+        color: var(--whiteColor);
+    }
+    .most-popular-single-item .most-popular-single-content .most-popular-single-price {
+        border-color: #323232;
+    }
+    .faq-accordion-wrap.style-two .accordion-item {
+        background-color: #1b1f22;
+    }
+    .faq-accordion-wrap .accordion-item .accordion-header .accordion-button {
+        color: var(--whiteColor);
+    }
+    .faq-accordion-wrap .accordion-item .accordion-body p {
+        color: var(--darkTextColor);
+    }
+    .how-its-work-area.bg-color-f7f2ff.pt-175.pb-150 {
+        padding-top: 0;
+    }
+    .how-its-work-single-item {
+        background-color: #1b1f22;
+    }
+    .offer-content {
+        background-color: #1b1f22;
+    }
+    .offer-content .offer-content-btn .bg-transparent {
+        color: var(--whiteColor);
+    }
+    .swiper-controller-wrap .swiper-controller {
+        background-color: transparent;
+    }
+    .swiper-controller .controller-icon {
+        border-color: #1e1e1e;
+        svg {
+            stroke: var(--whiteColor) !important;
+        }
+    }
+    .partner-logo .swiper-slide img {
+        filter: brightness(100);
+    }
+    .blog-single-item .blog-single-content {
+        background-color: #000000;
+    }
+    .blog-single-item .blog-single-content h4 a {
+        color: var(--whiteColor);
+    }
+    .dark-none {
+        display: none !important;
+    }
+    .dark-block {
+        display: block !important;
+    }
+    .location-track {
+        background-color: #0a0a0a;
+    }
+    .benefits-single-item::before {
+        background-color: #1e1e1e;
+    }
+    a.default-btn.active.bg-transparent.text-dark.text-decoration-underline {
+        color: var(--whiteColor) !important;
+    }
+    .bg-color-fff7ed {
+        background-color: #070707;
+    }
+    .author-single-item {
+        background-color: #1b1f22;
+    }
+    .author-single-item .rate {
+        background-color: #070707;
+    }
+    .discover-single-item {
+        background-color: #2c3134;
+    }
+    .discover-single-item span {
+        color: #e8e8e8;
+    }
+    .copy-right-area {
+        border-color: #1e1e1e;
+    }
+    .banner-buy-sell-two .buy-sell-form  {
+        background-color: #1b1f22;
+    }
+    .banner-buy-sell-two .banner-buy-sell-tabs .nav-item .nav-link {
+        background-color: #1b1f22;
+        color: var(--whiteColor);
+        &.active {
+            background-color: var(--optionalColor);
+            color: var(--whiteColor);
+        }
+    }
+    option {
+        color: var(--headingColor);
+    }
+    .most-popular-tab .nav-item .nav-link {
+        background-color: #1b1f22;
+        color: var(--whiteColor);
+    }
+    .house-listing-single-item .house-listing-single-content {
+        background-color: #1b1f22;
+    }
+    .house-listing-single-item .house-listing-single-content h3 a {
+        color: var(--mainColor);
+    }
+    .house-listing-single-item .house-listing-single-content h3 span {
+        color: var(--whiteColor);
+    }
+    .house-listing-single-item .house-listing-single-content {
+        border-color: #525b61;
+        .house-listing-fe-list {
+            border-color: #525b61;
+        }
+    }
+    .how-it-works-single-item {
+        background-color: #282e33;
+    }
+    .top-author-single-item .top-author-single-content {
+        background-color: #1b1f22;
+    }
+    .top-author-single-item .top-author-single-content ul li a {
+        color: var(--whiteColor);
+    }
+    .faq-accordion-wrap .accordion-item .accordion-header .accordion-button::after {
+        background-color: #000000;
+    }
+    .page-banner-area::before {
+        background-color: #1b1f22;
+    }
+    .track-form-area::before {
+        background-color: #1b1f22;
+    }
+    .navbar .others-options.style-two ul li .search-icon i {
+        background-color: #1b1f22;
+    }
+    .pagination-area .page-numbers {
+        background-color: #070707;
+        color: var(--whiteColor);
+    }
+    .pagination-area .page-numbers {
+        svg {
+            stroke: var(--whiteColor);
+        }
+    }
+    .pagination-area .page-numbers.current {
+        background-color: var(--optionalColor);
+    }
+    .page-banner-content ul li a {
+        color: var(--whiteColor);
+    }
+    .box-style {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .stay-details-content .post-info .fe-list {
+        border-color: #262b2f;
+    }
+    .box-title::before {
+        background-color: #262b2f;
+    }
+    .stay-details-content .stay-amenities .view-amenities {
+        background-color: #2f3337;
+        color: var(--whiteColor);
+    }
+    .stay-details-content .stay-room-rates ul li {
+        background-color: #292929;
+        &:nth-child(2) {
+            background-color: #1b1f22;
+        }
+        &:nth-child(4) {
+            background-color: #1b1f22;
+        }
+        &:nth-child(6) {
+            background-color: #1b1f22;
+        }
+    }
+    .stay-details-content .stay-comment-list ul li {
+        background-color: #292929;
+    }
+    .stay-details-content .stay-things .check-in li {
+        background-color: #292929;
+        &:nth-child(2) {
+            background-color: #1b1f22;
+        }
+    }
+    .stay-details-sidebar .stay-single-sidebar-item {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .stay-details-sidebar .stay-single-sidebar-item .per-person .booking-date {
+        border-color: #262b2f;
+        background: #1b1f22;
+    }
+    .stay-details-sidebar .stay-single-sidebar-item .per-person .booking-date .divider {
+        border-color: #262b2f;
+    }
+    .stay-details-sidebar .stay-single-sidebar-item .per-person .booking-date .border-0 {
+        background-color: transparent;
+        color: var(--whiteColor);
+    }
+    .stay-details-sidebar .stay-single-sidebar-item .per-person .booking-date .form-select {
+        background-color: transparent;
+        color: var(--whiteColor);
+    }
+    .stay-details-sidebar .stay-single-sidebar-item .per-person .total span {
+        color: var(--whiteColor);
+    }
+    .stay-details-sidebar .stay-single-sidebar-item .per-person .fe-list {
+        border-color: #262b2f;
+    }
+    .flight-accordion .accordion-item .accordion-header .accordion-button {
+        background-color: #000;
+        border-color: #000;
+        border-radius: 20px;
+    }
+    .flight-accordion .accordion-item {
+        border-color: #000;
+        border-radius: 20px;
+        background-color: #000;
+    }
+    .flight-accordion .accordion-item .accordion-body {
+        background-color: #070707;
+    }
+    .flight-accordion .accordion-item .accordion-body .flight-schedule li p {
+        color: #dedede;
+    }
+    .flight-accordion .accordion-item .accordion-body .flight-schedule li span {
+        color: #dedede;
+    }
+    .flight-accordion .accordion-item .accordion-body .flight-schedule li::before {
+        border-color: #232323;
+    }
+    .flight-accordion .accordion-item .accordion-body .flight-schedule::before {
+        background-color: #232323;
+    }
+    .flight-accordion .accordion-item .accordion-body .bangkok {
+        border-color: #232323 !important;
+        color: #dedede;
+    }
+    .flight-accordion .accordion-item .accordion-body .business-time p {
+        color: #dedede;
+    }
+    .flight-accordion .accordion-item .accordion-header .accordion-button::after {
+        background-color: #070707;
+    }
+    .flight-accordion .accordion-item .accordion-header .accordion-button .title {
+        color: var(--whiteColor);
+    }
+    .choosing-listing-categories-content .choosing-form {
+        border-color: #232323;
+    }
+    .choosing-listing-categories-content .form-group .property {
+        background-color: #1b1f22;
+    }
+    .add-to-cart-counter input {
+        background-color: transparent;
+        border-color: #232323;
+        color: var(--whiteColor);
+    }
+    .choosing-listing-categories-content .choosing-form.amenities .form-check .form-check-input {
+        background-color: #000;
+        border-color: #232323;
+    }
+    .choosing-listing-categories-content .choosing-form.amenities .form-check .form-check-label {
+        color: var(--darkTextColor);
+    }
+    .choosing-listing-categories-content .choosing-form.amenities .title {
+        color: var(--whiteColor);
+    }
+    .choosing-listing-categories-content .form-group .input-group .input-group-text {
+        background-color: #1b1f22;
+        border-color: #1b1f22;
+        color: var(--whiteColor);
+    }
+    .chackout-content {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+        .date-wrap.border-right {
+            border-color: #262b2f;
+        }
+    }
+    .chackout-content .row.g-0 {
+        border-color: #262b2f;
+    }
+    .chackout-content .date-wrap .date {
+        color: var(--whiteColor);
+    }
+    .chackout-content .btn {
+        color: var(--whiteColor);
+    }
+    .chackout-sidebar {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .chackout-sidebar .total span {
+        color: var(--whiteColor);
+    }
+    .chackout-sidebar .list-order {
+        border-color: #262b2f;
+    }
+    .chackout-content h4 {
+        border-color: #262b2f;
+    }
+    .author-content-wrap {
+        background-color:#33383b;
+        border-color: #262b2f;
+    }
+    .author-content-review {
+        background-color:#33383b;
+        border-color: #262b2f;
+    }
+    .author-content-review .review-list li {
+        background-color: #1b1f22;
+    }
+    .author-sidebar {
+        background-color:#33383b;
+        border-color: #262b2f;
+    }
+    .author-sidebar .social-link li a {
+        border-color: #1b1f22;
+        color: var(--whiteColor);
+    }
+    .account-content {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .account-content .account-tabs .nav-item .nav-link {
+        background: #353a3f;
+        color: var(--whiteColor);
+        &.active {
+            background-color: var(--optionalColor);
+        }
+    }
+    .login-register-form {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .login-register-form .form-group .login-others {
+        background-color: #313235;
+    }
+    .login-register-form .form-group.or .bg {
+        background-color: #1b1f22;
+    }
+    .login-register-form .form-group.or::before {
+        background-color: #383b3e;
+    }
+    .subscription-single-item {
+        background-color: #1b1f22;
+    }
+    .subscription-single-item .subscription-header {
+        border-color: #262b2f;
+    }
+    .blog-single-item .blog-single-content {
+        border-color: #1b1f22;
+    }
+    .blog-details-content .blockquote {
+        background-color: #1b1f22;
+        p {
+            color: var(--whiteColor);
+        }
+    }
+    .blog-details-content .tag-share {
+        background-color: #1b1f22;
+    }
+    .author-content {
+        background-color: #1b1f22;
+    }
+    .comment-list ul li {
+        background-color: #1b1f22;
+    }
+    .comment-replay {
+        background-color: #1b1f22;
+    }
+    .blog-details-content .tag-share .social-link li a {
+        background-color: #000000;
+    }
+    .single-sidebar-item {
+        background-color: #1b1f22;
+    }
+    .single-sidebar-item .popular-post .date {
+        color: var(--darkTextColor);
+    }
+    .single-sidebar-item .tags li a {
+        background-color: #3a3c41;
+        &:hover {
+            background-color: var(--optionalColor);
+            color: var(--whiteColor);
+        }
+    }
+    .contat-us-form {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .contact-us-info li {
+        background-color:#1b1f22;
+        border-color: #262b2f;
+    }
+    .video-play .text-circle {
+        filter: brightness(100);
+    }
+    .follow-us li a {
+        background-color: #3a3e41;
+        color: var(--darkTextColor);
+
+        &:hover {
+            background-color: var(--optionalColor);
+            border-color: var(--optionalColor);
+            color: #fff;
+        }
+    }
+    .navbar .navbar-nav .nav-item .dropdown-menu {
+        background-color: #111416;
+    }
+
+    .footer-single-widget .import-link li a {
+        color: var(--darkTextColor);
+    }
+    .most-popular-single-item .most-popular-single-content .most-popular-single-price p .title {
+        color: #fff;
+    }
+    .follow-us span { 
+        color: var(--darkTextColor);
+    }
+    .choose-content .choose-content-list li .icon {
+        border: 1px solid #333;
+    }
+    .testimonial-slide {
+        .swiper-pagination {
+            .swiper-pagination-bullet {
+                background-color: #333;
+                opacity: 1;
+
+                &.swiper-pagination-bullet-active {
+                    background: var(--mainColor);
+                }
+            }
+        }
+    }
+    .faq-accordion-wrap {
+        .accordion {
+            .accordion__item {
+                .accordion__button {
+                    color: var(--whiteColor); 
+                }
+                .accordion__panel {
+                    p {
+                        color: var(--darkTextColor);
+                    }
+                }
+            }
+        }
+
+        &.style-two {
+            .accordion__item {
+                background-color: #141414; 
+            }
+        }
+    }
+    .subscription-single-item {
+        .subscription-header {
+            h1 {
+                sub {
+                    color: var(--darkTextColor);
+                }
+            }
+        }
+    }
+    .drop-zone {
+        input { 
+            background: #121212; 
+        }
+    }
+    .form-text { 
+        color: var(--darkTextColor);
+    }
+    .page-banner-content {
+        ul.style-two {
+            li {
+                span {
+                    color: var(--darkTextColor); 
+                }
+            }
+        }
+    }
+    .flight-accordion {
+        .accordion {
+            .accordion__item {
+                background: #020202; 
+
+                .accordion__heading {
+                    .accordion__button {
+                        .title {
+                            color: var(--whiteColor);
+                        }
+                        .sub-title {
+                            color: var(--darkTextColor); 
+                        }
+                    }
+                }
+
+                .accordion__panel {
+                    background-color: #0a0a0a;
+                }
+            }
+        }
+    }
+ 
+}
