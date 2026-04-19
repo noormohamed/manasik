@@ -190,10 +190,17 @@ export default function CheckoutSuccessPage() {
             <div className="d-flex justify-content-center gap-3">
               <button
                 className="btn btn-primary btn-lg"
-                onClick={() => router.push("/dashboard/bookings")}
+                onClick={() => {
+                  // Navigate to the first booking's confirmation page if available
+                  if (paymentDetails?.bookingIds && paymentDetails.bookingIds.length > 0) {
+                    router.push(`/booking/${paymentDetails.bookingIds[0]}`);
+                  } else {
+                    router.push("/dashboard/bookings");
+                  }
+                }}
               >
-                <i className="ri-calendar-check-line me-2"></i>
-                View My Bookings
+                <i className="ri-eye-line me-2"></i>
+                View Booking Confirmation
               </button>
               <button
                 className="btn btn-outline-secondary btn-lg"

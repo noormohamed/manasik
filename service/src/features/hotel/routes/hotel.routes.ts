@@ -5,11 +5,166 @@ import { requireFeature } from '../../../middleware/feature-flag';
 import { HotelRepository } from '../repositories/hotel.repository';
 import { RoomRepository } from '../repositories/room.repository';
 import { HotelFilterService } from '../services/hotel-filter.service';
+import { HotelSearchService, SortOption, ViewType } from '../services/hotel-search.service';
 import { getPool } from '../../../database/connection';
 import * as haramGatesService from '../../../services/haram-gates.service';
 
 export const createHotelRoutes = () => {
   const router = new Router({ prefix: '/hotels' });
+
+  /**
+   * GET /api/hotels/search
+   * Advanced hotel search with sorting and Hajj/Umrah specific filters
+   * Query params:
+   * - location: Search by city, country, or address
+   * - city: Filter by specific city
+   * - country: Filter by specific country
+   * - checkIn: Check-in date (YYYY-MM-DD)
+   * - checkOut: Check-out date (YYYY-MM-DD)
+   * - guests: Number of guests
+   * - minRating: Minimum star rating
+   * - minPrice: Minimum price per night
+   * - maxPrice: Maximum price per night
+   * - maxWalkingTimeToHaram: Maximum walking time to Haram in minutes
+   * - viewTypes: Comma-separated view types (kaaba, partial_haram, city, none)
+   * - elderlyFriendly: Filter for elderly-friendly hotels (true/false)
+   * - familyRooms: Filter for hotels with family rooms (true/false)
+   * - bestForTags: Comma-separated "best for" tags
+   * - facilities: Comma-separated list of facility names
+   * - roomFacilities: Comma-separated list of room facility names
+   * - sortBy: Sort option (recommended, price_low_high, price_high_low, star_rating, highest_reviewed, manasik_score, distance_to_haram)
+   * - page: Page number (default: 1)
+   * - limit: Results per page (default: 20)
+   */
+  router.get('/search', requireFeature('hotelListing'), async (ctx: Context) => {
+    try {
+      const {
+        location,
+        city,
+        country,
+        checkIn,
+        checkOut,
+        guests,
+        minRating,
+        minPrice,
+        maxPrice,
+        maxWalkingTimeToHaram,
+        viewTypes,
+        elderlyFriendly,
+        familyRooms,
+        bestForTags,
+        facilities,
+        roomFacilities,
+        sortBy,
+        page = 1,
+        limit = 20,
+      } = ctx.query;
+
+      const pageNum = parseInt(page as string);
+      const limitNum = parseInt(limit as string);
+      const offset = (pageNum - 1) * limitNum;
+
+      const searchService = new HotelSearchService();
+
+      // Parse comma-separated arrays
+      const viewTypesArray = viewTypes 
+        ? (viewTypes as string).split(',').map(v => v.trim()) as ViewType[]
+        : undefined;
+      const bestForTagsArray = bestForTags 
+        ? (bestForTags as string).split(',').map(t => t.trim())
+        : undefined;
+      const facilitiesArray = facilities 
+        ? (facilities as string).split(',').map(f => f.trim())
+        : undefined;
+      const roomFacilitiesArray = roomFacilities 
+        ? (roomFacilities as string).split(',').map(f => f.trim())
+        : undefined;
+
+      const { hotels, total } = await searchService.search({
+        location: location as string,
+        city: city as string,
+        country: country as string,
+        checkIn: checkIn as string,
+        checkOut: checkOut as string,
+        guests: guests ? parseInt(guests as string) : undefined,
+        minRating: minRating ? parseFloat(minRating as string) : undefined,
+        minPrice: minPrice ? parseFloat(minPrice as string) : undefined,
+        maxPrice: maxPrice ? parseFloat(maxPrice as string) : undefined,
+        maxWalkingTimeToHaram: maxWalkingTimeToHaram ? parseInt(maxWalkingTimeToHaram as string) : undefined,
+        viewTypes: viewTypesArray,
+        elderlyFriendly: elderlyFriendly === 'true',
+        familyRooms: familyRooms === 'true',
+        bestForTags: bestForTagsArray,
+        facilities: facilitiesArray,
+        roomFacilities: roomFacilitiesArray,
+        sortBy: (sortBy as SortOption) || 'recommended',
+        limit: limitNum,
+        offset,
+      });
+
+      ctx.body = {
+        hotels,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          totalPages: Math.ceil(total / limitNum),
+        },
+        filters: {
+          location,
+          city,
+          country,
+          checkIn,
+          checkOut,
+          guests: guests ? parseInt(guests as string) : null,
+          minRating: minRating ? parseFloat(minRating as string) : null,
+          minPrice: minPrice ? parseFloat(minPrice as string) : null,
+          maxPrice: maxPrice ? parseFloat(maxPrice as string) : null,
+          maxWalkingTimeToHaram: maxWalkingTimeToHaram ? parseInt(maxWalkingTimeToHaram as string) : null,
+          viewTypes: viewTypesArray,
+          elderlyFriendly: elderlyFriendly === 'true',
+          familyRooms: familyRooms === 'true',
+          bestForTags: bestForTagsArray,
+          facilities: facilitiesArray,
+          roomFacilities: roomFacilitiesArray,
+          sortBy: sortBy || 'recommended',
+        },
+      };
+    } catch (error) {
+      console.error('Error searching hotels:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to search hotels' };
+    }
+  });
+
+  /**
+   * GET /api/hotels/filter-options
+   * Get available filter options for the search UI
+   */
+  router.get('/filter-options', requireFeature('hotelListing'), async (ctx: Context) => {
+    try {
+      const { city } = ctx.query;
+      const searchService = new HotelSearchService();
+      const options = await searchService.getFilterOptions(city as string);
+
+      ctx.body = {
+        sortOptions: [
+          { value: 'recommended', label: 'Recommended' },
+          { value: 'price_low_high', label: 'Price: Low to High' },
+          { value: 'price_high_low', label: 'Price: High to Low' },
+          { value: 'star_rating', label: 'Star Rating' },
+          { value: 'highest_reviewed', label: 'Highest Reviewed' },
+          { value: 'manasik_score', label: 'Manasik Score' },
+          { value: 'distance_to_haram', label: 'Distance to Haram' },
+        ],
+        ...options,
+      };
+    } catch (error) {
+      console.error('Error fetching filter options:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to fetch filter options' };
+    }
+  });
 
   /**
    * GET /api/hotels/listings
@@ -350,7 +505,7 @@ export const createHotelRoutes = () => {
         return;
       }
 
-      // Fetch bookings for these hotels with customer and agent info
+      // Fetch bookings for these hotels with customer, agent, and hotel provider info
       // Note: metadata may use either 'hotelId' or 'hotel_id' depending on how booking was created
       const pool = getPool();
       
@@ -374,10 +529,15 @@ export const createHotelRoutes = () => {
           u.last_name as customer_last_name,
           u.email as customer_email,
           ag.name as agent_name,
-          ag.email as agent_email
+          ag.email as agent_email,
+          h.provider_name,
+          h.provider_reference,
+          h.provider_phone
         FROM bookings b
         LEFT JOIN users u ON b.customer_id = u.id
         LEFT JOIN agents ag ON b.agent_id = ag.id
+        LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id 
+          OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) = h.id
         WHERE b.service_type = 'HOTEL'
           AND (
             JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) IN (${hotelIds.map(() => '?').join(',')})
@@ -416,8 +576,8 @@ export const createHotelRoutes = () => {
       const [countResult] = await pool.query<any>(countQuery, countParams);
       const total = countResult[0].total;
 
-      // Parse metadata for each booking
-      const formattedBookings = (bookings as any[]).map((booking: any) => {
+      // Parse metadata for each booking and fetch guest details
+      const formattedBookings = await Promise.all((bookings as any[]).map(async (booking: any) => {
         const metadata = typeof booking.metadata === 'string' 
           ? JSON.parse(booking.metadata) 
           : booking.metadata;
@@ -427,6 +587,25 @@ export const createHotelRoutes = () => {
           (booking.customer_first_name ? `${booking.customer_first_name} ${booking.customer_last_name}` : 'Guest');
         const guestEmail = metadata.guestEmail || metadata.guest_email || booking.customer_email || '';
         const guestPhone = metadata.guestPhone || metadata.guest_phone || '';
+
+        // Fetch guests for this booking from guests table
+        const [guestRows] = await pool.query<any>(
+          `SELECT id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger 
+           FROM guests WHERE booking_id = ? ORDER BY is_lead_passenger DESC`,
+          [booking.id]
+        );
+
+        const guests = (guestRows as any[]).map((g: any) => ({
+          id: g.id,
+          firstName: g.first_name,
+          lastName: g.last_name,
+          email: g.email,
+          phone: g.phone,
+          nationality: g.nationality,
+          passportNumber: g.passport_number,
+          dateOfBirth: g.date_of_birth,
+          isLeadPassenger: g.is_lead_passenger === 1,
+        }));
 
         return {
           id: booking.id,
@@ -449,18 +628,23 @@ export const createHotelRoutes = () => {
           guestEmail,
           guestPhone,
           guestCount: metadata.guests || metadata.guest_count,
+          guests,
           customerId: booking.customer_id,
           // Agent info (if booked via agent)
           agentId: booking.agent_id,
           agentName: booking.agent_name,
           agentEmail: booking.agent_email,
+          // Provider info
+          providerName: booking.provider_name,
+          providerReference: booking.provider_reference,
+          providerPhone: booking.provider_phone,
           // Hold info for broker bookings
           holdExpiresAt: booking.hold_expires_at,
           // Timestamps
           createdAt: booking.created_at,
           updatedAt: booking.updated_at,
         };
-      });
+      }));
 
       ctx.body = {
         bookings: formattedBookings,
@@ -480,7 +664,7 @@ export const createHotelRoutes = () => {
 
   /**
    * GET /api/hotels/:id
-   * Get hotel details with rooms, images, and amenities
+   * Get hotel details with rooms, images, amenities, and conversion-critical info
    */
   router.get('/:id', requireFeature('hotelDetails'), async (ctx: Context) => {
     try {
@@ -524,6 +708,33 @@ export const createHotelRoutes = () => {
       // Get room types with images
       const rooms = await roomRepository.findByHotelId(id);
 
+      // Get "Best for" tags
+      const [bestForTags] = await pool.query<any>(
+        'SELECT tag_name, tag_icon FROM hotel_best_for_tags WHERE hotel_id = ?',
+        [id]
+      );
+
+      // Get closest Haram gate for quick display
+      const [closestGate] = await pool.query<any>(`
+        SELECT 
+          hgd.distance_meters,
+          hgd.walking_time_minutes,
+          hg.gate_number,
+          hg.name_english,
+          hg.has_direct_kaaba_access
+        FROM hotel_gate_distances hgd
+        JOIN haram_gates hg ON hgd.gate_id = hg.id
+        WHERE hgd.hotel_id = ?
+        ORDER BY hgd.distance_meters ASC
+        LIMIT 1
+      `, [id]);
+
+      // Get hotel facilities
+      const [facilities] = await pool.query<any>(
+        'SELECT facility_name FROM hotel_facilities WHERE hotel_id = ?',
+        [id]
+      );
+
       ctx.body = {
         hotel: {
           id: hotelRow.id,
@@ -544,6 +755,28 @@ export const createHotelRoutes = () => {
           checkOutTime: hotelRow.check_out_time,
           cancellationPolicy: hotelRow.cancellation_policy,
           status: hotelRow.status,
+          // New conversion-critical fields
+          manasikScore: hotelRow.manasik_score ? parseFloat(hotelRow.manasik_score) : null,
+          walkDescription: hotelRow.walk_description,
+          liftSituation: hotelRow.lift_situation,
+          distanceExplanation: hotelRow.distance_explanation,
+          videoUrl: hotelRow.video_url,
+          videoThumbnail: hotelRow.video_thumbnail,
+          // Best for tags
+          bestForTags: bestForTags.map((tag: any) => ({
+            name: tag.tag_name,
+            icon: tag.tag_icon,
+          })),
+          // Closest Haram gate (quick access)
+          closestHaramGate: closestGate.length > 0 ? {
+            distanceMeters: closestGate[0].distance_meters,
+            walkingTimeMinutes: closestGate[0].walking_time_minutes,
+            gateNumber: closestGate[0].gate_number,
+            gateName: closestGate[0].name_english,
+            hasDirectKaabaAccess: closestGate[0].has_direct_kaaba_access === 1,
+          } : null,
+          // Facilities list
+          facilities: facilities.map((f: any) => f.facility_name),
           images: images.map((img: any) => ({
             id: img.id,
             url: img.url,
@@ -639,6 +872,105 @@ export const createHotelRoutes = () => {
       console.error('Error updating hotel:', error);
       ctx.status = 500;
       ctx.body = { error: 'Failed to update hotel' };
+    }
+  });
+
+  /**
+   * POST /api/hotels/bookings/:id/refund
+   * Issue a refund for a booking (hotel manager only)
+   * Only hotel managers can refund bookings for their hotels
+   */
+  router.post('/bookings/:id/refund', authMiddleware, requireFeature('hotelListing'), async (ctx: Context) => {
+    try {
+      const userId = (ctx as any).user?.userId;
+      const bookingId = ctx.params.id;
+      // @ts-ignore
+      const { amount, reason } = ctx.request.body;
+
+      if (!userId) {
+        ctx.status = 401;
+        ctx.body = { error: 'Unauthorized' };
+        return;
+      }
+
+      if (!amount || !reason) {
+        ctx.status = 400;
+        ctx.body = { error: 'Missing required fields: amount, reason' };
+        return;
+      }
+
+      const pool = getPool();
+      const hotelRepository = new HotelRepository();
+
+      // Get the booking
+      const [bookingRows] = await pool.query<any>(
+        'SELECT * FROM bookings WHERE id = ?',
+        [bookingId]
+      );
+
+      if (!bookingRows || bookingRows.length === 0) {
+        ctx.status = 404;
+        ctx.body = { error: 'Booking not found' };
+        return;
+      }
+
+      const booking = bookingRows[0];
+      const metadata = typeof booking.metadata === 'string' 
+        ? JSON.parse(booking.metadata) 
+        : booking.metadata;
+
+      const hotelId = metadata.hotelId || metadata.hotel_id;
+
+      // Verify user manages this hotel
+      const isManager = await hotelRepository.isUserManagingHotel(userId, hotelId);
+      if (!isManager) {
+        ctx.status = 403;
+        ctx.body = { error: 'You do not have permission to refund bookings for this hotel' };
+        return;
+      }
+
+      // Update booking with refund info
+      const refundAmount = parseFloat(amount);
+      const currentRefund = booking.refund_amount ? parseFloat(booking.refund_amount) : 0;
+      const totalRefund = currentRefund + refundAmount;
+
+      // Determine if this is a full or partial refund
+      const bookingTotal = parseFloat(booking.total);
+      const isFullRefund = totalRefund >= bookingTotal;
+
+      const [result] = await pool.query<any>(
+        `UPDATE bookings 
+         SET refund_amount = ?,
+             refund_reason = ?,
+             refunded_at = NOW(),
+             status = ?,
+             updated_at = NOW()
+         WHERE id = ?`,
+        [totalRefund, reason, isFullRefund ? 'REFUNDED' : booking.status, bookingId]
+      );
+
+      if (result.affectedRows === 0) {
+        ctx.status = 500;
+        ctx.body = { error: 'Failed to process refund' };
+        return;
+      }
+
+      ctx.body = {
+        success: true,
+        message: 'Refund processed successfully',
+        refund: {
+          bookingId,
+          amount: refundAmount,
+          totalRefund,
+          isFullRefund,
+          reason,
+          refundedAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      console.error('Refund booking error:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to process refund' };
     }
   });
 
@@ -843,7 +1175,16 @@ export const createHotelRoutes = () => {
 
   /**
    * POST /api/hotels/:id/bookings
-   * Create a hotel booking
+   * Create a hotel booking with guest details
+   * Request body:
+   * - roomTypeId: Room type ID
+   * - checkIn: Check-in date (YYYY-MM-DD)
+   * - checkOut: Check-out date (YYYY-MM-DD)
+   * - guestCount: Number of guests
+   * - guestName: Lead passenger name (for backward compatibility)
+   * - guestEmail: Lead passenger email (for backward compatibility)
+   * - guestPhone: Lead passenger phone (optional)
+   * - guestDetails: Array of guest objects with: firstName, lastName, email, phone, nationality, passportNumber, dateOfBirth, isLeadPassenger
    */
   router.post('/:id/bookings', authMiddleware, requireFeature('hotelBooking'), async (ctx: Context) => {
     try {
@@ -851,7 +1192,7 @@ export const createHotelRoutes = () => {
       const userEmail = (ctx as any).user?.email;
       const { id: hotelId } = ctx.params;
       // @ts-ignore
-      const { roomTypeId, checkIn, checkOut, guestCount, guestName, guestEmail } = ctx.request.body;
+      const { roomTypeId, checkIn, checkOut, guestCount, guestName, guestEmail, guestPhone, guestDetails } = ctx.request.body;
 
       // Validate required fields
       if (!roomTypeId || !checkIn || !checkOut || !guestCount || !guestName || !guestEmail) {
@@ -912,9 +1253,19 @@ export const createHotelRoutes = () => {
 
       // Create booking
       const bookingId = require('uuid').v4();
+      
+      // Access hotel address fields - hotel is raw DB row with snake_case
+      const hotelAddress = (hotel as any).address || '';
+      const hotelCity = (hotel as any).city || '';
+      const hotelCountry = (hotel as any).country || '';
+      
       const metadata = {
         hotelId: hotelId,
         hotelName: hotel.name,
+        hotelAddress: hotelAddress,
+        hotelCity: hotelCity,
+        hotelCountry: hotelCountry,
+        hotelFullAddress: [hotelAddress, hotelCity, hotelCountry].filter(Boolean).join(', '),
         roomTypeId: roomTypeId,
         roomType: room.name,
         checkInDate: checkIn,
@@ -922,6 +1273,7 @@ export const createHotelRoutes = () => {
         nights,
         guestName: guestName,
         guestEmail: guestEmail,
+        guestPhone: guestPhone || '',
         guests: guestCount,
         basePrice: room.basePrice,
       };
@@ -929,10 +1281,24 @@ export const createHotelRoutes = () => {
       // Get company_id from hotel (findById returns raw DB row with snake_case)
       const companyId = (hotel as any).company_id || (hotel as any).companyId || 'default-company';
 
+      // Prepare guest details for storage
+      const processedGuestDetails = guestDetails && Array.isArray(guestDetails) 
+        ? guestDetails.map((guest: any) => ({
+            firstName: guest.firstName || '',
+            lastName: guest.lastName || '',
+            email: guest.email || '',
+            phone: guest.phone || '',
+            nationality: guest.nationality || '',
+            passportNumber: guest.passportNumber || '',
+            dateOfBirth: guest.dateOfBirth || '',
+            isLeadPassenger: guest.isLeadPassenger || false,
+          }))
+        : [];
+
       const insertQuery = `
         INSERT INTO bookings (
-          id, company_id, customer_id, service_type, booking_source, status, currency, subtotal, tax, total, payment_status, metadata, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          id, company_id, customer_id, service_type, booking_source, status, currency, subtotal, tax, total, payment_status, metadata, guest_details, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       await pool.execute(insertQuery, [
@@ -948,7 +1314,33 @@ export const createHotelRoutes = () => {
         total,
         'PENDING',
         JSON.stringify(metadata),
+        JSON.stringify(processedGuestDetails),
       ]);
+
+      // Store individual guests in guests table
+      if (processedGuestDetails.length > 0) {
+        for (const guest of processedGuestDetails) {
+          const guestId = require('uuid').v4();
+          const guestInsertQuery = `
+            INSERT INTO guests (
+              id, booking_id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          `;
+          
+          await pool.execute(guestInsertQuery, [
+            guestId,
+            bookingId,
+            guest.firstName,
+            guest.lastName,
+            guest.email,
+            guest.phone,
+            guest.nationality,
+            guest.passportNumber,
+            guest.dateOfBirth || null,
+            guest.isLeadPassenger ? 1 : 0,
+          ]);
+        }
+      }
 
       // Fetch created booking
       const [bookingRows] = await pool.query(
@@ -956,6 +1348,25 @@ export const createHotelRoutes = () => {
         [bookingId]
       );
       const bookingRow = bookingRows[0];
+
+      // Fetch guests for response
+      const [guestRows] = await pool.query(
+        `SELECT id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger 
+         FROM guests WHERE booking_id = ? ORDER BY is_lead_passenger DESC`,
+        [bookingId]
+      );
+
+      const guests = (guestRows as any[]).map((g: any) => ({
+        id: g.id,
+        firstName: g.first_name,
+        lastName: g.last_name,
+        email: g.email,
+        phone: g.phone,
+        nationality: g.nationality,
+        passportNumber: g.passport_number,
+        dateOfBirth: g.date_of_birth,
+        isLeadPassenger: g.is_lead_passenger === 1,
+      }));
 
       ctx.status = 201;
       ctx.body = {
@@ -977,6 +1388,7 @@ export const createHotelRoutes = () => {
           guestName,
           guestEmail,
           guestCount,
+          guests,
           createdAt: bookingRow.created_at,
         },
       };

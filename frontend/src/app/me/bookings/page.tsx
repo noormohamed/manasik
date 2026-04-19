@@ -3,9 +3,9 @@
 import React from "react";
 import Navbar from "@/components/Layout/Navbar";
 import Footer from "@/components/Layout/Footer";
-import MyBookingsContent from "@/components/MyBookings/MyBookingsContent";
+import { MyBookingsPage as MyBookingsContent } from "@/components/MyBookings";
 
-const MyBookingsPage: React.FC = () => {
+const BookingsPage: React.FC = () => {
   return (
     <>
       <Navbar />
@@ -15,4 +15,4 @@ const MyBookingsPage: React.FC = () => {
   );
 };
 
-export default MyBookingsPage;
+export default BookingsPage;

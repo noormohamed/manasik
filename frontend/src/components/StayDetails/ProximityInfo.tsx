@@ -11,6 +11,9 @@ interface HaramGate {
   distanceMeters: number;
   walkingTimeMinutes: number;
   isRecommended: boolean;
+  hasDirectKaabaAccess: boolean;
+  floorLevel: 'ground' | 'first' | 'roof';
+  isClosestDirectAccess: boolean;
 }
 
 interface NearbyAttraction {
@@ -26,6 +29,7 @@ interface ProximityData {
   gates: HaramGate[];
   attractions: NearbyAttraction[];
   recommendedGate: HaramGate | null;
+  closestDirectAccessGate: HaramGate | null;
 }
 
 interface ProximityInfoProps {
@@ -104,13 +108,25 @@ const ProximityInfo: React.FC<ProximityInfoProps> = ({ hotelId }) => {
           <div className="card-header bg-success text-white">
             <h5 className="mb-0">
               <i className="ri-door-open-line me-2"></i>
-              Recommended Haram Gate
+              Closest Haram Gate
             </h5>
           </div>
           <div className="card-body">
             <div className="d-flex justify-content-between align-items-center">
               <div>
                 <h4 className="mb-1">Gate {data.recommendedGate.gateNumber} - {data.recommendedGate.nameEnglish}</h4>
+                <div className="d-flex gap-2 mt-1">
+                  {data.recommendedGate.hasDirectKaabaAccess && (
+                    <span className="badge bg-warning text-dark">
+                      <i className="ri-checkbox-circle-line me-1"></i>
+                      Direct Kaaba Access
+                    </span>
+                  )}
+                  <span className="badge bg-light text-dark">
+                    {data.recommendedGate.floorLevel === 'ground' ? 'Ground Floor' : 
+                     data.recommendedGate.floorLevel === 'first' ? 'First Floor' : 'Roof Level'}
+                  </span>
+                </div>
               </div>
               <div className="text-end">
                 <div className="h4 text-success mb-0">{formatDistance(data.recommendedGate.distanceMeters)}</div>
@@ -120,6 +136,35 @@ const ProximityInfo: React.FC<ProximityInfoProps> = ({ hotelId }) => {
             <div className="alert alert-success mt-3 mb-0" style={{ fontSize: '13px' }}>
               <i className="ri-information-line me-2"></i>
               This is the closest gate to your hotel. We recommend using this entrance for the shortest walk to Masjid al-Haram.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Closest Direct Kaaba Access Gate - if different from recommended */}
+      {data.closestDirectAccessGate && data.recommendedGate && 
+       data.closestDirectAccessGate.id !== data.recommendedGate.id && (
+        <div className="card mb-3 border-warning">
+          <div className="card-header bg-warning text-dark">
+            <h5 className="mb-0">
+              <i className="ri-focus-3-line me-2"></i>
+              Closest Direct Kaaba Access
+            </h5>
+          </div>
+          <div className="card-body">
+            <div className="d-flex justify-content-between align-items-center">
+              <div>
+                <h4 className="mb-1">Gate {data.closestDirectAccessGate.gateNumber} - {data.closestDirectAccessGate.nameEnglish}</h4>
+                <span className="badge bg-light text-dark">Ground Floor - Direct to Mataf</span>
+              </div>
+              <div className="text-end">
+                <div className="h4 text-warning mb-0">{formatDistance(data.closestDirectAccessGate.distanceMeters)}</div>
+                <small className="text-muted">~{data.closestDirectAccessGate.walkingTimeMinutes} min walk</small>
+              </div>
+            </div>
+            <div className="alert alert-warning mt-3 mb-0" style={{ fontSize: '13px' }}>
+              <i className="ri-star-line me-2"></i>
+              This gate provides direct ground-floor access to the Mataf (Tawaf area around the Kaaba). Ideal for Tawaf and prayers near the Kaaba.
             </div>
           </div>
         </div>
@@ -146,12 +191,22 @@ const ProximityInfo: React.FC<ProximityInfoProps> = ({ hotelId }) => {
               </thead>
               <tbody>
                 {displayedGates.map((gate) => (
-                  <tr key={gate.id} className={gate.isRecommended ? 'table-success' : ''}>
+                  <tr key={gate.id} className={gate.isRecommended ? 'table-success' : gate.isClosestDirectAccess ? 'table-warning' : ''}>
                     <td>
                       <span className="badge bg-secondary">#{gate.gateNumber}</span>
                     </td>
                     <td>
                       <div>{gate.nameEnglish}</div>
+                      <div className="d-flex gap-1 mt-1">
+                        {gate.hasDirectKaabaAccess && (
+                          <span className="badge bg-warning text-dark" style={{ fontSize: '0.65rem' }}>
+                            Direct Access
+                          </span>
+                        )}
+                        <span className="badge bg-light text-muted" style={{ fontSize: '0.65rem' }}>
+                          {gate.floorLevel === 'ground' ? 'Ground' : gate.floorLevel === 'first' ? '1st Floor' : 'Roof'}
+                        </span>
+                      </div>
                     </td>
                     <td className="text-end">
                       <strong>{formatDistance(gate.distanceMeters)}</strong>

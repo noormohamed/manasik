@@ -1,3 +1,5 @@
+'use client';
+
 import NavbarStyleTwo from "@/components/Layout/NavbarStyleTwo";
 import Footer from "@/components/Layout/Footer";
 import PageBannerTitle from "@/components/Common/PageBannerTitle";

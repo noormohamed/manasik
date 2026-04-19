@@ -1,11 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { apiClient } from "@/lib/api";
-import FilterSidebar from "./FilterSidebar";
+import ResultsHeader from "./ResultsHeader";
+import HajjUmrahFilters, { HajjUmrahFilterParams, ViewType } from "./HajjUmrahFilters";
+import HotelCard, { HotelCardData } from "./HotelCard";
+import HotelMapView from "./HotelMapView";
+import AdvancedFilters, { AdvancedFilterParams } from "./AdvancedFilters";
+import { SortOption } from "./SortDropdown";
 
 interface Hotel {
   id: string;
@@ -13,15 +18,26 @@ interface Hotel {
   description: string;
   city: string;
   country: string;
+  latitude?: number;
+  longitude?: number;
   starRating: number;
   averageRating: number;
   totalReviews: number;
-  images: Array<{ url: string }>;
+  minPrice?: number;
+  walkingTimeToHaram?: number;
+  distanceToHaramMeters?: number;
+  viewType?: ViewType;
+  isElderlyFriendly?: boolean;
+  hasFamilyRooms?: boolean;
+  manasikScore?: number;
+  bestForTags?: string[];
+  images: Array<{ id?: string; url: string }>;
   rooms?: Array<{
     id: string;
     name: string;
     basePrice: number;
     currency: string;
+    capacity?: number;
   }>;
 }
 
@@ -33,13 +49,23 @@ export interface FilterParams {
   checkOut?: string;
   guests?: number;
   minRating?: number;
+  minPrice?: number;
   maxPrice?: number;
+  // Hajj/Umrah filters
+  maxWalkingTimeToHaram?: number;
+  viewTypes?: ViewType[];
+  elderlyFriendly?: boolean;
+  familyRooms?: boolean;
+  bestForTags?: string[];
+  // Advanced filters
   facilities?: string[];
   roomFacilities?: string[];
   proximityLandmark?: string;
   proximityDistance?: number;
   surroundings?: string[];
   airportMaxDistance?: number;
+  // Sorting
+  sortBy?: SortOption;
 }
 
 const ListingCardContent = () => {
@@ -52,8 +78,11 @@ const ListingCardContent = () => {
   const [totalResults, setTotalResults] = useState(0);
   const [filters, setFilters] = useState<FilterParams>({});
   const [isInitialized, setIsInitialized] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'map'>('list');
+  const [showFilters, setShowFilters] = useState(true);
+  const [selectedHotelId, setSelectedHotelId] = useState<string | undefined>();
 
-  // Initialize filters from URL params ONCE
+  // Initialize filters from URL params
   useEffect(() => {
     const initialFilters: FilterParams = {};
     
@@ -64,13 +93,16 @@ const ListingCardContent = () => {
     const checkOut = searchParams.get('checkOut');
     const guests = searchParams.get('guests');
     const minRating = searchParams.get('minRating');
+    const minPrice = searchParams.get('minPrice');
     const maxPrice = searchParams.get('maxPrice');
+    const maxWalkingTimeToHaram = searchParams.get('maxWalkingTimeToHaram');
+    const viewTypes = searchParams.get('viewTypes');
+    const elderlyFriendly = searchParams.get('elderlyFriendly');
+    const familyRooms = searchParams.get('familyRooms');
+    const bestForTags = searchParams.get('bestForTags');
     const facilities = searchParams.get('facilities');
     const roomFacilities = searchParams.get('roomFacilities');
-    const proximityLandmark = searchParams.get('proximityLandmark');
-    const proximityDistance = searchParams.get('proximityDistance');
-    const surroundings = searchParams.get('surroundings');
-    const airportMaxDistance = searchParams.get('airportMaxDistance');
+    const sortBy = searchParams.get('sortBy');
 
     if (location) initialFilters.location = location;
     if (city) initialFilters.city = city;
@@ -79,26 +111,24 @@ const ListingCardContent = () => {
     if (checkOut) initialFilters.checkOut = checkOut;
     if (guests) initialFilters.guests = parseInt(guests);
     if (minRating) initialFilters.minRating = parseFloat(minRating);
+    if (minPrice) initialFilters.minPrice = parseFloat(minPrice);
     if (maxPrice) initialFilters.maxPrice = parseFloat(maxPrice);
+    if (maxWalkingTimeToHaram) initialFilters.maxWalkingTimeToHaram = parseInt(maxWalkingTimeToHaram);
+    if (viewTypes) initialFilters.viewTypes = viewTypes.split(',') as ViewType[];
+    if (elderlyFriendly === 'true') initialFilters.elderlyFriendly = true;
+    if (familyRooms === 'true') initialFilters.familyRooms = true;
+    if (bestForTags) initialFilters.bestForTags = bestForTags.split(',');
     if (facilities) initialFilters.facilities = facilities.split(',');
     if (roomFacilities) initialFilters.roomFacilities = roomFacilities.split(',');
-    if (proximityLandmark) initialFilters.proximityLandmark = proximityLandmark;
-    if (proximityDistance) initialFilters.proximityDistance = parseFloat(proximityDistance);
-    if (surroundings) initialFilters.surroundings = surroundings.split(',');
-    if (airportMaxDistance) initialFilters.airportMaxDistance = parseFloat(airportMaxDistance);
+    if (sortBy) initialFilters.sortBy = sortBy as SortOption;
 
-    console.log('[ListingCardContent] URL params changed, setting filters:', initialFilters);
     setFilters(initialFilters);
     setIsInitialized(true);
   }, [searchParams]);
 
-  // Fetch hotels when filters or page changes, but only after initialization
+  // Fetch hotels when filters or page changes
   useEffect(() => {
-    if (!isInitialized) {
-      console.log('[ListingCardContent] Skipping fetch - not initialized yet');
-      return;
-    }
-    console.log('[ListingCardContent] Filters or page changed, fetching hotels. Page:', currentPage, 'Filters:', filters);
+    if (!isInitialized) return;
     fetchHotels();
   }, [currentPage, filters, isInitialized]);
 
@@ -112,7 +142,7 @@ const ListingCardContent = () => {
         limit: 12,
       };
 
-      // Add filters to params
+      // Add all filters to params
       if (filters.location) params.location = filters.location;
       if (filters.city) params.city = filters.city;
       if (filters.country) params.country = filters.country;
@@ -120,20 +150,25 @@ const ListingCardContent = () => {
       if (filters.checkOut) params.checkOut = filters.checkOut;
       if (filters.guests) params.guests = filters.guests;
       if (filters.minRating) params.minRating = filters.minRating;
+      if (filters.minPrice) params.minPrice = filters.minPrice;
       if (filters.maxPrice) params.maxPrice = filters.maxPrice;
+      if (filters.maxWalkingTimeToHaram) params.maxWalkingTimeToHaram = filters.maxWalkingTimeToHaram;
+      if (filters.viewTypes?.length) params.viewTypes = filters.viewTypes.join(',');
+      if (filters.elderlyFriendly) params.elderlyFriendly = 'true';
+      if (filters.familyRooms) params.familyRooms = 'true';
+      if (filters.bestForTags?.length) params.bestForTags = filters.bestForTags.join(',');
       if (filters.facilities?.length) params.facilities = filters.facilities.join(',');
       if (filters.roomFacilities?.length) params.roomFacilities = filters.roomFacilities.join(',');
-      if (filters.proximityLandmark) params.proximityLandmark = filters.proximityLandmark;
-      if (filters.proximityDistance) params.proximityDistance = filters.proximityDistance;
-      if (filters.surroundings?.length) params.surroundings = filters.surroundings.join(',');
-      if (filters.airportMaxDistance) params.airportMaxDistance = filters.airportMaxDistance;
+      if (filters.sortBy) params.sortBy = filters.sortBy;
 
-      console.log('Fetching hotels with params:', params);
-      const response = (await apiClient.get('/hotels', { params })) as {
-        hotels?: Hotel[];
-        pagination?: { totalPages: number; total: number };
-      };
-      console.log('API Response:', response);
+      // Try the new search endpoint first, fall back to the old one
+      let response: any;
+      try {
+        response = await apiClient.get('/hotels/search', { params });
+      } catch {
+        // Fall back to old endpoint
+        response = await apiClient.get('/hotels', { params });
+      }
       
       setHotels(response.hotels || []);
       setTotalPages(response.pagination?.totalPages || 1);
@@ -146,349 +181,460 @@ const ListingCardContent = () => {
     }
   };
 
-  const handleFilterChange = (newFilters: FilterParams) => {
-    console.log('[ListingCardContent] handleFilterChange called with:', newFilters);
-    console.log('[ListingCardContent] Current filters:', filters);
-    setFilters(newFilters);
-    setCurrentPage(1); // Reset to first page when filters change
-  };
+  const handleFilterChange = useCallback((newFilters: Partial<FilterParams>) => {
+    setFilters(prev => ({ ...prev, ...newFilters }));
+    setCurrentPage(1);
+  }, []);
 
-  const handleClearFilters = () => {
+  const handleHajjUmrahFilterChange = useCallback((hajjFilters: HajjUmrahFilterParams) => {
+    handleFilterChange(hajjFilters);
+  }, [handleFilterChange]);
+
+  const handleAdvancedFilterChange = useCallback((advancedFilters: AdvancedFilterParams) => {
+    handleFilterChange(advancedFilters);
+  }, [handleFilterChange]);
+
+  const handleSortChange = useCallback((sortBy: SortOption) => {
+    handleFilterChange({ sortBy });
+  }, [handleFilterChange]);
+
+  const handleClearFilters = useCallback(() => {
     setFilters({});
     setCurrentPage(1);
-  };
+  }, []);
 
-  const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, index) => (
-      <li key={index}>
-        <i className={index < rating ? "ri-star-fill" : "ri-star-line"}></i>
-      </li>
-    ));
-  };
-
-  const getMinPrice = (hotel: Hotel) => {
-    if (!hotel.rooms || hotel.rooms.length === 0) return null;
-    const minPrice = Math.min(...hotel.rooms.map(r => Number(r.basePrice)));
-    const currency = hotel.rooms[0].currency;
-    return { price: minPrice, currency };
+  const getActiveFilterCount = () => {
+    let count = 0;
+    if (filters.minRating) count++;
+    if (filters.minPrice) count++;
+    if (filters.maxPrice) count++;
+    if (filters.maxWalkingTimeToHaram) count++;
+    if (filters.viewTypes?.length) count += filters.viewTypes.length;
+    if (filters.elderlyFriendly) count++;
+    if (filters.familyRooms) count++;
+    if (filters.bestForTags?.length) count += filters.bestForTags.length;
+    if (filters.facilities?.length) count += filters.facilities.length;
+    if (filters.roomFacilities?.length) count += filters.roomFacilities.length;
+    return count;
   };
 
   const calculateNights = () => {
-    if (!filters.checkIn || !filters.checkOut) return null;
+    if (!filters.checkIn || !filters.checkOut) return undefined;
     const checkIn = new Date(filters.checkIn);
     const checkOut = new Date(filters.checkOut);
     const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
-    return nights > 0 ? nights : null;
+    return nights > 0 ? nights : undefined;
   };
 
-  const getPriceDisplay = (hotel: Hotel) => {
-    const priceInfo = getMinPrice(hotel);
-    if (!priceInfo) return null;
+  const nights = calculateNights();
 
-    const nights = calculateNights();
-    if (nights) {
-      const totalPrice = Math.round(Number(priceInfo.price) * nights * 100) / 100;
-      return {
-        amount: Number(totalPrice).toFixed(2),
-        perNight: Number(priceInfo.price).toFixed(2),
-        label: `${nights} night${nights !== 1 ? 's' : ''}`,
-        isTotal: true
-      };
-    }
-
-    return {
-      amount: Number(priceInfo.price).toFixed(2),
-      perNight: null,
-      label: 'per night',
-      isTotal: false
-    };
-  };
+  // Convert hotels to HotelCardData format
+  const hotelCards: HotelCardData[] = hotels.map(hotel => ({
+    id: hotel.id,
+    name: hotel.name,
+    description: hotel.description,
+    city: hotel.city,
+    country: hotel.country,
+    latitude: hotel.latitude,
+    longitude: hotel.longitude,
+    starRating: hotel.starRating,
+    averageRating: hotel.averageRating,
+    totalReviews: hotel.totalReviews,
+    minPrice: hotel.minPrice || (hotel.rooms?.[0]?.basePrice),
+    walkingTimeToHaram: hotel.walkingTimeToHaram,
+    distanceToHaramMeters: hotel.distanceToHaramMeters,
+    viewType: hotel.viewType,
+    isElderlyFriendly: hotel.isElderlyFriendly || false,
+    hasFamilyRooms: hotel.hasFamilyRooms || false,
+    manasikScore: hotel.manasikScore,
+    bestForTags: hotel.bestForTags || [],
+    images: hotel.images?.map(img => ({ id: img.id || '', url: img.url })) || [],
+    rooms: hotel.rooms?.map(room => ({
+      id: room.id,
+      name: room.name,
+      basePrice: room.basePrice,
+      currency: room.currency,
+      capacity: room.capacity || 2,
+    })) || [],
+  }));
 
   return (
     <>
       <style jsx>{`
-        .filters-and-hotels-wrapper {
+        .listing-content-wrapper {
+          padding: 20px 0 60px;
+        }
+
+        .content-layout {
           display: grid;
-          grid-template-columns: 250px 1fr;
-          gap: 50px;
-          align-items: start;
-          margin-top: 30px;
+          grid-template-columns: ${showFilters ? '280px 1fr' : '1fr'};
+          gap: 30px;
+          transition: all 0.3s ease;
         }
 
-        @media (max-width: 1200px) {
-          .filters-and-hotels-wrapper {
-            grid-template-columns: 240px 1fr;
-            gap: 40px;
-          }
+        .filters-sidebar {
+          position: sticky;
+          top: 20px;
+          height: fit-content;
+          max-height: calc(100vh - 40px);
+          overflow-y: auto;
+          background: white;
+          border-radius: 12px;
+          padding: 20px;
+          box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
         }
 
-        @media (max-width: 1024px) {
-          .filters-and-hotels-wrapper {
-            grid-template-columns: 1fr;
-            gap: 40px;
-          }
+        .filters-sidebar::-webkit-scrollbar {
+          width: 6px;
         }
 
-        @media (max-width: 768px) {
-          .filters-and-hotels-wrapper {
-            gap: 30px;
-          }
+        .filters-sidebar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 3px;
         }
 
-        .hotels-grid-wrapper {
-          width: 100%;
+        .filters-sidebar::-webkit-scrollbar-thumb {
+          background: #ccc;
+          border-radius: 3px;
         }
 
-        .hotels-grid-wrapper .row {
-          row-gap: 40px;
-          margin-left: -12px;
-          margin-right: -12px;
+        .filters-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 20px;
+          padding-bottom: 16px;
+          border-bottom: 1px solid #f0f0f0;
         }
 
-        .hotels-grid-wrapper .col-xl-4,
-        .hotels-grid-wrapper .col-md-6 {
-          padding-left: 12px;
-          padding-right: 12px;
+        .filters-header h3 {
+          font-size: 18px;
+          font-weight: 700;
+          margin: 0;
+          color: #111;
+        }
+
+        .clear-filters-btn {
+          font-size: 13px;
+          color: #ff621f;
+          background: none;
+          border: none;
+          cursor: pointer;
+          font-weight: 500;
+        }
+
+        .clear-filters-btn:hover {
+          text-decoration: underline;
+        }
+
+        .main-content {
+          min-width: 0;
+        }
+
+        .hotels-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+          gap: 24px;
+        }
+
+        .map-view-container {
+          height: calc(100vh - 200px);
+          min-height: 600px;
         }
 
         .loading-container {
-          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
           padding: 60px 20px;
+          text-align: center;
         }
 
-        .loading-container .spinner-border {
-          width: 3rem;
-          height: 3rem;
+        .loading-spinner {
+          width: 48px;
+          height: 48px;
+          border: 4px solid #f0f0f0;
+          border-top-color: #ff621f;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
         }
 
-        .loading-container p {
-          margin-top: 12px;
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+          margin-top: 16px;
           font-size: 16px;
           color: #666;
         }
 
-        .error-alert {
-          margin-bottom: 30px;
-          padding: 16px 20px;
-          border-left: 4px solid #dc3545;
+        .error-container {
+          padding: 24px;
+          background: #fef2f2;
+          border: 1px solid #fecaca;
+          border-radius: 8px;
+          color: #dc2626;
+          text-align: center;
         }
 
-        .pagination-area {
-          margin-top: 40px;
-          padding-top: 30px;
-          border-top: 1px solid #e0e0e0;
+        .no-results {
+          padding: 60px 20px;
+          text-align: center;
+          background: #f8f9fa;
+          border-radius: 12px;
+        }
+
+        .no-results h3 {
+          font-size: 20px;
+          font-weight: 600;
+          color: #333;
+          margin: 0 0 8px 0;
+        }
+
+        .no-results p {
+          font-size: 14px;
+          color: #666;
+          margin: 0;
+        }
+
+        .pagination {
           display: flex;
           justify-content: center;
           align-items: center;
           gap: 8px;
+          margin-top: 40px;
+          padding-top: 24px;
+          border-top: 1px solid #f0f0f0;
         }
 
-        .pagination-area button {
-          min-width: 40px;
-          height: 40px;
-          padding: 0 8px;
-          border: 1px solid #ddd;
-          background: white;
-          border-radius: 4px;
-          font-weight: 500;
-          color: #333;
-          cursor: pointer;
-          transition: all 0.3s ease;
+        .pagination-btn {
           display: flex;
           align-items: center;
           justify-content: center;
+          min-width: 40px;
+          height: 40px;
+          padding: 0 12px;
+          border: 1px solid #e0e0e0;
+          background: white;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 500;
+          color: #333;
+          cursor: pointer;
+          transition: all 0.2s ease;
         }
 
-        .pagination-area button:hover:not(:disabled) {
+        .pagination-btn:hover:not(:disabled) {
           border-color: #ff621f;
           color: #ff621f;
         }
 
-        .pagination-area button.current {
+        .pagination-btn.active {
           background: #ff621f;
-          color: white;
           border-color: #ff621f;
+          color: white;
         }
 
-        .pagination-area button:disabled {
+        .pagination-btn:disabled {
           opacity: 0.5;
           cursor: not-allowed;
         }
-      `}</style>
-      
-      <div className="most-popular-area mt-35">
-        <div className="container">
-          <div className="filters-and-hotels-wrapper">
-            {/* Filter Sidebar - Always Visible */}
-            <FilterSidebar
-              filters={filters}
-              totalResults={totalResults}
-              onFilterChange={handleFilterChange}
-              onClearFilters={handleClearFilters}
-            />
 
-            {/* Hotels Grid Section */}
-            <div className="hotels-grid-wrapper">
+        .filter-section-divider {
+          margin: 20px 0;
+          border: none;
+          border-top: 1px solid #f0f0f0;
+        }
+
+        .advanced-filters-toggle {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 12px 0;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          color: #333;
+        }
+
+        .advanced-filters-toggle i {
+          transition: transform 0.2s ease;
+        }
+
+        .advanced-filters-toggle.expanded i {
+          transform: rotate(180deg);
+        }
+
+        @media (max-width: 1024px) {
+          .content-layout {
+            grid-template-columns: 1fr;
+          }
+
+          .filters-sidebar {
+            position: relative;
+            top: 0;
+            max-height: none;
+            display: ${showFilters ? 'block' : 'none'};
+          }
+        }
+
+        @media (max-width: 768px) {
+          .hotels-grid {
+            grid-template-columns: 1fr;
+          }
+        }
+      `}</style>
+
+      <div className="listing-content-wrapper">
+        <div className="container">
+          <ResultsHeader
+            totalResults={totalResults}
+            location={filters.city || filters.location}
+            sortBy={filters.sortBy || 'recommended'}
+            onSortChange={handleSortChange}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            onToggleFilters={() => setShowFilters(!showFilters)}
+            activeFilterCount={getActiveFilterCount()}
+          />
+
+          <div className="content-layout">
+            {/* Filters Sidebar */}
+            {showFilters && (
+              <div className="filters-sidebar">
+                <div className="filters-header">
+                  <h3>Filters</h3>
+                  {getActiveFilterCount() > 0 && (
+                    <button className="clear-filters-btn" onClick={handleClearFilters} type="button">
+                      Clear All
+                    </button>
+                  )}
+                </div>
+
+                {/* Hajj/Umrah Specific Filters */}
+                <HajjUmrahFilters
+                  filters={{
+                    maxWalkingTimeToHaram: filters.maxWalkingTimeToHaram,
+                    viewTypes: filters.viewTypes,
+                    elderlyFriendly: filters.elderlyFriendly,
+                    familyRooms: filters.familyRooms,
+                    bestForTags: filters.bestForTags,
+                    minPrice: filters.minPrice,
+                    maxPrice: filters.maxPrice,
+                  }}
+                  onFilterChange={handleHajjUmrahFilterChange}
+                />
+
+                <hr className="filter-section-divider" />
+
+                {/* Advanced Filters */}
+                <AdvancedFilters
+                  filters={{
+                    facilities: filters.facilities,
+                    roomFacilities: filters.roomFacilities,
+                    proximityLandmark: filters.proximityLandmark,
+                    proximityDistance: filters.proximityDistance,
+                    surroundings: filters.surroundings,
+                    airportMaxDistance: filters.airportMaxDistance,
+                  }}
+                  onFilterChange={handleAdvancedFilterChange}
+                />
+              </div>
+            )}
+
+            {/* Main Content */}
+            <div className="main-content">
               {/* Loading State */}
               {loading && (
                 <div className="loading-container">
-                  <div className="spinner-border text-primary" role="status">
-                    <span className="visually-hidden">Loading...</span>
-                  </div>
-                  <p className="mt-3">Loading hotels...</p>
+                  <div className="loading-spinner"></div>
+                  <p className="loading-text">Finding the best stays for you...</p>
                 </div>
               )}
 
               {/* Error State */}
-              {error && (
-                <div className="alert alert-danger error-alert" role="alert">
-                  <i className="ri-error-warning-line me-2"></i>
-                  {error}
+              {error && !loading && (
+                <div className="error-container">
+                  <p>{error}</p>
                 </div>
               )}
 
-              {/* Hotels Grid */}
+              {/* Results */}
               {!loading && !error && (
-                <div className="row">
-                  {hotels.length === 0 ? (
-                    <div className="col-12">
-                      <div className="alert alert-info text-center" role="alert">
-                        <i className="ri-information-line me-2"></i>
-                        No hotels found. Try adjusting your search criteria.
-                      </div>
-                    </div>
-                  ) : (
-                    hotels.map((hotel) => {
-                      const priceDisplay = getPriceDisplay(hotel);
-                      const imageUrl = hotel.images && hotel.images.length > 0 
-                        ? hotel.images[0].url 
-                        : '/images/popular/popular-7.jpg';
-
-                      return (
-                        <div key={hotel.id} className="col-xl-4 col-md-6">
-                          <div className="most-popular-single-item">
-                            <div className="most-popular-single-img position-relative">
-                              <Link href={`/stay-details/${hotel.id}`}>
-                                <Image 
-                                  src={imageUrl} 
-                                  alt={hotel.name}
-                                  width={400}
-                                  height={300}
-                                  style={{ objectFit: 'cover', width: '100%', height: '250px' }}
-                                />
-                              </Link>
-                              <div className="most-popular-single-heart-discount d-flex justify-content-between align-items-center">
-                                <button type="button" className="heart">
-                                  <i className="flaticon-heart"></i>
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="most-popular-single-content">
-                              <h3>
-                                <Link href={`/stay-details/${hotel.id}`}>{hotel.name}</Link>
-                              </h3>
-
-                              <div className="d-flex align-items-center most-popular-single-location">
-                                <i className="flaticon-location"></i>
-                                <span>{hotel.city}, {hotel.country}</span>
-                              </div>
-
-                              <ul className="ps-0 pe-0 list-unstyled d-flex align-items-center most-popular-single-star">
-                                {renderStars(hotel.starRating)}
-                                <li>
-                                  <span>({hotel.totalReviews > 0 ? `${hotel.totalReviews}` : '0'} Rating{hotel.totalReviews !== 1 ? 's' : ''})</span>
-                                </li>
-                              </ul>
-
-                              <div className="d-flex align-items-center justify-content-between most-popular-single-price" style={{ fontSize: '13px' }}>
-                                {priceDisplay ? (
-                                  <>
-                                    <p style={{ margin: 0 }}>
-                                      <span className="title" style={{ fontSize: '14px' }}>from ${priceDisplay.amount}</span>
-                                      <span style={{ fontWeight: 'normal', fontSize: '13px' }}> / night</span>
-                                    </p>
-                                  </>
-                                ) : (
-                                  <p style={{ margin: 0 }}>
-                                    <span className="title" style={{ fontSize: '14px' }}>Contact for pricing</span>
-                                  </p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
+                <>
+                  {viewMode === 'list' ? (
+                    <>
+                      {hotels.length === 0 ? (
+                        <div className="no-results">
+                          <h3>No hotels found</h3>
+                          <p>Try adjusting your filters or search criteria</p>
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              )}
-              
-              {/* Pagination */}
-              {hotels.length > 0 && totalPages > 1 && (
-                <div className="row">
-                  <div className="col-lg-12">
-                    <div className="pagination-area text-start">
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                      disabled={currentPage === 1}
-                      className="next page-numbers"
-                      style={{ border: 'none', background: 'transparent', cursor: currentPage === 1 ? 'not-allowed' : 'pointer' }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="15"
-                        height="15"
-                        viewBox="0 0 15 15"
-                        fill="none"
-                      >
-                        <g clipPath="url(#clip0_3719_2626)">
-                          <path
-                            d="M3.60973 7.0177L10.4279 0.199699C10.6941 -0.0665738 11.1259 -0.0665739 11.3921 0.199744C11.6584 0.466017 11.6584 0.897699 11.3921 1.16397L5.05605 7.49988L11.3921 13.8361C11.6584 14.1024 11.6584 14.5341 11.3921 14.8003C11.259 14.9335 11.0845 15 10.91 15C10.7355 15 10.561 14.9335 10.4279 14.8003L3.60973 7.98192C3.48182 7.85406 3.41 7.68065 3.41 7.49983C3.41 7.31902 3.48182 7.14556 3.60973 7.0177Z"
-                            fill="#111827"
-                          />
-                        </g>
-                      </svg>
-                    </button>
-
-                    {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                      const pageNum = i + 1;
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`page-numbers ${currentPage === pageNum ? 'current' : ''}`}
-                          style={{ border: 'none', background: 'transparent', cursor: 'pointer' }}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    })}
-
-                    <button
-                      onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                      disabled={currentPage === totalPages}
-                      className="next page-numbers"
-                      style={{ border: 'none', background: 'transparent', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer' }}
-                    >
-                      <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="15"
-                        height="15"
-                        viewBox="0 0 15 15"
-                        fill="none"
-                      >
-                        <g clipPath="url(#clip0_3719_2622)">
-                          <path
-                            d="M11.3903 7.0177L4.57209 0.199699C4.30587 -0.0665738 3.87414 -0.0665739 3.60787 0.199744C3.34164 0.466017 3.34164 0.897699 3.60791 1.16397L9.94395 7.49988L3.60787 13.8361C3.34164 14.1024 3.34164 14.5341 3.60791 14.8003C3.741 14.9335 3.9155 15 4.09 15C4.2645 15 4.439 14.9335 4.57214 14.8003L11.3903 7.98192C11.5182 7.85406 11.59 7.68065 11.59 7.49983C11.59 7.31901 11.5182 7.14556 11.3903 7.0177Z"
-                            fill="#111827"
-                          />
-                        </g>
-                      </svg>
-                    </button>
+                      ) : (
+                        <div className="hotels-grid">
+                          {hotelCards.map((hotel) => (
+                            <HotelCard key={hotel.id} hotel={hotel} nights={nights} />
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  ) : (
+                    <div className="map-view-container">
+                      <HotelMapView
+                        hotels={hotelCards}
+                        selectedHotelId={selectedHotelId}
+                        onHotelSelect={setSelectedHotelId}
+                      />
                     </div>
-                  </div>
-                </div>
+                  )}
+
+                  {/* Pagination */}
+                  {viewMode === 'list' && hotels.length > 0 && totalPages > 1 && (
+                    <div className="pagination">
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                        disabled={currentPage === 1}
+                        type="button"
+                      >
+                        <i className="ri-arrow-left-s-line"></i>
+                      </button>
+
+                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            className={`pagination-btn ${currentPage === pageNum ? 'active' : ''}`}
+                            onClick={() => setCurrentPage(pageNum)}
+                            type="button"
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        className="pagination-btn"
+                        onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={currentPage === totalPages}
+                        type="button"
+                      >
+                        <i className="ri-arrow-right-s-line"></i>
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </div>

@@ -51,6 +51,10 @@ export interface BookingDetail extends AdminBooking {
   guests?: number;
   roomType?: string;
   hotelName?: string;
+  hotelAddress?: string;
+  hotelCity?: string;
+  hotelCountry?: string;
+  hotelFullAddress?: string;
   agentId?: string;
   paymentLinkUrl?: string;
   brokerNotes?: string;
@@ -216,11 +220,14 @@ export class AdminBookingsService {
         u.email as customerEmail,
         c.name as serviceName,
         h.name as hotelName,
+        h.address as hotelAddress,
+        h.city as hotelCity,
+        h.country as hotelCountry,
         CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName
       FROM bookings b
       JOIN users u ON b.customer_id = u.id
       JOIN companies c ON b.company_id = c.id
-      LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
+      LEFT JOIN hotels h ON b.hotel_id = h.id
       LEFT JOIN agents a ON b.agent_id = a.id
       LEFT JOIN users agent_user ON a.user_id = agent_user.id
       WHERE b.id = ?
@@ -250,6 +257,11 @@ export class AdminBookingsService {
     // Determine booking source - check column first, then metadata for backwards compatibility
     const bookingSource = booking.booking_source || metadata.bookingSource || metadata.source || 'DIRECT';
 
+    // Build hotel full address
+    const hotelFullAddress = [booking.hotelAddress, booking.hotelCity, booking.hotelCountry]
+      .filter(Boolean)
+      .join(', ') || null;
+
     return {
       id: booking.id,
       customerId: booking.customer_id,
@@ -259,6 +271,10 @@ export class AdminBookingsService {
       serviceType: booking.service_type,
       serviceName: booking.serviceName,
       hotelName: booking.hotelName || booking.serviceName,
+      hotelAddress: booking.hotelAddress || null,
+      hotelCity: booking.hotelCity || null,
+      hotelCountry: booking.hotelCountry || null,
+      hotelFullAddress,
       bookingDate: booking.created_at,
       checkInDate,
       checkOutDate,

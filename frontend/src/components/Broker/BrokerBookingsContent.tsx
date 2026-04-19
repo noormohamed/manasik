@@ -14,6 +14,9 @@ interface Booking {
   subtotal: number;
   tax: number;
   total: number;
+  refundAmount?: number;
+  refundReason?: string;
+  refundedAt?: string;
   paymentStatus?: string;
   bookingSource?: string;
   hotelId: string;
@@ -447,10 +450,20 @@ const BrokerBookingsContent: React.FC = () => {
                       </td>
                       <td className="text-end">
                         <div className="fw-bold">
-                          {formatCurrency(booking.total, booking.currency)}
+                          {booking.refundAmount && booking.refundAmount > 0
+                            ? formatCurrency(
+                                booking.total - booking.refundAmount,
+                                booking.currency
+                              )
+                            : formatCurrency(booking.total, booking.currency)}
                         </div>
-                        <small className="text-muted" style={{ color: "#6f42c1" }}>
-                          +{formatCurrency(calculateCommission(booking.total), booking.currency)}{" "}
+                        {booking.refundAmount && booking.refundAmount > 0 && (
+                          <small className="text-muted" style={{ textDecoration: 'line-through' }}>
+                            {formatCurrency(booking.total, booking.currency)}
+                          </small>
+                        )}
+                        <small className="text-muted d-block" style={{ color: "#6f42c1" }}>
+                          +{formatCurrency(calculateCommission(booking.refundAmount && booking.refundAmount > 0 ? booking.total - booking.refundAmount : booking.total), booking.currency)}{" "}
                           comm.
                         </small>
                       </td>

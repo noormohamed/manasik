@@ -14,10 +14,37 @@ interface Booking {
   subtotal: number;
   tax: number;
   total: number;
+  refundAmount?: number;
+  refundReason?: string;
+  refundedAt?: string;
   paymentStatus?: string;
   bookingSource?: string;
   hotelId: string;
   hotelName: string;
+  hotelAddress?: string;
+  hotelCity?: string;
+  hotelCountry?: string;
+  hotelFullAddress?: string;
+  hotelImage?: string;
+  hotelPhone?: string;
+  providerName?: string;
+  providerReference?: string;
+  providerPhone?: string;
+  checkInTime?: string;
+  checkOutTime?: string;
+  starRating?: number;
+  closestGate?: {
+    name: string;
+    gateNumber: number;
+    distance: number;
+    walkingTime: number;
+  };
+  kaabaGate?: {
+    name: string;
+    gateNumber: number;
+    distance: number;
+    walkingTime: number;
+  };
   roomTypeId: string;
   roomName: string;
   checkIn: string;
@@ -27,6 +54,17 @@ interface Booking {
   guestEmail: string;
   guestPhone?: string;
   guestCount: number;
+  guests?: Array<{
+    id: string;
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone?: string;
+    nationality?: string;
+    passportNumber?: string;
+    dateOfBirth?: string;
+    isLeadPassenger: boolean;
+  }>;
   customerId?: string;
   agentId?: string;
   agentName?: string;
@@ -54,6 +92,10 @@ const DashboardBookingsContent: React.FC = () => {
   const [calendarStartDate, setCalendarStartDate] = useState(new Date());
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundAmount, setRefundAmount] = useState<string>('');
+  const [refundReason, setRefundReason] = useState<string>('');
+  const [processingRefund, setProcessingRefund] = useState(false);
 
   const userName = user ? `${user.firstName} ${user.lastName}` : 'User';
 
@@ -100,10 +142,22 @@ const DashboardBookingsContent: React.FC = () => {
         subtotal: b.subtotal,
         tax: b.tax,
         total: b.total,
+        refundAmount: b.refundAmount || null,
+        refundReason: b.refundReason || null,
+        refundedAt: b.refundedAt || null,
         paymentStatus: b.paymentStatus,
         bookingSource: b.bookingSource || 'DIRECT',
-        hotelId: b.metadata?.hotelId || b.hotelId || '',
+        hotelId: b.hotelId || b.metadata?.hotelId || '',
         hotelName: b.hotelName || b.metadata?.hotelName || 'Unknown Hotel',
+        hotelAddress: b.hotelAddress || b.metadata?.hotelAddress || '',
+        hotelCity: b.hotelCity || b.metadata?.hotelCity || '',
+        hotelCountry: b.hotelCountry || b.metadata?.hotelCountry || '',
+        hotelFullAddress: b.hotelFullAddress || b.metadata?.hotelFullAddress || '',
+        checkInTime: b.checkInTime || '14:00',
+        checkOutTime: b.checkOutTime || '11:00',
+        starRating: b.starRating,
+        closestGate: b.closestGate || null,
+        kaabaGate: b.kaabaGate || null,
         roomTypeId: b.metadata?.roomTypeId || b.roomTypeId || '',
         roomName: b.roomType || b.metadata?.roomType || 'Room',
         checkIn: b.checkInDate || b.metadata?.checkInDate || '',
@@ -113,6 +167,7 @@ const DashboardBookingsContent: React.FC = () => {
         guestEmail: b.metadata?.guestEmail || '',
         guestPhone: b.metadata?.guestPhone || '',
         guestCount: b.guests || b.metadata?.guests || 1,
+        guests: b.guestDetails || [],
         customerId: b.customerId,
         agentId: b.agentId,
         agentName: b.agentName,
@@ -326,6 +381,607 @@ const DashboardBookingsContent: React.FC = () => {
   const handleCloseModal = () => {
     setShowDetailsModal(false);
     setSelectedBooking(null);
+  };
+
+  const handleOpenRefundModal = () => {
+    if (selectedBooking) {
+      setRefundAmount((selectedBooking.total - (selectedBooking.refundAmount || 0)).toString());
+      setRefundReason('');
+      setShowRefundModal(true);
+    }
+  };
+
+  const handleCloseRefundModal = () => {
+    setShowRefundModal(false);
+    setRefundAmount('');
+    setRefundReason('');
+  };
+
+  const handleProcessRefund = async () => {
+    if (!selectedBooking || !refundAmount || !refundReason) {
+      alert('Please fill in all refund details');
+      return;
+    }
+
+    const amount = parseFloat(refundAmount);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Please enter a valid refund amount');
+      return;
+    }
+
+    const maxRefund = selectedBooking.total - (selectedBooking.refundAmount || 0);
+    if (amount > maxRefund) {
+      alert(`Refund amount cannot exceed ${formatCurrency(maxRefund, selectedBooking.currency)}`);
+      return;
+    }
+
+    setProcessingRefund(true);
+    try {
+      await apiClient.post(`/hotels/bookings/${selectedBooking.id}/refund`, {
+        amount,
+        reason: refundReason,
+      });
+
+      alert('Refund processed successfully!');
+      handleCloseRefundModal();
+      setShowDetailsModal(false);
+      setSelectedBooking(null);
+      // Force a fresh fetch of bookings
+      await fetchBookings();
+    } catch (err: any) {
+      alert(err.error || 'Failed to process refund');
+    } finally {
+      setProcessingRefund(false);
+    }
+  };
+
+  const handlePrintConfirmation = () => {
+    if (!selectedBooking) return;
+
+    const hotelAddress = selectedBooking.hotelFullAddress || 
+      [selectedBooking.hotelAddress, selectedBooking.hotelCity, selectedBooking.hotelCountry]
+        .filter(Boolean).join(', ') || 'Address not available';
+
+    // Format check-in/out times
+    const formatTime = (time: string) => {
+      if (!time) return '';
+      const [hours, minutes] = time.split(':');
+      const hour = parseInt(hours);
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour % 12 || 12;
+      return `${hour12}:${minutes} ${ampm}`;
+    };
+
+    // Generate star rating display
+    const starRating = selectedBooking.starRating 
+      ? '⭐'.repeat(selectedBooking.starRating) 
+      : '';
+
+    // Provider information section
+    const providerHtml = selectedBooking.providerName ? `
+      <div class="provider-box">
+        <h4>🏢 Provider Information</h4>
+        <p style="font-size: 14px; margin: 4px 0;">
+          <strong>Company:</strong> ${selectedBooking.providerName}
+        </p>
+        ${selectedBooking.providerReference ? `
+        <p style="font-size: 14px; margin: 4px 0;">
+          <strong>Reference:</strong> ${selectedBooking.providerReference}
+        </p>
+        ` : ''}
+        ${selectedBooking.providerPhone ? `
+        <p style="font-size: 14px; margin: 4px 0;">
+          <strong>Contact:</strong> ${selectedBooking.providerPhone}
+        </p>
+        ` : ''}
+      </div>
+    ` : '';
+
+    // Gate information sections
+    const closestGateHtml = selectedBooking.closestGate ? `
+      <div class="info-box gate-box">
+        <h4>🚶 Closest Haram Gate</h4>
+        <p style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">
+          Gate ${selectedBooking.closestGate.gateNumber} - ${selectedBooking.closestGate.name}
+        </p>
+        <p style="color: #666; margin: 0;">
+          ${selectedBooking.closestGate.distance}m • ${selectedBooking.closestGate.walkingTime} min walk
+        </p>
+      </div>
+    ` : '';
+
+    const kaabaGateHtml = selectedBooking.kaabaGate ? `
+      <div class="info-box gate-box kaaba">
+        <h4>🕋 Kaaba Gate Access</h4>
+        <p style="font-size: 16px; font-weight: bold; margin-bottom: 4px;">
+          Gate ${selectedBooking.kaabaGate.gateNumber} - ${selectedBooking.kaabaGate.name}
+        </p>
+        <p style="color: #666; margin: 0;">
+          ${selectedBooking.kaabaGate.distance}m • ${selectedBooking.kaabaGate.walkingTime} min walk
+        </p>
+      </div>
+    ` : '';
+
+    const printContent = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Booking Confirmation - ${selectedBooking.id}</title>
+        <style>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            color: #333;
+          }
+          .header {
+            text-align: center;
+            border-bottom: 3px solid #0d6efd;
+            padding-bottom: 20px;
+            margin-bottom: 30px;
+          }
+          .header h1 {
+            color: #0d6efd;
+            margin: 0 0 10px 0;
+            font-size: 28px;
+          }
+          .header-content {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+          }
+          .booking-id {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 8px 16px;
+            border-radius: 4px;
+            display: inline-block;
+            font-size: 14px;
+          }
+          .status-badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-weight: bold;
+          }
+          .status-CONFIRMED { background: #d4edda; color: #155724; }
+          .status-PENDING { background: #fff3cd; color: #856404; }
+          .status-CANCELLED { background: #f8d7da; color: #721c24; }
+          .status-COMPLETED { background: #d1ecf1; color: #0c5460; }
+          .status-REFUNDED { background: #e2e3e5; color: #383d41; }
+          
+          .section {
+            margin-bottom: 28px;
+          }
+          .section h3 {
+            color: #0d6efd;
+            font-size: 18px;
+            border-bottom: 2px solid #0d6efd;
+            padding-bottom: 10px;
+            margin-bottom: 16px;
+            font-weight: 600;
+          }
+          
+          .accommodation-section {
+            background: #e8f4fd;
+            border: 2px solid #0d6efd;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 28px;
+          }
+          .accommodation-section h3 {
+            border: none;
+            margin-top: 0;
+            margin-bottom: 16px;
+            color: #0d6efd;
+          }
+          .hotel-name {
+            font-size: 20px;
+            font-weight: bold;
+            color: #0d6efd;
+            margin-bottom: 4px;
+          }
+          .star-rating {
+            font-size: 14px;
+            margin-bottom: 8px;
+            color: #666;
+          }
+          .room-name {
+            font-size: 16px;
+            color: #495057;
+            margin-bottom: 12px;
+            font-weight: 500;
+          }
+          .address {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 12px;
+          }
+          .times {
+            display: flex;
+            gap: 24px;
+            padding-top: 12px;
+            border-top: 1px solid #cce5ff;
+            font-size: 14px;
+            flex-wrap: wrap;
+          }
+          .times span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+          }
+          
+          .provider-box {
+            background: #f0f7ff;
+            border-left: 4px solid #0d6efd;
+            padding: 12px;
+            border-radius: 4px;
+            margin-top: 12px;
+            font-size: 13px;
+          }
+          .provider-box h4 {
+            margin: 0 0 8px 0;
+            color: #0d6efd;
+            font-size: 13px;
+            font-weight: 600;
+          }
+          .provider-box p {
+            margin: 4px 0;
+            font-size: 13px;
+          }
+          
+          .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+          }
+          .info-box {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+          }
+          .info-box h4 {
+            margin: 0 0 12px 0;
+            color: #6c757d;
+            font-size: 12px;
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+          }
+          .info-box p {
+            margin: 4px 0;
+            font-size: 14px;
+          }
+          .info-box .value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #0d6efd;
+            margin-top: 8px;
+          }
+          
+          .gate-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+          }
+          .gate-box h4 {
+            color: #e65100;
+          }
+          .gate-box.kaaba {
+            background: #e8f5e9;
+            border-left: 4px solid #4caf50;
+          }
+          .gate-box.kaaba h4 {
+            color: #2e7d32;
+          }
+          
+          .payment-summary {
+            background: #e7f1ff;
+            padding: 20px;
+            border-radius: 8px;
+            border: 1px solid #b3d9ff;
+          }
+          .payment-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+          }
+          .payment-row.total {
+            border-top: 2px solid #0d6efd;
+            padding-top: 12px;
+            margin-top: 12px;
+            font-size: 18px;
+            font-weight: bold;
+            color: #0d6efd;
+          }
+          .refund-section {
+            margin-top: 16px;
+            padding-top: 12px;
+            border-top: 2px dashed #28a745;
+          }
+          .refund-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            color: #28a745;
+            font-weight: 500;
+          }
+          
+          .important-info {
+            background: #fff8e1;
+            border: 1px solid #ffecb3;
+            border-radius: 8px;
+            padding: 16px;
+          }
+          .important-info h4 {
+            margin: 0 0 12px 0;
+            color: #f57c00;
+            font-size: 14px;
+            font-weight: 600;
+          }
+          .important-info ul {
+            margin: 0;
+            padding-left: 20px;
+            font-size: 13px;
+          }
+          .important-info li {
+            margin-bottom: 6px;
+            line-height: 1.5;
+          }
+          
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #dee2e6;
+            text-align: center;
+            color: #6c757d;
+            font-size: 12px;
+          }
+          .footer p {
+            margin: 4px 0;
+          }
+          
+          .print-btn {
+            display: block;
+            margin: 20px auto;
+            padding: 12px 32px;
+            background: #0d6efd;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 500;
+          }
+          .print-btn:hover {
+            background: #0b5ed7;
+          }
+          @media print {
+            body { padding: 20px; }
+            .print-btn { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <!-- 1. HEADER WITH BOOKING ID AND STATUS -->
+        <div class="header">
+          <h1>🏨 Booking Confirmation</h1>
+          <div class="header-content">
+            <span class="booking-id">${selectedBooking.id}</span>
+            <span class="status-badge status-${selectedBooking.status}">${selectedBooking.status}</span>
+          </div>
+        </div>
+
+        <!-- 2. ACCOMMODATION SECTION -->
+        <div class="accommodation-section">
+          <h3>🏨 Accommodation</h3>
+          <div class="hotel-name">${selectedBooking.hotelName}</div>
+          ${starRating ? `<div class="star-rating">${starRating}</div>` : ''}
+          <div class="room-name">${selectedBooking.roomName}</div>
+          <div class="address">
+            <span>📍</span>
+            <span>${hotelAddress}</span>
+          </div>
+          <div class="times">
+            <span>🔑 Check-in: <strong>${formatTime(selectedBooking.checkInTime || '14:00')}</strong></span>
+            <span>🚪 Check-out: <strong>${formatTime(selectedBooking.checkOutTime || '11:00')}</strong></span>
+          </div>
+          ${providerHtml}
+        </div>
+
+        <!-- 3. GUEST INFORMATION SECTION -->
+        <div class="section">
+          <h3>👤 Guest Information</h3>
+          ${selectedBooking.guests && selectedBooking.guests.length > 0 ? `
+            <div style="display: grid; gap: 16px;">
+              ${selectedBooking.guests.map((guest: any, idx: number) => `
+                <div style="background: #f8f9fa; padding: 16px; border-radius: 8px; border-left: 4px solid ${guest.isLeadPassenger ? '#0d6efd' : '#6c757d'};">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <h4 style="margin: 0; color: #0d6efd; font-size: 16px; font-weight: 600;">
+                      ${guest.firstName} ${guest.lastName}
+                      ${guest.isLeadPassenger ? '<span style="background: #0d6efd; color: white; padding: 2px 8px; border-radius: 4px; font-size: 11px; margin-left: 8px; font-weight: bold;">LEAD</span>' : ''}
+                    </h4>
+                  </div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 13px;">
+                    <div>
+                      <span style="color: #666; font-weight: 500;">📧 Email:</span>
+                      <p style="margin: 4px 0; color: #333;">${guest.email || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span style="color: #666; font-weight: 500;">📱 Phone:</span>
+                      <p style="margin: 4px 0; color: #333;">${guest.phone || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span style="color: #666; font-weight: 500;">🌍 Nationality:</span>
+                      <p style="margin: 4px 0; color: #333;">${guest.nationality || 'N/A'}</p>
+                    </div>
+                    <div>
+                      <span style="color: #666; font-weight: 500;">📄 Passport:</span>
+                      <p style="margin: 4px 0; color: #333;">${guest.passportNumber || 'N/A'}</p>
+                    </div>
+                    ${guest.dateOfBirth ? `
+                    <div>
+                      <span style="color: #666; font-weight: 500;">🎂 Date of Birth:</span>
+                      <p style="margin: 4px 0; color: #333;">${new Date(guest.dateOfBirth).toLocaleDateString()}</p>
+                    </div>
+                    ` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          ` : `
+            <div class="info-grid">
+              <div class="info-box">
+                <h4>Guest Name</h4>
+                <p class="value">${selectedBooking.guestName || 'N/A'}</p>
+              </div>
+              <div class="info-box">
+                <h4>Email</h4>
+                <p>${selectedBooking.guestEmail || 'N/A'}</p>
+              </div>
+              <div class="info-box">
+                <h4>Phone</h4>
+                <p>${selectedBooking.guestPhone || 'N/A'}</p>
+              </div>
+              <div class="info-box">
+                <h4>Guest Count</h4>
+                <p class="value">${selectedBooking.guestCount} ${selectedBooking.guestCount === 1 ? 'guest' : 'guests'}</p>
+              </div>
+            </div>
+          `}
+        </div>
+
+        <!-- 4. STAY DETAILS SECTION -->
+        <div class="section">
+          <h3>📅 Stay Details</h3>
+          <div class="info-grid">
+            <div class="info-box">
+              <h4>Check-in Date</h4>
+              <p class="value">${formatDate(selectedBooking.checkIn)}</p>
+              <p style="color: #666; font-size: 12px; margin-top: 4px;">From ${formatTime(selectedBooking.checkInTime || '14:00')}</p>
+            </div>
+            <div class="info-box">
+              <h4>Check-out Date</h4>
+              <p class="value">${formatDate(selectedBooking.checkOut)}</p>
+              <p style="color: #666; font-size: 12px; margin-top: 4px;">By ${formatTime(selectedBooking.checkOutTime || '11:00')}</p>
+            </div>
+            <div class="info-box">
+              <h4>Duration</h4>
+              <p class="value">${selectedBooking.nights}</p>
+              <p style="color: #666; font-size: 12px; margin-top: 4px;">${selectedBooking.nights === 1 ? 'night' : 'nights'}</p>
+            </div>
+            <div class="info-box">
+              <h4>Booking Date</h4>
+              <p style="font-size: 13px;">${new Date(selectedBooking.createdAt).toLocaleDateString()}</p>
+              <p style="color: #666; font-size: 12px; margin-top: 4px;">${new Date(selectedBooking.createdAt).toLocaleTimeString()}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. HARAM GATE ACCESS SECTION (if available) -->
+        ${(closestGateHtml || kaabaGateHtml) ? `
+        <div class="section">
+          <h3>🕌 Haram Gate Access</h3>
+          <div class="info-grid">
+            ${closestGateHtml}
+            ${kaabaGateHtml}
+          </div>
+        </div>
+        ` : ''}
+
+        <!-- 6. PAYMENT SUMMARY SECTION -->
+        <div class="section">
+          <h3>💳 Payment Summary</h3>
+          <div class="payment-summary">
+            <div class="payment-row">
+              <span>Subtotal</span>
+              <span>${formatCurrency(selectedBooking.subtotal, selectedBooking.currency)}</span>
+            </div>
+            <div class="payment-row">
+              <span>Tax</span>
+              <span>${formatCurrency(selectedBooking.tax, selectedBooking.currency)}</span>
+            </div>
+            <div class="payment-row total">
+              <span>Total</span>
+              <span style="color: ${selectedBooking.status === 'CANCELLED' || selectedBooking.status === 'REFUNDED' ? '#dc3545' : '#0d6efd'}; ${selectedBooking.refundAmount && selectedBooking.refundAmount >= selectedBooking.total ? 'text-decoration: line-through;' : ''}">
+                ${formatCurrency(selectedBooking.total, selectedBooking.currency)}
+              </span>
+            </div>
+            ${selectedBooking.refundAmount && selectedBooking.refundAmount > 0 ? `
+            <div class="refund-section">
+              <div class="refund-row">
+                <span>💰 ${selectedBooking.refundAmount >= selectedBooking.total ? 'Full Refund' : 'Partial Refund'}</span>
+                <span>-${formatCurrency(selectedBooking.refundAmount, selectedBooking.currency)}</span>
+              </div>
+              ${selectedBooking.refundAmount < selectedBooking.total ? `
+              <div class="payment-row" style="margin-top: 8px; color: #0d6efd; font-weight: bold;">
+                <span>Net Amount Paid</span>
+                <span>${formatCurrency(selectedBooking.total - selectedBooking.refundAmount, selectedBooking.currency)}</span>
+              </div>
+              ` : ''}
+              ${selectedBooking.refundReason ? `
+              <div style="margin-top: 8px; padding: 8px; background: #d4edda; border-radius: 4px; font-size: 12px;">
+                <strong>Refund Reason:</strong> ${selectedBooking.refundReason}
+              </div>
+              ` : ''}
+              ${selectedBooking.refundedAt ? `
+              <div style="margin-top: 4px; font-size: 11px; color: #666;">
+                Refunded on: ${new Date(selectedBooking.refundedAt).toLocaleDateString()}
+              </div>
+              ` : ''}
+            </div>
+            ` : ''}
+            ${selectedBooking.status === 'CANCELLED' && !selectedBooking.refundAmount ? `
+            <div style="margin-top: 16px; padding: 12px; background: #f8d7da; border-radius: 4px; text-align: center;">
+              <span style="color: #721c24; font-weight: bold;">⚠️ Booking Cancelled</span>
+            </div>
+            ` : ''}
+          </div>
+        </div>
+
+        <!-- 7. IMPORTANT INFORMATION SECTION -->
+        <div class="important-info">
+          <h4>📋 Important Information</h4>
+          <ul>
+            <li>Please present this confirmation and a valid ID at check-in</li>
+            <li>Early check-in and late check-out are subject to availability</li>
+            <li>Contact the hotel directly for special requests</li>
+            ${selectedBooking.closestGate ? `<li>The closest Haram gate is Gate ${selectedBooking.closestGate.gateNumber} (${selectedBooking.closestGate.walkingTime} min walk)</li>` : ''}
+            ${selectedBooking.providerName ? `<li>Provider: ${selectedBooking.providerName}${selectedBooking.providerPhone ? ` - Contact: ${selectedBooking.providerPhone}` : ''}</li>` : ''}
+          </ul>
+        </div>
+
+        <!-- 8. FOOTER -->
+        <div class="footer">
+          <p>Booking confirmed on: ${new Date(selectedBooking.createdAt).toLocaleString()}</p>
+          <p>Thank you for your booking! We look forward to hosting you.</p>
+          <p style="margin-top: 12px; font-size: 10px; color: #999;">Booking Reference: ${selectedBooking.id}</p>
+        </div>
+
+        <button class="print-btn" onclick="window.print()">🖨️ Print Confirmation</button>
+      </body>
+      </html>
+    `;
+
+    // Open a clean popup window without browser chrome
+    const printWindow = window.open(
+      '', 
+      'BookingConfirmation',
+      'width=850,height=700,menubar=no,toolbar=no,location=no,status=no,scrollbars=yes,resizable=yes'
+    );
+    
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+      printWindow.focus();
+    }
   };
 
   const getBookingSourceBadge = (source: string) => {
@@ -779,11 +1435,35 @@ const DashboardBookingsContent: React.FC = () => {
                               {/* Price section */}
                               <div className="text-end">
                                 <h5 className="mb-0 text-primary">
-                                  {formatCurrency(booking.total, booking.currency)}
+                                  {booking.refundAmount && booking.refundAmount > 0
+                                    ? formatCurrency(
+                                        booking.total - booking.refundAmount,
+                                        booking.currency
+                                      )
+                                    : formatCurrency(booking.total, booking.currency)}
                                 </h5>
+                                {booking.refundAmount && booking.refundAmount > 0 && (
+                                  <small className="text-muted d-block mb-2" style={{ textDecoration: 'line-through' }}>
+                                    {formatCurrency(booking.total, booking.currency)}
+                                  </small>
+                                )}
                                 <small className="text-muted d-block mb-2">
-                                  (Subtotal: {formatCurrency(booking.subtotal, booking.currency)} + 
-                                  Tax: {formatCurrency(booking.tax, booking.currency)})
+                                  {booking.refundAmount && booking.refundAmount > 0 ? (
+                                    <>
+                                      (Subtotal: {formatCurrency(
+                                        booking.subtotal - (booking.refundAmount * booking.subtotal / booking.total),
+                                        booking.currency
+                                      )} + Tax: {formatCurrency(
+                                        booking.tax - (booking.refundAmount * booking.tax / booking.total),
+                                        booking.currency
+                                      )})
+                                    </>
+                                  ) : (
+                                    <>
+                                      (Subtotal: {formatCurrency(booking.subtotal, booking.currency)} + 
+                                      Tax: {formatCurrency(booking.tax, booking.currency)})
+                                    </>
+                                  )}
                                 </small>
                                 {/* Visual scale for nights */}
                                 <div className="d-flex align-items-center justify-content-end gap-1">
@@ -808,12 +1488,24 @@ const DashboardBookingsContent: React.FC = () => {
                             {/* Action buttons */}
                             <div className="d-flex gap-2">
                               <Link
-                                href={`/dashboard/listings/${booking.hotelId}`}
+                                href={`/dashboard/stay-details/?hotelId=${booking.hotelId}`}
                                 className="btn btn-sm btn-outline-primary"
                               >
                                 <i className="ri-hotel-line me-1"></i>
                                 View Hotel
                               </Link>
+                              {(booking.status === 'CONFIRMED' || booking.status === 'COMPLETED' || booking.status === 'PENDING') && (
+                                <button 
+                                  className="btn btn-sm btn-warning"
+                                  onClick={() => {
+                                    setSelectedBooking(booking);
+                                    handleOpenRefundModal();
+                                  }}
+                                >
+                                  <i className="ri-refund-2-line me-1"></i>
+                                  Refund
+                                </button>
+                              )}
                               <button 
                                 className="btn btn-sm btn-outline-secondary"
                                 onClick={() => handleViewDetails(booking)}
@@ -901,36 +1593,93 @@ const DashboardBookingsContent: React.FC = () => {
 
                 <div className="row">
                   {/* Guest Information */}
-                  <div className="col-md-6 mb-4">
+                  <div className="col-md-12 mb-4">
                     <h6 className="text-muted mb-3">
                       <i className="ri-user-line me-2"></i>
                       Guest Information
                     </h6>
-                    <div className="card">
-                      <div className="card-body">
-                        <p className="mb-2">
-                          <strong>{selectedBooking.guestName || 'N/A'}</strong>
-                        </p>
-                        {selectedBooking.guestEmail && (
-                          <p className="mb-2 text-muted">
-                            <i className="ri-mail-line me-2"></i>
-                            {selectedBooking.guestEmail}
-                          </p>
-                        )}
-                        {selectedBooking.guestPhone && (
-                          <p className="mb-2 text-muted">
-                            <i className="ri-phone-line me-2"></i>
-                            {selectedBooking.guestPhone}
-                          </p>
-                        )}
-                        <p className="mb-0 text-muted">
-                          <i className="ri-group-line me-2"></i>
-                          {selectedBooking.guestCount} {selectedBooking.guestCount === 1 ? 'guest' : 'guests'}
-                        </p>
+                    {selectedBooking.guests && selectedBooking.guests.length > 0 ? (
+                      <div className="row">
+                        {selectedBooking.guests.map((guest, index) => (
+                          <div key={guest.id || index} className="col-md-6 mb-3">
+                            <div className="card">
+                              <div className="card-body">
+                                {guest.isLeadPassenger && (
+                                  <div className="mb-2">
+                                    <span className="badge bg-primary">Lead Passenger</span>
+                                  </div>
+                                )}
+                                <p className="mb-2">
+                                  <strong>{guest.firstName} {guest.lastName}</strong>
+                                </p>
+                                {guest.email && (
+                                  <p className="mb-2 text-muted small">
+                                    <i className="ri-mail-line me-2"></i>
+                                    {guest.email}
+                                  </p>
+                                )}
+                                {guest.phone && (
+                                  <p className="mb-2 text-muted small">
+                                    <i className="ri-phone-line me-2"></i>
+                                    {guest.phone}
+                                  </p>
+                                )}
+                                {guest.nationality && (
+                                  <p className="mb-2 text-muted small">
+                                    <i className="ri-global-line me-2"></i>
+                                    {guest.nationality}
+                                  </p>
+                                )}
+                                {guest.passportNumber && (
+                                  <p className="mb-2 text-muted small">
+                                    <i className="ri-id-card-line me-2"></i>
+                                    {guest.passportNumber}
+                                  </p>
+                                )}
+                                {guest.dateOfBirth && (
+                                  <p className="mb-0 text-muted small">
+                                    <i className="ri-calendar-line me-2"></i>
+                                    {new Date(guest.dateOfBirth).toLocaleDateString('en-US', {
+                                      year: 'numeric',
+                                      month: 'short',
+                                      day: 'numeric',
+                                    })}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
+                    ) : (
+                      <div className="card">
+                        <div className="card-body">
+                          <p className="mb-2">
+                            <strong>{selectedBooking.guestName || 'N/A'}</strong>
+                          </p>
+                          {selectedBooking.guestEmail && (
+                            <p className="mb-2 text-muted">
+                              <i className="ri-mail-line me-2"></i>
+                              {selectedBooking.guestEmail}
+                            </p>
+                          )}
+                          {selectedBooking.guestPhone && (
+                            <p className="mb-2 text-muted">
+                              <i className="ri-phone-line me-2"></i>
+                              {selectedBooking.guestPhone}
+                            </p>
+                          )}
+                          <p className="mb-0 text-muted">
+                            <i className="ri-group-line me-2"></i>
+                            {selectedBooking.guestCount} {selectedBooking.guestCount === 1 ? 'guest' : 'guests'}
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
+                </div>
 
+                <div className="row">
                   {/* Stay Details */}
                   <div className="col-md-6 mb-4">
                     <h6 className="text-muted mb-3">
@@ -965,7 +1714,15 @@ const DashboardBookingsContent: React.FC = () => {
                   <div className="card">
                     <div className="card-body">
                       <h6 className="mb-1">{selectedBooking.hotelName}</h6>
-                      <p className="text-muted mb-0">{selectedBooking.roomName}</p>
+                      <p className="text-muted mb-1">{selectedBooking.roomName}</p>
+                      {(selectedBooking.hotelFullAddress || selectedBooking.hotelAddress) && (
+                        <p className="text-muted mb-0 small">
+                          <i className="ri-map-pin-line me-1"></i>
+                          {selectedBooking.hotelFullAddress || 
+                            [selectedBooking.hotelAddress, selectedBooking.hotelCity, selectedBooking.hotelCountry]
+                              .filter(Boolean).join(', ')}
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -989,10 +1746,59 @@ const DashboardBookingsContent: React.FC = () => {
                       <hr />
                       <div className="d-flex justify-content-between">
                         <strong>Total</strong>
-                        <strong className="text-primary fs-5">
+                        <strong 
+                          className={`fs-5 ${selectedBooking.status === 'CANCELLED' || selectedBooking.status === 'REFUNDED' ? 'text-danger' : 'text-primary'}`}
+                          style={selectedBooking.refundAmount && selectedBooking.refundAmount >= selectedBooking.total ? { textDecoration: 'line-through' } : {}}
+                        >
                           {formatCurrency(selectedBooking.total, selectedBooking.currency)}
                         </strong>
                       </div>
+                      
+                      {/* Refund Information */}
+                      {selectedBooking.refundAmount && selectedBooking.refundAmount > 0 && (
+                        <>
+                          <hr style={{ borderStyle: 'dashed', borderColor: '#28a745' }} />
+                          <div className="d-flex justify-content-between mb-2">
+                            <span className="text-success">
+                              <i className="ri-refund-2-line me-1"></i>
+                              {selectedBooking.refundAmount >= selectedBooking.total ? 'Full Refund' : 'Partial Refund'}
+                            </span>
+                            <strong className="text-success">
+                              -{formatCurrency(selectedBooking.refundAmount, selectedBooking.currency)}
+                            </strong>
+                          </div>
+                          {selectedBooking.refundAmount < selectedBooking.total && (
+                            <div className="d-flex justify-content-between">
+                              <strong>Net Amount Paid</strong>
+                              <strong className="text-primary fs-5">
+                                {formatCurrency(selectedBooking.total - selectedBooking.refundAmount, selectedBooking.currency)}
+                              </strong>
+                            </div>
+                          )}
+                          {selectedBooking.refundReason && (
+                            <div className="mt-2 p-2 rounded" style={{ backgroundColor: '#d4edda' }}>
+                              <small>
+                                <strong>Refund Reason:</strong> {selectedBooking.refundReason}
+                              </small>
+                            </div>
+                          )}
+                          {selectedBooking.refundedAt && (
+                            <small className="text-muted d-block mt-1">
+                              Refunded on: {new Date(selectedBooking.refundedAt).toLocaleDateString()}
+                            </small>
+                          )}
+                        </>
+                      )}
+                      
+                      {/* Cancelled without refund */}
+                      {selectedBooking.status === 'CANCELLED' && !selectedBooking.refundAmount && (
+                        <div className="mt-3 p-2 rounded text-center" style={{ backgroundColor: '#f8d7da' }}>
+                          <span className="text-danger">
+                            <i className="ri-close-circle-line me-1"></i>
+                            <strong>Booking Cancelled</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1019,8 +1825,26 @@ const DashboardBookingsContent: React.FC = () => {
                 >
                   Close
                 </button>
+                {(selectedBooking.status === 'CONFIRMED' || selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'PENDING') && (
+                  <button 
+                    type="button" 
+                    className="btn btn-warning"
+                    onClick={handleOpenRefundModal}
+                  >
+                    <i className="ri-refund-2-line me-2"></i>
+                    Process Refund
+                  </button>
+                )}
+                <button 
+                  type="button" 
+                  className="btn btn-outline-primary"
+                  onClick={handlePrintConfirmation}
+                >
+                  <i className="ri-printer-line me-2"></i>
+                  Print Confirmation
+                </button>
                 <Link
-                  href={`/dashboard/listings/${selectedBooking.hotelId}`}
+                  href={`/dashboard/stay-details/?hotelId=${selectedBooking.hotelId}`}
                   className="btn btn-primary"
                 >
                   <i className="ri-hotel-line me-2"></i>
@@ -1038,6 +1862,142 @@ const DashboardBookingsContent: React.FC = () => {
           background-color: #9c27b0 !important;
         }
       `}</style>
+
+      {/* Refund Modal */}
+      {showRefundModal && selectedBooking && (
+        <div 
+          className="modal fade show" 
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={handleCloseRefundModal}
+        >
+          <div 
+            className="modal-dialog modal-dialog-centered"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content">
+              <div className="modal-header bg-warning bg-opacity-10">
+                <h5 className="modal-title">
+                  <i className="ri-refund-2-line me-2 text-warning"></i>
+                  Process Refund
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={handleCloseRefundModal}
+                ></button>
+              </div>
+              <div className="modal-body">
+                {/* Booking Summary */}
+                <div className="mb-4 p-3 rounded" style={{ backgroundColor: '#f8f9fa' }}>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Booking ID</span>
+                    <strong className="font-monospace">{selectedBooking.id.slice(0, 8)}</strong>
+                  </div>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Guest</span>
+                    <strong>{selectedBooking.guestName}</strong>
+                  </div>
+                  <div className="d-flex justify-content-between">
+                    <span className="text-muted">Original Total</span>
+                    <strong>{formatCurrency(selectedBooking.total, selectedBooking.currency)}</strong>
+                  </div>
+                  {selectedBooking.refundAmount && selectedBooking.refundAmount > 0 && (
+                    <div className="d-flex justify-content-between mt-2 pt-2 border-top">
+                      <span className="text-success">Already Refunded</span>
+                      <strong className="text-success">
+                        -{formatCurrency(selectedBooking.refundAmount, selectedBooking.currency)}
+                      </strong>
+                    </div>
+                  )}
+                </div>
+
+                {/* Refund Amount */}
+                <div className="mb-3">
+                  <label className="form-label">
+                    <strong>Refund Amount</strong>
+                    <span className="text-muted ms-2">
+                      (Max: {formatCurrency(selectedBooking.total - (selectedBooking.refundAmount || 0), selectedBooking.currency)})
+                    </span>
+                  </label>
+                  <div className="input-group">
+                    <span className="input-group-text">{selectedBooking.currency}</span>
+                    <input
+                      type="number"
+                      className="form-control"
+                      placeholder="0.00"
+                      value={refundAmount}
+                      onChange={(e) => setRefundAmount(e.target.value)}
+                      step="0.01"
+                      min="0"
+                      max={selectedBooking.total - (selectedBooking.refundAmount || 0)}
+                      disabled={processingRefund}
+                    />
+                  </div>
+                  <small className="text-muted d-block mt-1">
+                    Remaining after refund: <strong>{formatCurrency(
+                      selectedBooking.total - (selectedBooking.refundAmount || 0) - parseFloat(refundAmount || '0'),
+                      selectedBooking.currency
+                    )}</strong>
+                  </small>
+                </div>
+
+                {/* Refund Reason */}
+                <div className="mb-3">
+                  <label className="form-label">
+                    <strong>Refund Reason</strong>
+                  </label>
+                  <textarea
+                    className="form-control"
+                    placeholder="Enter reason for refund (e.g., Guest requested cancellation, Booking error, etc.)"
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    rows={3}
+                    disabled={processingRefund}
+                  ></textarea>
+                </div>
+
+                {/* Refund Type Indicator */}
+                {refundAmount && (
+                  <div className="alert alert-info mb-0">
+                    <i className="ri-information-line me-2"></i>
+                    {parseFloat(refundAmount) >= (selectedBooking.total - (selectedBooking.refundAmount || 0))
+                      ? 'This will be a <strong>Full Refund</strong>'
+                      : 'This will be a <strong>Partial Refund</strong>'}
+                  </div>
+                )}
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={handleCloseRefundModal}
+                  disabled={processingRefund}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-warning"
+                  onClick={handleProcessRefund}
+                  disabled={processingRefund || !refundAmount || !refundReason}
+                >
+                  {processingRefund ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="ri-refund-2-line me-2"></i>
+                      Process Refund
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };

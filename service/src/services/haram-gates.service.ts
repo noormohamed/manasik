@@ -9,9 +9,12 @@ interface HaramGate {
   latitude: number;
   longitude: number;
   description: string;
+  hasDirectKaabaAccess: boolean;
+  floorLevel: 'ground' | 'first' | 'roof';
   distanceMeters?: number;
   walkingTimeMinutes?: number;
   isRecommended?: boolean;
+  isClosestDirectAccess?: boolean;
 }
 
 interface NearbyAttraction {
@@ -56,7 +59,9 @@ export async function getAllGates(): Promise<HaramGate[]> {
     nameArabic: row.name_arabic,
     latitude: parseFloat(row.latitude),
     longitude: parseFloat(row.longitude),
-    description: row.description
+    description: row.description,
+    hasDirectKaabaAccess: row.has_direct_kaaba_access === 1 || row.has_direct_kaaba_access === true,
+    floorLevel: row.floor_level || 'ground'
   }));
 }
 
@@ -85,7 +90,8 @@ export async function getGatesWithDistances(hotelLat: number, hotelLon: number):
       ...gate,
       distanceMeters: distance,
       walkingTimeMinutes: estimateWalkingTime(distance),
-      isRecommended: false
+      isRecommended: false,
+      isClosestDirectAccess: false
     };
   });
 
@@ -95,6 +101,12 @@ export async function getGatesWithDistances(hotelLat: number, hotelLon: number):
   // Mark the closest gate as recommended
   if (gatesWithDistances.length > 0) {
     gatesWithDistances[0].isRecommended = true;
+  }
+
+  // Find and mark the closest gate with direct Kaaba access
+  const closestDirectAccess = gatesWithDistances.find(g => g.hasDirectKaabaAccess);
+  if (closestDirectAccess) {
+    closestDirectAccess.isClosestDirectAccess = true;
   }
 
   return gatesWithDistances;
@@ -122,6 +134,7 @@ export async function getHotelProximityInfo(hotelId: string): Promise<{
   gates: HaramGate[];
   attractions: NearbyAttraction[];
   recommendedGate: HaramGate | null;
+  closestDirectAccessGate: HaramGate | null;
 }> {
   const pool = getPool();
   // Get hotel coordinates
@@ -144,7 +157,8 @@ export async function getHotelProximityInfo(hotelId: string): Promise<{
   return {
     gates,
     attractions,
-    recommendedGate: gates.find(g => g.isRecommended) || null
+    recommendedGate: gates.find(g => g.isRecommended) || null,
+    closestDirectAccessGate: gates.find(g => g.isClosestDirectAccess) || null
   };
 }
 

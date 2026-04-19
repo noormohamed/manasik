@@ -16,6 +16,7 @@ interface Booking {
   checkOut: string;
   nights: number;
   total: number;
+  refundAmount?: number;
   currency: string;
   status: string;
   guestCount: number;

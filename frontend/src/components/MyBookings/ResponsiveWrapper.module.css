@@ -1,0 +1,169 @@
+/**
+ * ResponsiveWrapper Styles
+ * Clean two-column layout inspired by Casap design
+ */
+
+/* Desktop Layout (≥1024px) */
+.desktopLayout {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 20px;
+  height: 100%;
+  min-height: calc(100vh - 200px);
+  padding: 20px;
+}
+
+.desktopLayout .leftColumn {
+  min-width: 0;
+  max-height: 100%;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.desktopLayout .rightColumn {
+  min-width: 0;
+  max-height: 100%;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+/* Tablet Layout (768px-1023px) */
+.tabletLayout {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 16px;
+  height: 100%;
+  min-height: calc(100vh - 200px);
+  padding: 16px;
+}
+
+.tabletLayout .leftColumn {
+  min-width: 0;
+  max-height: 100%;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.tabletLayout .rightColumn {
+  min-width: 0;
+  max-height: 100%;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+/* Mobile Layout (<768px) */
+.mobileLayout {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100vh;
+  padding: 0;
+}
+
+.mobileTabs {
+  display: flex;
+  gap: 0;
+  background: white;
+  border-bottom: 1px solid #e9ecef;
+  flex-shrink: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tab {
+  flex: 1;
+  padding: 14px 16px;
+  background: white;
+  border: none;
+  border-bottom: 3px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: #6c757d;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.tab:hover {
+  color: #0d6efd;
+  background: #f8f9fa;
+}
+
+.tab.active {
+  color: #0d6efd;
+  border-bottom-color: #0d6efd;
+  background: #f0f7ff;
+}
+
+.mobileContent {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 12px;
+}
+
+.mobilePanel {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* Responsive breakpoints */
+@media (max-width: 1023px) {
+  .desktopLayout {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .desktopLayout .leftColumn,
+  .desktopLayout .rightColumn {
+    max-height: none;
+  }
+}
+
+@media (max-width: 768px) {
+  .tabletLayout {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
+  }
+
+  .tabletLayout .leftColumn,
+  .tabletLayout .rightColumn {
+    max-height: none;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .mobileTabs {
+    border-bottom: 1px solid #e9ecef;
+  }
+
+  .tab {
+    padding: 12px 12px;
+    font-size: 13px;
+  }
+
+  .tab i {
+    font-size: 16px;
+  }
+
+  .mobileContent {
+    padding: 8px;
+  }
+}

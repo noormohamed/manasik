@@ -1,0 +1,125 @@
+/**
+ * GateInformationSection Styles
+ */
+
+.section {
+  margin-bottom: 24px;
+}
+
+.title {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0d6efd;
+  border-bottom: 2px solid #0d6efd;
+  padding-bottom: 10px;
+}
+
+.gateGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.gateBox {
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid;
+}
+
+.closestGate {
+  background: #e0f7fa;
+  border-left-color: #00bcd4;
+}
+
+.kaabaGate {
+  background: #f3e5f5;
+  border-left-color: #9c27b0;
+}
+
+.gateTitle {
+  margin: 0 0 12px 0;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.closestGate .gateTitle {
+  color: #00838f;
+}
+
+.kaabaGate .gateTitle {
+  color: #6a1b9a;
+}
+
+.gateName {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+}
+
+.gateDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detailItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: #333;
+}
+
+.icon {
+  font-size: 16px;
+}
+
+.notAvailable {
+  margin: 0;
+  font-size: 13px;
+  color: #999;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .title {
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  .gateGrid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .gateBox {
+    padding: 12px;
+  }
+
+  .gateTitle {
+    font-size: 12px;
+    margin-bottom: 8px;
+  }
+
+  .gateName {
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+
+  .gateDetails {
+    gap: 6px;
+  }
+
+  .detailItem {
+    font-size: 12px;
+  }
+
+  .notAvailable {
+    font-size: 12px;
+  }
+}

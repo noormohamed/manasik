@@ -17,9 +17,19 @@ const navigationItems = [
     icon: 'users',
   },
   {
+    name: 'Hotels',
+    href: '/admin/hotels',
+    icon: 'hotels',
+  },
+  {
     name: 'Bookings',
     href: '/admin/bookings',
     icon: 'bookings',
+  },
+  {
+    name: 'Messages',
+    href: '/admin/messages',
+    icon: 'messages',
   },
   {
     name: 'Reviews',
@@ -60,9 +70,19 @@ const getIcon = (iconName: string) => {
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 8.048M12 4.354L9.172 7.172M12 4.354l2.828 2.828m0 5.656a4 4 0 110-8.048m0 8.048l2.828-2.828m-2.828 2.828l-2.828-2.828M4.929 13.586a9 9 0 1115.142 0M4.929 13.586L7.757 10.758m0 0a4 4 0 118.486 0l2.828 2.828" />
       </svg>
     ),
+    hotels: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+      </svg>
+    ),
     bookings: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+      </svg>
+    ),
+    messages: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
       </svg>
     ),
     reviews: (

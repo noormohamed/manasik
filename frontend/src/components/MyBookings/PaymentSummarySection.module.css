@@ -1,0 +1,151 @@
+/**
+ * PaymentSummarySection Styles
+ */
+
+.section {
+  margin: 25px;
+  padding: 20px;
+  border: 1px solid #f0f0f0;
+  background: #f5f5f5;
+  border-radius: 10px;
+}
+
+.title {
+  margin: 0 0 16px 0;
+  font-size: 21px;
+  font-weight: 700;
+  color: #333;
+}
+
+.paymentSummary {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  border: none;
+}
+
+.paymentRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #333;
+}
+
+.paymentRow.total {
+  border-top: none;
+  padding-top: 12px;
+  margin-top: 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.refundSection {
+  margin-top: 16px;
+  padding: 16px;
+  background: #d4edda;
+  border-radius: 8px;
+  border: 1px solid #28a745;
+  border-left: none;
+}
+
+.refundRow {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  color: #155724;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.netAmount {
+  margin-top: 8px;
+  color: #155724;
+  font-weight: bold;
+}
+
+.refundReason {
+  margin-top: 8px;
+  padding: 0;
+  background: transparent;
+  border-radius: 0;
+  font-size: 12px;
+  color: #155724;
+}
+
+.refundDate {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #155724;
+}
+
+.cancelledNotice {
+  margin-top: 16px;
+  padding: 12px;
+  background: #f8d7da;
+  border-radius: 4px;
+  text-align: center;
+  color: #721c24;
+  font-weight: bold;
+}
+
+/* Responsive */
+@media (max-width: 1400px) {
+  .section {
+    display: block;
+    order: 3;
+    margin-top: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    display: block;
+    padding: 16px;
+  }
+
+  .title {
+    font-size: 18px;
+    margin-bottom: 12px;
+  }
+
+  .paymentSummary {
+    padding: 0;
+  }
+
+  .paymentRow {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  .paymentRow.total {
+    font-size: 15px;
+    margin-top: 10px;
+    padding-top: 10px;
+  }
+
+  .refundSection {
+    margin-top: 12px;
+    padding: 12px;
+  }
+
+  .refundRow {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+
+  .refundReason {
+    font-size: 11px;
+    margin-top: 6px;
+  }
+
+  .refundDate {
+    font-size: 10px;
+  }
+
+  .cancelledNotice {
+    font-size: 13px;
+    padding: 10px;
+  }
+}

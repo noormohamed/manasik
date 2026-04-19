@@ -14,19 +14,38 @@ const CheckoutContent = () => {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Guest information
-  const [guestName, setGuestName] = useState(user ? `${user.firstName} ${user.lastName}` : "");
-  const [guestEmail, setGuestEmail] = useState(user?.email || "");
-  const [guestPhone, setGuestPhone] = useState("");
+  // Lead passenger information
+  const [leadFirstName, setLeadFirstName] = useState(user?.firstName || "");
+  const [leadLastName, setLeadLastName] = useState(user?.lastName || "");
+  const [leadEmail, setLeadEmail] = useState(user?.email || "");
+  const [leadPhone, setLeadPhone] = useState("");
+  const [leadNationality, setLeadNationality] = useState("");
+  const [leadPassport, setLeadPassport] = useState("");
+  const [leadDOB, setLeadDOB] = useState("");
+  
+  // Additional guests
+  const [additionalGuests, setAdditionalGuests] = useState<Array<{
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+    nationality: string;
+    passport: string;
+    dob: string;
+  }>>([]);
+  
   const [specialRequests, setSpecialRequests] = useState("");
+
+  // Get total guest count from cart
+  const totalGuestCount = items.reduce((sum, item) => sum + (item.guestCount || 1), 0);
 
   const taxRate = 0.10; // 10% tax
   const tax = totalAmount * taxRate;
   const grandTotal = totalAmount + tax;
 
   const handleStripeCheckout = async () => {
-    if (!guestName || !guestEmail) {
-      setError("Please fill in all required fields");
+    if (!leadFirstName || !leadLastName || !leadEmail || !leadNationality) {
+      setError("Please fill in all required lead passenger fields");
       return;
     }
 
@@ -35,10 +54,34 @@ const CheckoutContent = () => {
       return;
     }
 
+    // Validate guest count matches
+    if (additionalGuests.length + 1 !== totalGuestCount) {
+      setError(`Please add details for all ${totalGuestCount} guests`);
+      return;
+    }
+
     setProcessing(true);
     setError(null);
 
     try {
+      // Prepare guest details array
+      const guestDetails = [
+        {
+          firstName: leadFirstName,
+          lastName: leadLastName,
+          email: leadEmail,
+          phone: leadPhone,
+          nationality: leadNationality,
+          passport: leadPassport,
+          dob: leadDOB,
+          isLeadPassenger: true,
+        },
+        ...additionalGuests.map(guest => ({
+          ...guest,
+          isLeadPassenger: false,
+        })),
+      ];
+
       // First, create bookings for each cart item (with PENDING status)
       const bookingIds: string[] = [];
       
@@ -49,11 +92,9 @@ const CheckoutContent = () => {
             checkIn: item.checkIn,
             checkOut: item.checkOut,
             guestCount: item.guestCount,
-            guestName,
-            guestEmail,
-            guestPhone,
+            guestDetails, // Pass all guest details
             specialRequests,
-            status: 'PENDING_PAYMENT', // Will be updated after payment
+            status: 'PENDING_PAYMENT',
           });
           
           if (response?.id) {
@@ -68,32 +109,32 @@ const CheckoutContent = () => {
         description: item.type === 'HOTEL' 
           ? `${item.nights} night(s), ${item.guestCount} guest(s)` 
           : item.roomName,
-        amount: item.subtotal + (item.subtotal * taxRate), // Include tax
+        amount: item.subtotal + (item.subtotal * taxRate),
         quantity: 1,
         currency: item.currency || 'GBP',
       }));
 
       const response = await apiClient.post<{ url?: string; sessionId?: string }>('/checkout/create-session', {
         items: checkoutItems,
-        customerEmail: guestEmail,
+        customerEmail: leadEmail,
         customerId: user?.id,
         bookingIds,
         metadata: {
-          guestName,
-          guestPhone,
+          leadPassengerName: `${leadFirstName} ${leadLastName}`,
+          leadPhone: leadPhone,
+          guestCount: totalGuestCount,
           specialRequests,
         },
       });
 
       if (response?.url) {
-        // Store cart info in localStorage for recovery if needed
         localStorage.setItem('pendingCheckout', JSON.stringify({
           bookingIds,
           sessionId: response.sessionId,
           items,
+          guestDetails,
         }));
 
-        // Redirect to Stripe Checkout
         window.location.href = response.url;
       } else {
         throw new Error('Failed to create checkout session');
@@ -217,22 +258,32 @@ const CheckoutContent = () => {
                   ))}
                 </div>
 
-                {/* Guest Information Form */}
-                <div className="card">
+                {/* Lead Passenger Information Form */}
+                <div className="card mb-4">
                   <div className="card-body">
                     <h4 className="mb-4">
                       <i className="ri-user-line me-2"></i>
-                      Guest Information
+                      Lead Passenger Information *
                     </h4>
 
                     <div className="row">
                       <div className="col-md-6 mb-3">
-                        <label className="form-label">Full Name *</label>
+                        <label className="form-label">First Name *</label>
                         <input
                           type="text"
                           className="form-control"
-                          value={guestName}
-                          onChange={(e) => setGuestName(e.target.value)}
+                          value={leadFirstName}
+                          onChange={(e) => setLeadFirstName(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Last Name *</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={leadLastName}
+                          onChange={(e) => setLeadLastName(e.target.value)}
                           required
                         />
                       </div>
@@ -241,8 +292,8 @@ const CheckoutContent = () => {
                         <input
                           type="email"
                           className="form-control"
-                          value={guestEmail}
-                          onChange={(e) => setGuestEmail(e.target.value)}
+                          value={leadEmail}
+                          onChange={(e) => setLeadEmail(e.target.value)}
                           required
                         />
                       </div>
@@ -251,20 +302,213 @@ const CheckoutContent = () => {
                         <input
                           type="tel"
                           className="form-control"
-                          value={guestPhone}
-                          onChange={(e) => setGuestPhone(e.target.value)}
+                          value={leadPhone}
+                          onChange={(e) => setLeadPhone(e.target.value)}
                         />
                       </div>
-                      <div className="col-12 mb-3">
-                        <label className="form-label">Special Requests</label>
-                        <textarea
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Nationality *</label>
+                        <input
+                          type="text"
                           className="form-control"
-                          rows={3}
-                          value={specialRequests}
-                          onChange={(e) => setSpecialRequests(e.target.value)}
-                          placeholder="Any special requests or requirements..."
-                        ></textarea>
+                          value={leadNationality}
+                          onChange={(e) => setLeadNationality(e.target.value)}
+                          placeholder="e.g., United Kingdom"
+                          required
+                        />
                       </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Date of Birth</label>
+                        <input
+                          type="date"
+                          className="form-control"
+                          value={leadDOB}
+                          onChange={(e) => setLeadDOB(e.target.value)}
+                        />
+                      </div>
+                      <div className="col-md-6 mb-3">
+                        <label className="form-label">Passport Number</label>
+                        <input
+                          type="text"
+                          className="form-control"
+                          value={leadPassport}
+                          onChange={(e) => setLeadPassport(e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Additional Guests */}
+                {totalGuestCount > 1 && (
+                  <div className="card mb-4">
+                    <div className="card-body">
+                      <h4 className="mb-4">
+                        <i className="ri-group-line me-2"></i>
+                        Additional Guests ({additionalGuests.length}/{totalGuestCount - 1})
+                      </h4>
+
+                      {additionalGuests.map((guest, index) => (
+                        <div key={index} className="border-bottom pb-4 mb-4">
+                          <div className="d-flex justify-content-between align-items-center mb-3">
+                            <h5 className="mb-0">Guest {index + 2}</h5>
+                            <button
+                              type="button"
+                              className="btn btn-sm btn-outline-danger"
+                              onClick={() => {
+                                setAdditionalGuests(additionalGuests.filter((_, i) => i !== index));
+                              }}
+                            >
+                              <i className="ri-delete-bin-line me-1"></i>
+                              Remove
+                            </button>
+                          </div>
+
+                          <div className="row">
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">First Name *</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={guest.firstName}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].firstName = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                                required
+                              />
+                            </div>
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">Last Name *</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={guest.lastName}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].lastName = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                                required
+                              />
+                            </div>
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">Email Address *</label>
+                              <input
+                                type="email"
+                                className="form-control"
+                                value={guest.email}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].email = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                                required
+                              />
+                            </div>
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">Phone Number</label>
+                              <input
+                                type="tel"
+                                className="form-control"
+                                value={guest.phone}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].phone = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                              />
+                            </div>
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">Nationality *</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={guest.nationality}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].nationality = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                                placeholder="e.g., United Kingdom"
+                                required
+                              />
+                            </div>
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">Date of Birth</label>
+                              <input
+                                type="date"
+                                className="form-control"
+                                value={guest.dob}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].dob = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                              />
+                            </div>
+                            <div className="col-md-6 mb-3">
+                              <label className="form-label">Passport Number</label>
+                              <input
+                                type="text"
+                                className="form-control"
+                                value={guest.passport}
+                                onChange={(e) => {
+                                  const updated = [...additionalGuests];
+                                  updated[index].passport = e.target.value;
+                                  setAdditionalGuests(updated);
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+
+                      {additionalGuests.length < totalGuestCount - 1 && (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary"
+                          onClick={() => {
+                            setAdditionalGuests([
+                              ...additionalGuests,
+                              {
+                                firstName: '',
+                                lastName: '',
+                                email: '',
+                                phone: '',
+                                nationality: '',
+                                passport: '',
+                                dob: '',
+                              },
+                            ]);
+                          }}
+                        >
+                          <i className="ri-add-line me-1"></i>
+                          Add Guest
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Special Requests */}
+                <div className="card">
+                  <div className="card-body">
+                    <h4 className="mb-4">
+                      <i className="ri-message-line me-2"></i>
+                      Special Requests
+                    </h4>
+
+                    <div className="mb-3">
+                      <label className="form-label">Any special requests or requirements?</label>
+                      <textarea
+                        className="form-control"
+                        rows={3}
+                        value={specialRequests}
+                        onChange={(e) => setSpecialRequests(e.target.value)}
+                        placeholder="Let us know if you have any special requests..."
+                      ></textarea>
                     </div>
                   </div>
                 </div>
@@ -301,7 +545,7 @@ const CheckoutContent = () => {
                   <button
                     className="btn btn-primary w-100 mb-3"
                     onClick={handleStripeCheckout}
-                    disabled={processing || !guestName || !guestEmail}
+                    disabled={processing || !leadFirstName || !leadLastName || !leadEmail || !leadNationality || additionalGuests.length + 1 !== totalGuestCount}
                   >
                     {processing ? (
                       <>

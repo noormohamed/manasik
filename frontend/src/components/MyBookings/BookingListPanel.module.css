@@ -1,0 +1,249 @@
+/**
+ * BookingListPanel Styles
+ * Clean, compact sidebar design
+ */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: white;
+  overflow: hidden;
+}
+
+.filterBar {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  background: white;
+  flex-shrink: 0;
+}
+
+.title {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.filterGroup {
+  margin-bottom: 10px;
+}
+
+.filterGroup:last-of-type {
+  margin-bottom: 0;
+}
+
+.label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+
+.select,
+.input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: white;
+  transition: all 0.2s ease;
+}
+
+.select:focus,
+.input:focus {
+  outline: none;
+  border-color: #0d6efd;
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
+}
+
+.clearButton {
+  width: 100%;
+  padding: 6px 10px;
+  margin-top: 10px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.clearButton:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
+  color: #333;
+}
+
+.listContainer {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.list {
+  padding: 8px;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 15px;
+  text-align: center;
+  color: #999;
+}
+
+.emptyState i {
+  font-size: 40px;
+  margin-bottom: 12px;
+  opacity: 0.4;
+}
+
+.emptyState p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.errorState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 15px;
+  text-align: center;
+  color: #dc3545;
+}
+
+.errorState i {
+  font-size: 40px;
+  margin-bottom: 12px;
+}
+
+.errorState p {
+  margin: 0 0 12px 0;
+  font-size: 12px;
+}
+
+.retryButton {
+  padding: 6px 12px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.retryButton:hover {
+  background: #c82333;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 2px solid #e9ecef;
+  border-top-color: #0d6efd;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-bottom: 12px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.resultCount {
+  padding: 8px 12px;
+  border-top: 1px solid #f0f0f0;
+  background: #fafafa;
+  font-size: 11px;
+  color: #999;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+/* Scrollbar styling */
+.listContainer::-webkit-scrollbar {
+  width: 4px;
+}
+
+.listContainer::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.listContainer::-webkit-scrollbar-thumb {
+  background: #e9ecef;
+  border-radius: 2px;
+}
+
+.listContainer::-webkit-scrollbar-thumb:hover {
+  background: #dee2e6;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .panel {
+    border-radius: 0;
+  }
+
+  .filterBar {
+    padding: 10px;
+  }
+
+  .title {
+    font-size: 13px;
+    margin-bottom: 10px;
+  }
+
+  .filterGroup {
+    margin-bottom: 8px;
+  }
+
+  .label {
+    font-size: 10px;
+    margin-bottom: 3px;
+  }
+
+  .select,
+  .input {
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .list {
+    padding: 6px;
+  }
+
+  .emptyState {
+    padding: 25px 12px;
+  }
+
+  .emptyState i {
+    font-size: 36px;
+    margin-bottom: 10px;
+  }
+
+  .emptyState p {
+    font-size: 11px;
+  }
+}

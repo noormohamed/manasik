@@ -338,6 +338,283 @@ export class AdminHotelsService {
     );
     return countries.map((c: any) => c.country);
   }
+
+  /**
+   * Get hotel transaction statistics for charts
+   * Returns daily/monthly revenue and booking counts
+   */
+  async getTransactionStats(params: {
+    period?: 'daily' | 'weekly' | 'monthly';
+    days?: number;
+  }): Promise<{
+    revenueByDate: { date: string; revenue: number; bookings: number }[];
+    revenueByHotel: { hotelName: string; revenue: number; bookings: number }[];
+    summary: {
+      totalRevenue: number;
+      totalBookings: number;
+      averageBookingValue: number;
+      confirmedBookings: number;
+      pendingBookings: number;
+      cancelledBookings: number;
+    };
+  }> {
+    const pool = getPool();
+    const { period = 'daily', days = 30 } = params;
+
+    // Determine date format based on period
+    let dateFormat: string;
+    switch (period) {
+      case 'weekly':
+        dateFormat = '%Y-%u'; // Year-Week
+        break;
+      case 'monthly':
+        dateFormat = '%Y-%m'; // Year-Month
+        break;
+      default:
+        dateFormat = '%Y-%m-%d'; // Year-Month-Day
+    }
+
+    // Get revenue by date
+    const [revenueByDate] = await pool.query<any>(
+      `SELECT 
+        DATE_FORMAT(b.created_at, ?) as date,
+        COALESCE(SUM(b.total), 0) as revenue,
+        COUNT(*) as bookings
+      FROM bookings b
+      WHERE b.service_type = 'HOTEL'
+        AND b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY DATE_FORMAT(b.created_at, ?)
+      ORDER BY date ASC`,
+      [dateFormat, days, dateFormat]
+    );
+
+    // Get revenue by hotel (top 10)
+    const [revenueByHotel] = await pool.query<any>(
+      `SELECT 
+        COALESCE(h.name, 'Unknown Hotel') as hotelName,
+        COALESCE(SUM(b.total), 0) as revenue,
+        COUNT(*) as bookings
+      FROM bookings b
+      LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
+      WHERE b.service_type = 'HOTEL'
+        AND b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
+      GROUP BY h.id, h.name
+      ORDER BY revenue DESC
+      LIMIT 10`,
+      [days]
+    );
+
+    // Get summary statistics
+    const [summaryResult] = await pool.query<any>(
+      `SELECT 
+        COALESCE(SUM(total), 0) as totalRevenue,
+        COUNT(*) as totalBookings,
+        COALESCE(AVG(total), 0) as averageBookingValue,
+        SUM(CASE WHEN status = 'CONFIRMED' THEN 1 ELSE 0 END) as confirmedBookings,
+        SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pendingBookings,
+        SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelledBookings
+      FROM bookings
+      WHERE service_type = 'HOTEL'
+        AND created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)`,
+      [days]
+    );
+
+    const summary = summaryResult[0] || {};
+
+    return {
+      revenueByDate: revenueByDate.map((r: any) => ({
+        date: r.date,
+        revenue: parseFloat(r.revenue) || 0,
+        bookings: parseInt(r.bookings) || 0,
+      })),
+      revenueByHotel: revenueByHotel.map((r: any) => ({
+        hotelName: r.hotelName,
+        revenue: parseFloat(r.revenue) || 0,
+        bookings: parseInt(r.bookings) || 0,
+      })),
+      summary: {
+        totalRevenue: parseFloat(summary.totalRevenue) || 0,
+        totalBookings: parseInt(summary.totalBookings) || 0,
+        averageBookingValue: parseFloat(summary.averageBookingValue) || 0,
+        confirmedBookings: parseInt(summary.confirmedBookings) || 0,
+        pendingBookings: parseInt(summary.pendingBookings) || 0,
+        cancelledBookings: parseInt(summary.cancelledBookings) || 0,
+      },
+    };
+  }
+
+  /**
+   * Get reviews for a specific hotel
+   */
+  async getHotelReviews(hotelId: string, params: {
+    page?: number;
+    limit?: number;
+  } = {}): Promise<{
+    reviews: {
+      id: string;
+      reviewerName: string;
+      reviewerEmail: string;
+      rating: number;
+      comment: string;
+      status: string;
+      createdAt: Date;
+      bookingId: string;
+    }[];
+    total: number;
+    averageRating: number;
+    ratingDistribution: { rating: number; count: number }[];
+  }> {
+    const pool = getPool();
+    const { page = 1, limit = 10 } = params;
+    const offset = (page - 1) * limit;
+
+    // Get reviews for this hotel
+    const [reviews] = await pool.query<any>(
+      `SELECT 
+        r.id,
+        CONCAT(u.first_name, ' ', u.last_name) as reviewerName,
+        u.email as reviewerEmail,
+        r.rating,
+        r.comment,
+        r.status,
+        r.created_at as createdAt,
+        r.booking_id as bookingId
+      FROM reviews r
+      JOIN users u ON r.customer_id = u.id
+      WHERE r.hotel_id = ?
+      ORDER BY r.created_at DESC
+      LIMIT ? OFFSET ?`,
+      [hotelId, limit, offset]
+    );
+
+    // Get total count
+    const [countResult] = await pool.query<any>(
+      `SELECT COUNT(*) as total FROM reviews WHERE hotel_id = ?`,
+      [hotelId]
+    );
+
+    // Get average rating
+    const [avgResult] = await pool.query<any>(
+      `SELECT AVG(rating) as avgRating FROM reviews WHERE hotel_id = ?`,
+      [hotelId]
+    );
+
+    // Get rating distribution
+    const [distribution] = await pool.query<any>(
+      `SELECT rating, COUNT(*) as count 
+       FROM reviews 
+       WHERE hotel_id = ?
+       GROUP BY rating
+       ORDER BY rating DESC`,
+      [hotelId]
+    );
+
+    return {
+      reviews: reviews.map((r: any) => ({
+        id: r.id,
+        reviewerName: r.reviewerName,
+        reviewerEmail: r.reviewerEmail,
+        rating: r.rating,
+        comment: r.comment,
+        status: r.status,
+        createdAt: r.createdAt,
+        bookingId: r.bookingId,
+      })),
+      total: countResult[0]?.total || 0,
+      averageRating: parseFloat(avgResult[0]?.avgRating) || 0,
+      ratingDistribution: distribution.map((d: any) => ({
+        rating: d.rating,
+        count: parseInt(d.count) || 0,
+      })),
+    };
+  }
+
+  /**
+   * Get transactions for a specific hotel
+   */
+  async getHotelTransactions(hotelId: string, params: {
+    page?: number;
+    limit?: number;
+  } = {}): Promise<{
+    transactions: {
+      id: string;
+      bookingId: string;
+      type: string;
+      amount: number;
+      currency: string;
+      status: string;
+      paymentMethod: string;
+      guestName: string;
+      createdAt: Date;
+    }[];
+    total: number;
+    totalAmount: number;
+  }> {
+    const pool = getPool();
+    const { page = 1, limit = 10 } = params;
+    const offset = (page - 1) * limit;
+
+    // Get payments for bookings at this hotel
+    const [transactions] = await pool.query<any>(
+      `SELECT 
+        p.id,
+        p.booking_id as bookingId,
+        'PAYMENT' as type,
+        p.amount,
+        p.currency,
+        p.status,
+        'card' as paymentMethod,
+        JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.guestName')) as guestName,
+        p.created_at as createdAt
+      FROM payments p
+      JOIN bookings b ON CONVERT(p.booking_id USING utf8mb4) = CONVERT(b.id USING utf8mb4)
+      WHERE b.service_type = 'HOTEL'
+        AND (JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = ?
+             OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) = ?)
+      ORDER BY p.created_at DESC
+      LIMIT ? OFFSET ?`,
+      [hotelId, hotelId, limit, offset]
+    );
+
+    // Get total count
+    const [countResult] = await pool.query<any>(
+      `SELECT COUNT(*) as total
+      FROM payments p
+      JOIN bookings b ON CONVERT(p.booking_id USING utf8mb4) = CONVERT(b.id USING utf8mb4)
+      WHERE b.service_type = 'HOTEL'
+        AND (JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = ?
+             OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) = ?)`,
+      [hotelId, hotelId]
+    );
+
+    // Get total amount
+    const [amountResult] = await pool.query<any>(
+      `SELECT COALESCE(SUM(p.amount), 0) as totalAmount
+      FROM payments p
+      JOIN bookings b ON CONVERT(p.booking_id USING utf8mb4) = CONVERT(b.id USING utf8mb4)
+      WHERE b.service_type = 'HOTEL'
+        AND p.status = 'paid'
+        AND (JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = ?
+             OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) = ?)`,
+      [hotelId, hotelId]
+    );
+
+    return {
+      transactions: transactions.map((t: any) => ({
+        id: t.id,
+        bookingId: t.bookingId,
+        type: t.type,
+        amount: parseFloat(t.amount) || 0,
+        currency: t.currency,
+        status: t.status,
+        paymentMethod: t.paymentMethod,
+        guestName: t.guestName || 'N/A',
+        createdAt: t.createdAt,
+      })),
+      total: countResult[0]?.total || 0,
+      totalAmount: parseFloat(amountResult[0]?.totalAmount) || 0,
+    };
+  }
 }
 
 export const adminHotelsService = new AdminHotelsService();
