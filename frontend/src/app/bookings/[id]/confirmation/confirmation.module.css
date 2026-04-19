@@ -484,6 +484,51 @@
   .qrCodeContainer {
     page-break-inside: avoid;
   }
+
+  /* Maintain two-column layout in print */
+  .hotelInfoWithQR {
+    display: grid;
+    grid-template-columns: 1fr 250px;
+    gap: 30px;
+    align-items: flex-start;
+  }
+
+  .hotelInfoColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+
+  .qrCodeColumn {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+  }
+
+  .qrCodeImage {
+    width: 180px;
+    height: 180px;
+  }
+
+  /* Maintain gate QR alignment in print */
+  .gateBoxContent {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .gateQrCode {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    flex-shrink: 0;
+  }
+
+  .gateQrImage {
+    width: 120px;
+    height: 120px;
+  }
 }
 
 /* Responsive */
