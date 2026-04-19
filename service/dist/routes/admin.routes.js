@@ -632,7 +632,7 @@ router.post('/users/:id/reset-password', (ctx) => __awaiter(void 0, void 0, void
  */
 router.get('/bookings', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { search, status, serviceType, dateRangeStart, dateRangeEnd, amountRangeMin, amountRangeMax, page = 1, limit = 25 } = ctx.query;
+        const { search, status, serviceType, bookingSource, dateRangeStart, dateRangeEnd, amountRangeMin, amountRangeMax, page = 1, limit = 25 } = ctx.query;
         const offset = (Number(page) - 1) * Number(limit);
         const { createAdminBookingsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-bookings.service')));
         const bookingsService = createAdminBookingsService(db);
@@ -640,6 +640,7 @@ router.get('/bookings', (ctx) => __awaiter(void 0, void 0, void 0, function* () 
             search: search,
             status: status,
             serviceType: serviceType,
+            bookingSource: bookingSource,
             dateRangeStart: dateRangeStart,
             dateRangeEnd: dateRangeEnd,
             amountRangeMin: amountRangeMin ? Number(amountRangeMin) : undefined,
@@ -1229,6 +1230,253 @@ router.post('/transactions/:id/dispute', (ctx) => __awaiter(void 0, void 0, void
     }
     catch (error) {
         console.error('Dispute transaction error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels
+ * Get hotels list with pagination, search, and filtering
+ */
+router.get('/hotels', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { search, status, city, country, page = 1, limit = 25 } = ctx.query;
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const result = yield adminHotelsService.getHotels({
+            page: Number(page),
+            limit: Number(limit),
+            search: search,
+            status: status,
+            city: city,
+            country: country,
+        });
+        ctx.body = {
+            success: true,
+            data: result.hotels,
+            pagination: {
+                page: Number(page),
+                limit: Number(limit),
+                total: result.total,
+                totalPages: Math.ceil(result.total / Number(limit)),
+            },
+        };
+    }
+    catch (error) {
+        console.error('Get hotels error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels/stats/transactions
+ * Get hotel transaction statistics for charts
+ */
+router.get('/hotels/stats/transactions', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { period = 'daily', days = 30 } = ctx.query;
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const stats = yield adminHotelsService.getTransactionStats({
+            period: period,
+            days: Number(days),
+        });
+        ctx.body = {
+            success: true,
+            data: stats,
+        };
+    }
+    catch (error) {
+        console.error('Get hotel transaction stats error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels/cities
+ * Get unique cities for filter dropdown
+ */
+router.get('/hotels/cities', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const cities = yield adminHotelsService.getCities();
+        ctx.body = {
+            success: true,
+            data: cities,
+        };
+    }
+    catch (error) {
+        console.error('Get cities error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels/countries
+ * Get unique countries for filter dropdown
+ */
+router.get('/hotels/countries', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const countries = yield adminHotelsService.getCountries();
+        ctx.body = {
+            success: true,
+            data: countries,
+        };
+    }
+    catch (error) {
+        console.error('Get countries error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels/:id
+ * Get hotel detail with all information
+ */
+router.get('/hotels/:id', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const hotelId = ctx.params.id;
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const hotel = yield adminHotelsService.getHotelById(hotelId);
+        if (!hotel) {
+            ctx.status = 404;
+            ctx.body = {
+                success: false,
+                error: 'Hotel not found',
+            };
+            return;
+        }
+        ctx.body = {
+            success: true,
+            data: hotel,
+        };
+    }
+    catch (error) {
+        console.error('Get hotel detail error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels/:id/reviews
+ * Get reviews for a specific hotel
+ */
+router.get('/hotels/:id/reviews', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const hotelId = ctx.params.id;
+        const { page = 1, limit = 10 } = ctx.query;
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const reviews = yield adminHotelsService.getHotelReviews(hotelId, {
+            page: Number(page),
+            limit: Number(limit),
+        });
+        ctx.body = {
+            success: true,
+            data: reviews,
+        };
+    }
+    catch (error) {
+        console.error('Get hotel reviews error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * GET /api/admin/hotels/:id/transactions
+ * Get transactions for a specific hotel
+ */
+router.get('/hotels/:id/transactions', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const hotelId = ctx.params.id;
+        const { page = 1, limit = 10 } = ctx.query;
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const transactions = yield adminHotelsService.getHotelTransactions(hotelId, {
+            page: Number(page),
+            limit: Number(limit),
+        });
+        ctx.body = {
+            success: true,
+            data: transactions,
+        };
+    }
+    catch (error) {
+        console.error('Get hotel transactions error:', error);
+        ctx.status = 500;
+        ctx.body = {
+            success: false,
+            error: 'Internal server error',
+        };
+    }
+}));
+/**
+ * POST /api/admin/hotels/:id/status
+ * Update hotel status (activate/deactivate)
+ */
+router.post('/hotels/:id/status', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+    try {
+        const hotelId = ctx.params.id;
+        const { status } = ctx.request.body;
+        if (!status || !['ACTIVE', 'INACTIVE', 'SUSPENDED'].includes(status)) {
+            ctx.status = 400;
+            ctx.body = {
+                success: false,
+                error: 'Valid status is required (ACTIVE, INACTIVE, SUSPENDED)',
+            };
+            return;
+        }
+        const { adminHotelsService } = yield Promise.resolve().then(() => __importStar(require('../services/admin-hotels.service')));
+        const success = yield adminHotelsService.updateHotelStatus(hotelId, status);
+        if (!success) {
+            ctx.status = 404;
+            ctx.body = {
+                success: false,
+                error: 'Hotel not found',
+            };
+            return;
+        }
+        // Log action
+        const authHeader = ctx.get('authorization');
+        const token = admin_auth_service_1.adminAuthService.extractToken(authHeader);
+        const payload = token ? admin_auth_service_1.adminAuthService.verifyAccessToken(token) : null;
+        if (payload) {
+            yield auditService.logAction({
+                admin_user_id: payload.adminUserId,
+                action_type: 'UPDATE_STATUS',
+                entity_type: 'HOTEL',
+                entity_id: hotelId,
+                reason: `Status changed to ${status}`,
+                ip_address: ctx.ip,
+                user_agent: ctx.get('user-agent'),
+            });
+        }
+        const hotel = yield adminHotelsService.getHotelById(hotelId);
+        ctx.body = {
+            success: true,
+            data: hotel,
+        };
+    }
+    catch (error) {
+        console.error('Update hotel status error:', error);
         ctx.status = 500;
         ctx.body = {
             success: false,

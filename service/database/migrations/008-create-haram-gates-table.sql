@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS haram_gates (
     latitude DECIMAL(10, 8) NOT NULL,
     longitude DECIMAL(11, 8) NOT NULL,
     description TEXT,
+    has_direct_kaaba_access BOOLEAN DEFAULT FALSE,
+    floor_level ENUM('ground', 'first', 'roof') DEFAULT 'ground',
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -54,17 +56,18 @@ CREATE TABLE IF NOT EXISTS hotel_attraction_distances (
 );
 
 -- Seed Haram Gates (approximate coordinates for major gates)
-INSERT INTO haram_gates (id, gate_number, name_english, name_arabic, latitude, longitude, description) VALUES
-('gate-001', 1, 'King Abdul Aziz Gate', 'باب الملك عبدالعزيز', 21.4225, 39.8262, 'Main entrance, also known as Gate 1'),
-('gate-002', 5, 'King Fahd Gate', 'باب الملك فهد', 21.4230, 39.8268, 'Northern entrance'),
-('gate-003', 11, 'Umrah Gate', 'باب العمرة', 21.4218, 39.8255, 'Western entrance for Umrah pilgrims'),
-('gate-004', 17, 'Al-Fatah Gate', 'باب الفتح', 21.4235, 39.8275, 'Eastern entrance'),
-('gate-005', 25, 'Al-Salam Gate', 'باب السلام', 21.4212, 39.8260, 'Peace Gate - southern entrance'),
-('gate-006', 45, 'King Abdullah Gate', 'باب الملك عبدالله', 21.4240, 39.8280, 'Expansion area entrance'),
-('gate-007', 62, 'Al-Marwah Gate', 'باب المروة', 21.4228, 39.8285, 'Near Marwah hill'),
-('gate-008', 79, 'Ibrahim Al-Khalil Gate', 'باب إبراهيم الخليل', 21.4205, 39.8250, 'Southwest entrance'),
-('gate-009', 84, 'Ajyad Gate', 'باب أجياد', 21.4200, 39.8245, 'Ajyad area entrance'),
-('gate-010', 94, 'Al-Safa Gate', 'باب الصفا', 21.4222, 39.8290, 'Near Safa hill');
+-- Gates with direct Kaaba access lead directly to the Mataf (Tawaf area around Kaaba) on ground floor
+INSERT INTO haram_gates (id, gate_number, name_english, name_arabic, latitude, longitude, description, has_direct_kaaba_access, floor_level) VALUES
+('gate-001', 1, 'King Abdul Aziz Gate', 'باب الملك عبدالعزيز', 21.4225, 39.8262, 'Main entrance - direct access to Mataf area', TRUE, 'ground'),
+('gate-002', 5, 'King Fahd Gate', 'باب الملك فهد', 21.4230, 39.8268, 'Northern entrance - leads to upper floors', FALSE, 'first'),
+('gate-003', 11, 'Umrah Gate', 'باب العمرة', 21.4218, 39.8255, 'Western entrance - direct ground floor access to Kaaba', TRUE, 'ground'),
+('gate-004', 17, 'Al-Fatah Gate', 'باب الفتح', 21.4235, 39.8275, 'Eastern entrance - upper level access', FALSE, 'first'),
+('gate-005', 25, 'Al-Salam Gate', 'باب السلام', 21.4212, 39.8260, 'Peace Gate - direct access to Mataf, traditional entrance', TRUE, 'ground'),
+('gate-006', 45, 'King Abdullah Gate', 'باب الملك عبدالله', 21.4240, 39.8280, 'Expansion area - leads to first floor prayer halls', FALSE, 'first'),
+('gate-007', 62, 'Al-Marwah Gate', 'باب المروة', 21.4228, 39.8285, 'Near Marwah - access to Sa''i area, not direct Kaaba', FALSE, 'ground'),
+('gate-008', 79, 'Ibrahim Al-Khalil Gate', 'باب إبراهيم الخليل', 21.4205, 39.8250, 'Southwest entrance - direct Mataf access', TRUE, 'ground'),
+('gate-009', 84, 'Ajyad Gate', 'باب أجياد', 21.4200, 39.8245, 'Ajyad area - ground floor with direct Kaaba view', TRUE, 'ground'),
+('gate-010', 94, 'Al-Safa Gate', 'باب الصفا', 21.4222, 39.8290, 'Near Safa - primarily for Sa''i access', FALSE, 'ground');
 
 -- Seed Nearby Attractions
 INSERT INTO nearby_attractions (id, name_english, name_arabic, category, latitude, longitude, description) VALUES

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -19,9 +52,136 @@ const feature_flag_1 = require("../../../middleware/feature-flag");
 const hotel_repository_1 = require("../repositories/hotel.repository");
 const room_repository_1 = require("../repositories/room.repository");
 const hotel_filter_service_1 = require("../services/hotel-filter.service");
+const hotel_search_service_1 = require("../services/hotel-search.service");
 const connection_1 = require("../../../database/connection");
+const haramGatesService = __importStar(require("../../../services/haram-gates.service"));
 const createHotelRoutes = () => {
     const router = new koa_router_1.default({ prefix: '/hotels' });
+    /**
+     * GET /api/hotels/search
+     * Advanced hotel search with sorting and Hajj/Umrah specific filters
+     * Query params:
+     * - location: Search by city, country, or address
+     * - city: Filter by specific city
+     * - country: Filter by specific country
+     * - checkIn: Check-in date (YYYY-MM-DD)
+     * - checkOut: Check-out date (YYYY-MM-DD)
+     * - guests: Number of guests
+     * - minRating: Minimum star rating
+     * - minPrice: Minimum price per night
+     * - maxPrice: Maximum price per night
+     * - maxWalkingTimeToHaram: Maximum walking time to Haram in minutes
+     * - viewTypes: Comma-separated view types (kaaba, partial_haram, city, none)
+     * - elderlyFriendly: Filter for elderly-friendly hotels (true/false)
+     * - familyRooms: Filter for hotels with family rooms (true/false)
+     * - bestForTags: Comma-separated "best for" tags
+     * - facilities: Comma-separated list of facility names
+     * - roomFacilities: Comma-separated list of room facility names
+     * - sortBy: Sort option (recommended, price_low_high, price_high_low, star_rating, highest_reviewed, manasik_score, distance_to_haram)
+     * - page: Page number (default: 1)
+     * - limit: Results per page (default: 20)
+     */
+    router.get('/search', (0, feature_flag_1.requireFeature)('hotelListing'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const { location, city, country, checkIn, checkOut, guests, minRating, minPrice, maxPrice, maxWalkingTimeToHaram, viewTypes, elderlyFriendly, familyRooms, bestForTags, facilities, roomFacilities, sortBy, page = 1, limit = 20, } = ctx.query;
+            const pageNum = parseInt(page);
+            const limitNum = parseInt(limit);
+            const offset = (pageNum - 1) * limitNum;
+            const searchService = new hotel_search_service_1.HotelSearchService();
+            // Parse comma-separated arrays
+            const viewTypesArray = viewTypes
+                ? viewTypes.split(',').map(v => v.trim())
+                : undefined;
+            const bestForTagsArray = bestForTags
+                ? bestForTags.split(',').map(t => t.trim())
+                : undefined;
+            const facilitiesArray = facilities
+                ? facilities.split(',').map(f => f.trim())
+                : undefined;
+            const roomFacilitiesArray = roomFacilities
+                ? roomFacilities.split(',').map(f => f.trim())
+                : undefined;
+            const { hotels, total } = yield searchService.search({
+                location: location,
+                city: city,
+                country: country,
+                checkIn: checkIn,
+                checkOut: checkOut,
+                guests: guests ? parseInt(guests) : undefined,
+                minRating: minRating ? parseFloat(minRating) : undefined,
+                minPrice: minPrice ? parseFloat(minPrice) : undefined,
+                maxPrice: maxPrice ? parseFloat(maxPrice) : undefined,
+                maxWalkingTimeToHaram: maxWalkingTimeToHaram ? parseInt(maxWalkingTimeToHaram) : undefined,
+                viewTypes: viewTypesArray,
+                elderlyFriendly: elderlyFriendly === 'true',
+                familyRooms: familyRooms === 'true',
+                bestForTags: bestForTagsArray,
+                facilities: facilitiesArray,
+                roomFacilities: roomFacilitiesArray,
+                sortBy: sortBy || 'recommended',
+                limit: limitNum,
+                offset,
+            });
+            ctx.body = {
+                hotels,
+                pagination: {
+                    page: pageNum,
+                    limit: limitNum,
+                    total,
+                    totalPages: Math.ceil(total / limitNum),
+                },
+                filters: {
+                    location,
+                    city,
+                    country,
+                    checkIn,
+                    checkOut,
+                    guests: guests ? parseInt(guests) : null,
+                    minRating: minRating ? parseFloat(minRating) : null,
+                    minPrice: minPrice ? parseFloat(minPrice) : null,
+                    maxPrice: maxPrice ? parseFloat(maxPrice) : null,
+                    maxWalkingTimeToHaram: maxWalkingTimeToHaram ? parseInt(maxWalkingTimeToHaram) : null,
+                    viewTypes: viewTypesArray,
+                    elderlyFriendly: elderlyFriendly === 'true',
+                    familyRooms: familyRooms === 'true',
+                    bestForTags: bestForTagsArray,
+                    facilities: facilitiesArray,
+                    roomFacilities: roomFacilitiesArray,
+                    sortBy: sortBy || 'recommended',
+                },
+            };
+        }
+        catch (error) {
+            console.error('Error searching hotels:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to search hotels' };
+        }
+    }));
+    /**
+     * GET /api/hotels/filter-options
+     * Get available filter options for the search UI
+     */
+    router.get('/filter-options', (0, feature_flag_1.requireFeature)('hotelListing'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const { city } = ctx.query;
+            const searchService = new hotel_search_service_1.HotelSearchService();
+            const options = yield searchService.getFilterOptions(city);
+            ctx.body = Object.assign({ sortOptions: [
+                    { value: 'recommended', label: 'Recommended' },
+                    { value: 'price_low_high', label: 'Price: Low to High' },
+                    { value: 'price_high_low', label: 'Price: High to Low' },
+                    { value: 'star_rating', label: 'Star Rating' },
+                    { value: 'highest_reviewed', label: 'Highest Reviewed' },
+                    { value: 'manasik_score', label: 'Manasik Score' },
+                    { value: 'distance_to_haram', label: 'Distance to Haram' },
+                ] }, options);
+        }
+        catch (error) {
+            console.error('Error fetching filter options:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to fetch filter options' };
+        }
+    }));
     /**
      * GET /api/hotels/listings
      * Get hotels managed by the logged-in user
@@ -80,7 +240,7 @@ const createHotelRoutes = () => {
                 ctx.body = { error: 'Unauthorized' };
                 return;
             }
-            const { name, description, address, city, state, country, zipCode, starRating, totalRooms, checkInTime, checkOutTime, cancellationPolicy, facilities, landmarks, surroundings,
+            const { name, description, address, city, state, country, zipCode, latitude, longitude, starRating, totalRooms, checkInTime, checkOutTime, cancellationPolicy, facilities, landmarks, surroundings,
             // @ts-ignore
              } = ctx.request.body;
             // Validate required fields
@@ -104,8 +264,8 @@ const createHotelRoutes = () => {
                 state: state || '',
                 country,
                 zip_code: zipCode || '',
-                latitude: null,
-                longitude: null,
+                latitude: latitude ? parseFloat(latitude) : null,
+                longitude: longitude ? parseFloat(longitude) : null,
                 star_rating: starRating || 3,
                 total_rooms: totalRooms || 0,
                 check_in_time: checkInTime || '14:00:00',
@@ -291,7 +451,8 @@ const createHotelRoutes = () => {
                 };
                 return;
             }
-            // Fetch bookings for these hotels
+            // Fetch bookings for these hotels with customer, agent, and hotel provider info
+            // Note: metadata may use either 'hotelId' or 'hotel_id' depending on how booking was created
             const pool = (0, connection_1.getPool)();
             let query = `
         SELECT 
@@ -301,14 +462,34 @@ const createHotelRoutes = () => {
           b.subtotal,
           b.tax,
           b.total,
+          b.booking_source,
+          b.agent_id,
+          b.customer_id,
+          b.payment_status,
           b.metadata,
+          b.hold_expires_at,
           b.created_at,
-          b.updated_at
+          b.updated_at,
+          u.first_name as customer_first_name,
+          u.last_name as customer_last_name,
+          u.email as customer_email,
+          ag.name as agent_name,
+          ag.email as agent_email,
+          h.provider_name,
+          h.provider_reference,
+          h.provider_phone
         FROM bookings b
+        LEFT JOIN users u ON b.customer_id = u.id
+        LEFT JOIN agents ag ON b.agent_id = ag.id
+        LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id 
+          OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) = h.id
         WHERE b.service_type = 'HOTEL'
-          AND JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) IN (${hotelIds.map(() => '?').join(',')})
+          AND (
+            JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) IN (${hotelIds.map(() => '?').join(',')})
+            OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) IN (${hotelIds.map(() => '?').join(',')})
+          )
       `;
-            const params = [...hotelIds];
+            const params = [...hotelIds, ...hotelIds];
             if (status) {
                 query += ' AND b.status = ?';
                 params.push(status);
@@ -321,20 +502,42 @@ const createHotelRoutes = () => {
         SELECT COUNT(*) as total
         FROM bookings b
         WHERE b.service_type = 'HOTEL'
-          AND JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) IN (${hotelIds.map(() => '?').join(',')})
+          AND (
+            JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) IN (${hotelIds.map(() => '?').join(',')})
+            OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) IN (${hotelIds.map(() => '?').join(',')})
+          )
       `;
-            const countParams = [...hotelIds];
+            const countParams = [...hotelIds, ...hotelIds];
             if (status) {
                 countQuery += ' AND b.status = ?';
                 countParams.push(status);
             }
             const [countResult] = yield pool.query(countQuery, countParams);
             const total = countResult[0].total;
-            // Parse metadata for each booking
-            const formattedBookings = bookings.map((booking) => {
+            // Parse metadata for each booking and fetch guest details
+            const formattedBookings = yield Promise.all(bookings.map((booking) => __awaiter(void 0, void 0, void 0, function* () {
                 const metadata = typeof booking.metadata === 'string'
                     ? JSON.parse(booking.metadata)
                     : booking.metadata;
+                // Determine guest info - prefer metadata, fall back to customer record
+                const guestName = metadata.guestName || metadata.guest_name ||
+                    (booking.customer_first_name ? `${booking.customer_first_name} ${booking.customer_last_name}` : 'Guest');
+                const guestEmail = metadata.guestEmail || metadata.guest_email || booking.customer_email || '';
+                const guestPhone = metadata.guestPhone || metadata.guest_phone || '';
+                // Fetch guests for this booking from guests table
+                const [guestRows] = yield pool.query(`SELECT id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger 
+           FROM guests WHERE booking_id = ? ORDER BY is_lead_passenger DESC`, [booking.id]);
+                const guests = guestRows.map((g) => ({
+                    id: g.id,
+                    firstName: g.first_name,
+                    lastName: g.last_name,
+                    email: g.email,
+                    phone: g.phone,
+                    nationality: g.nationality,
+                    passportNumber: g.passport_number,
+                    dateOfBirth: g.date_of_birth,
+                    isLeadPassenger: g.is_lead_passenger === 1,
+                }));
                 return {
                     id: booking.id,
                     status: booking.status,
@@ -342,20 +545,37 @@ const createHotelRoutes = () => {
                     subtotal: parseFloat(booking.subtotal),
                     tax: parseFloat(booking.tax),
                     total: parseFloat(booking.total),
-                    hotelId: metadata.hotel_id,
-                    hotelName: metadata.hotel_name,
-                    roomTypeId: metadata.room_type_id,
-                    roomName: metadata.room_type,
-                    checkIn: metadata.check_in,
-                    checkOut: metadata.check_out,
+                    paymentStatus: booking.payment_status,
+                    bookingSource: booking.booking_source || 'DIRECT',
+                    hotelId: metadata.hotelId || metadata.hotel_id,
+                    hotelName: metadata.hotelName || metadata.hotel_name,
+                    roomTypeId: metadata.roomTypeId || metadata.room_type_id,
+                    roomName: metadata.roomType || metadata.room_type,
+                    checkIn: metadata.checkInDate || metadata.check_in,
+                    checkOut: metadata.checkOutDate || metadata.check_out,
                     nights: metadata.nights,
-                    guestName: metadata.guest_name,
-                    guestEmail: metadata.guest_email,
-                    guestCount: metadata.guest_count,
+                    // Guest info
+                    guestName,
+                    guestEmail,
+                    guestPhone,
+                    guestCount: metadata.guests || metadata.guest_count,
+                    guests,
+                    customerId: booking.customer_id,
+                    // Agent info (if booked via agent)
+                    agentId: booking.agent_id,
+                    agentName: booking.agent_name,
+                    agentEmail: booking.agent_email,
+                    // Provider info
+                    providerName: booking.provider_name,
+                    providerReference: booking.provider_reference,
+                    providerPhone: booking.provider_phone,
+                    // Hold info for broker bookings
+                    holdExpiresAt: booking.hold_expires_at,
+                    // Timestamps
                     createdAt: booking.created_at,
                     updatedAt: booking.updated_at,
                 };
-            });
+            })));
             ctx.body = {
                 bookings: formattedBookings,
                 pagination: {
@@ -374,7 +594,7 @@ const createHotelRoutes = () => {
     }));
     /**
      * GET /api/hotels/:id
-     * Get hotel details with rooms, images, and amenities
+     * Get hotel details with rooms, images, amenities, and conversion-critical info
      */
     router.get('/:id', (0, feature_flag_1.requireFeature)('hotelDetails'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
         try {
@@ -400,6 +620,24 @@ const createHotelRoutes = () => {
             }, {});
             // Get room types with images
             const rooms = yield roomRepository.findByHotelId(id);
+            // Get "Best for" tags
+            const [bestForTags] = yield pool.query('SELECT tag_name, tag_icon FROM hotel_best_for_tags WHERE hotel_id = ?', [id]);
+            // Get closest Haram gate for quick display
+            const [closestGate] = yield pool.query(`
+        SELECT 
+          hgd.distance_meters,
+          hgd.walking_time_minutes,
+          hg.gate_number,
+          hg.name_english,
+          hg.has_direct_kaaba_access
+        FROM hotel_gate_distances hgd
+        JOIN haram_gates hg ON hgd.gate_id = hg.id
+        WHERE hgd.hotel_id = ?
+        ORDER BY hgd.distance_meters ASC
+        LIMIT 1
+      `, [id]);
+            // Get hotel facilities
+            const [facilities] = yield pool.query('SELECT facility_name FROM hotel_facilities WHERE hotel_id = ?', [id]);
             ctx.body = {
                 hotel: {
                     id: hotelRow.id,
@@ -420,6 +658,28 @@ const createHotelRoutes = () => {
                     checkOutTime: hotelRow.check_out_time,
                     cancellationPolicy: hotelRow.cancellation_policy,
                     status: hotelRow.status,
+                    // New conversion-critical fields
+                    manasikScore: hotelRow.manasik_score ? parseFloat(hotelRow.manasik_score) : null,
+                    walkDescription: hotelRow.walk_description,
+                    liftSituation: hotelRow.lift_situation,
+                    distanceExplanation: hotelRow.distance_explanation,
+                    videoUrl: hotelRow.video_url,
+                    videoThumbnail: hotelRow.video_thumbnail,
+                    // Best for tags
+                    bestForTags: bestForTags.map((tag) => ({
+                        name: tag.tag_name,
+                        icon: tag.tag_icon,
+                    })),
+                    // Closest Haram gate (quick access)
+                    closestHaramGate: closestGate.length > 0 ? {
+                        distanceMeters: closestGate[0].distance_meters,
+                        walkingTimeMinutes: closestGate[0].walking_time_minutes,
+                        gateNumber: closestGate[0].gate_number,
+                        gateName: closestGate[0].name_english,
+                        hasDirectKaabaAccess: closestGate[0].has_direct_kaaba_access === 1,
+                    } : null,
+                    // Facilities list
+                    facilities: facilities.map((f) => f.facility_name),
                     images: images.map((img) => ({
                         id: img.id,
                         url: img.url,
@@ -446,7 +706,7 @@ const createHotelRoutes = () => {
         try {
             const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
             const { id } = ctx.params;
-            const { name, description, address, city, state, country, zipCode, starRating, checkInTime, checkOutTime, cancellationPolicy, status } = ctx.request.body;
+            const { name, description, address, city, state, country, zipCode, latitude, longitude, starRating, checkInTime, checkOutTime, cancellationPolicy, status } = ctx.request.body;
             if (!userId) {
                 ctx.status = 401;
                 ctx.body = { error: 'Unauthorized' };
@@ -476,6 +736,10 @@ const createHotelRoutes = () => {
                 updateData.country = country;
             if (zipCode !== undefined)
                 updateData.zip_code = zipCode;
+            if (latitude !== undefined)
+                updateData.latitude = latitude ? parseFloat(latitude) : null;
+            if (longitude !== undefined)
+                updateData.longitude = longitude ? parseFloat(longitude) : null;
             if (starRating !== undefined)
                 updateData.star_rating = starRating;
             if (checkInTime !== undefined)
@@ -504,6 +768,87 @@ const createHotelRoutes = () => {
             console.error('Error updating hotel:', error);
             ctx.status = 500;
             ctx.body = { error: 'Failed to update hotel' };
+        }
+    }));
+    /**
+     * POST /api/hotels/bookings/:id/refund
+     * Issue a refund for a booking (hotel manager only)
+     * Only hotel managers can refund bookings for their hotels
+     */
+    router.post('/bookings/:id/refund', auth_middleware_1.authMiddleware, (0, feature_flag_1.requireFeature)('hotelListing'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
+        try {
+            const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
+            const bookingId = ctx.params.id;
+            // @ts-ignore
+            const { amount, reason } = ctx.request.body;
+            if (!userId) {
+                ctx.status = 401;
+                ctx.body = { error: 'Unauthorized' };
+                return;
+            }
+            if (!amount || !reason) {
+                ctx.status = 400;
+                ctx.body = { error: 'Missing required fields: amount, reason' };
+                return;
+            }
+            const pool = (0, connection_1.getPool)();
+            const hotelRepository = new hotel_repository_1.HotelRepository();
+            // Get the booking
+            const [bookingRows] = yield pool.query('SELECT * FROM bookings WHERE id = ?', [bookingId]);
+            if (!bookingRows || bookingRows.length === 0) {
+                ctx.status = 404;
+                ctx.body = { error: 'Booking not found' };
+                return;
+            }
+            const booking = bookingRows[0];
+            const metadata = typeof booking.metadata === 'string'
+                ? JSON.parse(booking.metadata)
+                : booking.metadata;
+            const hotelId = metadata.hotelId || metadata.hotel_id;
+            // Verify user manages this hotel
+            const isManager = yield hotelRepository.isUserManagingHotel(userId, hotelId);
+            if (!isManager) {
+                ctx.status = 403;
+                ctx.body = { error: 'You do not have permission to refund bookings for this hotel' };
+                return;
+            }
+            // Update booking with refund info
+            const refundAmount = parseFloat(amount);
+            const currentRefund = booking.refund_amount ? parseFloat(booking.refund_amount) : 0;
+            const totalRefund = currentRefund + refundAmount;
+            // Determine if this is a full or partial refund
+            const bookingTotal = parseFloat(booking.total);
+            const isFullRefund = totalRefund >= bookingTotal;
+            const [result] = yield pool.query(`UPDATE bookings 
+         SET refund_amount = ?,
+             refund_reason = ?,
+             refunded_at = NOW(),
+             status = ?,
+             updated_at = NOW()
+         WHERE id = ?`, [totalRefund, reason, isFullRefund ? 'REFUNDED' : booking.status, bookingId]);
+            if (result.affectedRows === 0) {
+                ctx.status = 500;
+                ctx.body = { error: 'Failed to process refund' };
+                return;
+            }
+            ctx.body = {
+                success: true,
+                message: 'Refund processed successfully',
+                refund: {
+                    bookingId,
+                    amount: refundAmount,
+                    totalRefund,
+                    isFullRefund,
+                    reason,
+                    refundedAt: new Date().toISOString(),
+                },
+            };
+        }
+        catch (error) {
+            console.error('Refund booking error:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to process refund' };
         }
     }));
     /**
@@ -685,7 +1030,16 @@ const createHotelRoutes = () => {
     }));
     /**
      * POST /api/hotels/:id/bookings
-     * Create a hotel booking
+     * Create a hotel booking with guest details
+     * Request body:
+     * - roomTypeId: Room type ID
+     * - checkIn: Check-in date (YYYY-MM-DD)
+     * - checkOut: Check-out date (YYYY-MM-DD)
+     * - guestCount: Number of guests
+     * - guestName: Lead passenger name (for backward compatibility)
+     * - guestEmail: Lead passenger email (for backward compatibility)
+     * - guestPhone: Lead passenger phone (optional)
+     * - guestDetails: Array of guest objects with: firstName, lastName, email, phone, nationality, passportNumber, dateOfBirth, isLeadPassenger
      */
     router.post('/:id/bookings', auth_middleware_1.authMiddleware, (0, feature_flag_1.requireFeature)('hotelBooking'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
         var _a, _b;
@@ -694,7 +1048,7 @@ const createHotelRoutes = () => {
             const userEmail = (_b = ctx.user) === null || _b === void 0 ? void 0 : _b.email;
             const { id: hotelId } = ctx.params;
             // @ts-ignore
-            const { roomTypeId, checkIn, checkOut, guestCount, guestName, guestEmail } = ctx.request.body;
+            const { roomTypeId, checkIn, checkOut, guestCount, guestName, guestEmail, guestPhone, guestDetails } = ctx.request.body;
             // Validate required fields
             if (!roomTypeId || !checkIn || !checkOut || !guestCount || !guestName || !guestEmail) {
                 ctx.status = 400;
@@ -745,38 +1099,103 @@ const createHotelRoutes = () => {
             const total = subtotal + tax;
             // Create booking
             const bookingId = require('uuid').v4();
+            // Access hotel address fields - hotel is raw DB row with snake_case
+            const hotelAddress = hotel.address || '';
+            const hotelCity = hotel.city || '';
+            const hotelCountry = hotel.country || '';
             const metadata = {
-                hotel_id: hotelId,
-                hotel_name: hotel.name,
-                room_type_id: roomTypeId,
-                room_type: room.name,
-                check_in: checkIn,
-                check_out: checkOut,
+                hotelId: hotelId,
+                hotelName: hotel.name,
+                hotelAddress: hotelAddress,
+                hotelCity: hotelCity,
+                hotelCountry: hotelCountry,
+                hotelFullAddress: [hotelAddress, hotelCity, hotelCountry].filter(Boolean).join(', '),
+                roomTypeId: roomTypeId,
+                roomType: room.name,
+                checkInDate: checkIn,
+                checkOutDate: checkOut,
                 nights,
-                guest_name: guestName,
-                guest_email: guestEmail,
-                guest_count: guestCount,
-                base_price: room.basePrice,
+                guestName: guestName,
+                guestEmail: guestEmail,
+                guestPhone: guestPhone || '',
+                guests: guestCount,
+                basePrice: room.basePrice,
             };
+            // Get company_id from hotel (findById returns raw DB row with snake_case)
+            const companyId = hotel.company_id || hotel.companyId || 'default-company';
+            // Prepare guest details for storage
+            const processedGuestDetails = guestDetails && Array.isArray(guestDetails)
+                ? guestDetails.map((guest) => ({
+                    firstName: guest.firstName || '',
+                    lastName: guest.lastName || '',
+                    email: guest.email || '',
+                    phone: guest.phone || '',
+                    nationality: guest.nationality || '',
+                    passportNumber: guest.passportNumber || '',
+                    dateOfBirth: guest.dateOfBirth || '',
+                    isLeadPassenger: guest.isLeadPassenger || false,
+                }))
+                : [];
             const insertQuery = `
         INSERT INTO bookings (
-          id, user_id, service_type, status, currency, subtotal, tax, total, metadata, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          id, company_id, customer_id, service_type, booking_source, status, currency, subtotal, tax, total, payment_status, metadata, guest_details, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
             yield pool.execute(insertQuery, [
                 bookingId,
+                companyId,
                 userId,
                 'HOTEL',
+                'DIRECT',
                 'PENDING',
                 room.currency,
                 subtotal,
                 tax,
                 total,
+                'PENDING',
                 JSON.stringify(metadata),
+                JSON.stringify(processedGuestDetails),
             ]);
+            // Store individual guests in guests table
+            if (processedGuestDetails.length > 0) {
+                for (const guest of processedGuestDetails) {
+                    const guestId = require('uuid').v4();
+                    const guestInsertQuery = `
+            INSERT INTO guests (
+              id, booking_id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          `;
+                    yield pool.execute(guestInsertQuery, [
+                        guestId,
+                        bookingId,
+                        guest.firstName,
+                        guest.lastName,
+                        guest.email,
+                        guest.phone,
+                        guest.nationality,
+                        guest.passportNumber,
+                        guest.dateOfBirth || null,
+                        guest.isLeadPassenger ? 1 : 0,
+                    ]);
+                }
+            }
             // Fetch created booking
             const [bookingRows] = yield pool.query('SELECT * FROM bookings WHERE id = ?', [bookingId]);
             const bookingRow = bookingRows[0];
+            // Fetch guests for response
+            const [guestRows] = yield pool.query(`SELECT id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger 
+         FROM guests WHERE booking_id = ? ORDER BY is_lead_passenger DESC`, [bookingId]);
+            const guests = guestRows.map((g) => ({
+                id: g.id,
+                firstName: g.first_name,
+                lastName: g.last_name,
+                email: g.email,
+                phone: g.phone,
+                nationality: g.nationality,
+                passportNumber: g.passport_number,
+                dateOfBirth: g.date_of_birth,
+                isLeadPassenger: g.is_lead_passenger === 1,
+            }));
             ctx.status = 201;
             ctx.body = {
                 message: 'Booking created successfully',
@@ -797,6 +1216,7 @@ const createHotelRoutes = () => {
                     guestName,
                     guestEmail,
                     guestCount,
+                    guests,
                     createdAt: bookingRow.created_at,
                 },
             };
@@ -1006,6 +1426,29 @@ const createHotelRoutes = () => {
             console.error('Error updating surroundings:', error);
             ctx.status = 500;
             ctx.body = { error: 'Failed to update surroundings' };
+        }
+    }));
+    /**
+     * GET /api/hotels/:id/proximity
+     * Get nearby Haram gates and attractions with distances
+     * Shows recommended gate based on closest distance
+     */
+    router.get('/:id/proximity', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const { id } = ctx.params;
+            const proximityInfo = yield haramGatesService.getHotelProximityInfo(id);
+            ctx.body = proximityInfo;
+        }
+        catch (error) {
+            console.error('Error fetching hotel proximity:', error);
+            if (error.message === 'Hotel not found') {
+                ctx.status = 404;
+                ctx.body = { error: 'Hotel not found' };
+            }
+            else {
+                ctx.status = 500;
+                ctx.body = { error: 'Failed to fetch proximity information' };
+            }
         }
     }));
     return router;

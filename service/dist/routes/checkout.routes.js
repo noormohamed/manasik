@@ -74,11 +74,9 @@ router.post('/create-session', (ctx) => __awaiter(void 0, void 0, void 0, functi
         });
         ctx.body = {
             success: true,
-            data: {
-                sessionId: session.sessionId,
-                url: session.url,
-                expiresAt: session.expiresAt,
-            },
+            sessionId: session.sessionId,
+            url: session.url,
+            expiresAt: session.expiresAt,
         };
     }
     catch (error) {

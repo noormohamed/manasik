@@ -145,11 +145,12 @@ class HotelRepository extends repository_1.BaseRepository {
       FROM ${this.tableName} h
       LEFT JOIN companies c ON h.company_id = c.id
       LEFT JOIN company_admins ca ON c.id = ca.company_id AND ca.user_id = ?
-      WHERE ca.user_id = ? OR h.agent_id = ?
+      LEFT JOIN agents a ON h.agent_id = a.id
+      WHERE ca.user_id = ? OR h.agent_id = ? OR a.user_id = ?
       ORDER BY h.created_at DESC
       LIMIT ? OFFSET ?
     `;
-            const results = yield this.query(query, [userId, userId, userId, limit.toString(), offset.toString()]);
+            const results = yield this.query(query, [userId, userId, userId, userId, limit.toString(), offset.toString()]);
             // Fetch images for each hotel
             const hotelsWithImages = yield Promise.all(results.map((row) => __awaiter(this, void 0, void 0, function* () {
                 const imagesQuery = `SELECT image_url FROM hotel_images WHERE hotel_id = ? ORDER BY display_order`;
@@ -196,9 +197,10 @@ class HotelRepository extends repository_1.BaseRepository {
       FROM ${this.tableName} h
       LEFT JOIN companies c ON h.company_id = c.id
       LEFT JOIN company_admins ca ON c.id = ca.company_id AND ca.user_id = ?
-      WHERE ca.user_id = ? OR h.agent_id = ?
+      LEFT JOIN agents a ON h.agent_id = a.id
+      WHERE ca.user_id = ? OR h.agent_id = ? OR a.user_id = ?
     `;
-            const results = yield this.query(query, [userId, userId, userId]);
+            const results = yield this.query(query, [userId, userId, userId, userId]);
             return ((_a = results[0]) === null || _a === void 0 ? void 0 : _a.count) || 0;
         });
     }
@@ -213,9 +215,10 @@ class HotelRepository extends repository_1.BaseRepository {
       FROM ${this.tableName} h
       LEFT JOIN companies c ON h.company_id = c.id
       LEFT JOIN company_admins ca ON c.id = ca.company_id AND ca.user_id = ?
-      WHERE (ca.user_id = ? OR h.agent_id = ?) AND h.id = ?
+      LEFT JOIN agents a ON h.agent_id = a.id
+      WHERE (ca.user_id = ? OR h.agent_id = ? OR a.user_id = ?) AND h.id = ?
     `;
-            const results = yield this.query(query, [userId, userId, userId, hotelId]);
+            const results = yield this.query(query, [userId, userId, userId, userId, hotelId]);
             return (((_a = results[0]) === null || _a === void 0 ? void 0 : _a.count) || 0) > 0;
         });
     }

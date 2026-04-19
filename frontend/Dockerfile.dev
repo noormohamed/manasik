@@ -1,20 +1,23 @@
-FROM node:18-alpine
+FROM node:20-alpine
 
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies
-RUN npm ci
+# Install dependencies
+RUN npm install
 
-# Copy next config and tsconfig (needed for Next.js)
-COPY next.config.js tsconfig.json ./
+# Copy the rest of the application
+COPY . .
 
-# Don't copy src - it will be mounted as a volume
-
-# Expose Next.js dev server port
+# Expose port
 EXPOSE 3000
 
-# Run Next.js dev server
-CMD ["npm", "run", "dev"]
+# Set environment for development
+ENV NODE_ENV=development
+ENV WATCHPACK_POLLING=true
+
+# Use ENTRYPOINT so CMD can be overridden
+ENTRYPOINT ["npm", "run"]
+CMD ["dev"]

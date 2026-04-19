@@ -12,6 +12,8 @@ const feature_flags_1 = require("../utils/feature-flags");
 const auth_routes_1 = require("./auth.routes");
 const user_routes_1 = require("./user.routes");
 const hotel_routes_1 = require("../features/hotel/routes/hotel.routes");
+const credits_routes_1 = require("./credits.routes");
+const broker_routes_1 = require("./broker.routes");
 const createApiRouter = () => {
     const router = new koa_router_1.default({ prefix: '/api' });
     router.get('/health', feature_flag_1.logFeatureFlags, (ctx) => {
@@ -38,7 +40,13 @@ const createApiRouter = () => {
         router.use(hotelRoutes.routes());
         router.use(hotelRoutes.allowedMethods());
     }
+    // Credits routes (always enabled)
+    const creditsRoutes = (0, credits_routes_1.createCreditsRoutes)();
+    router.use(creditsRoutes.routes());
+    router.use(creditsRoutes.allowedMethods());
+    // Broker routes (always enabled)
+    router.use(broker_routes_1.brokerRoutes.routes());
+    router.use(broker_routes_1.brokerRoutes.allowedMethods());
     return router;
 };
 exports.createApiRouter = createApiRouter;
-// DAN

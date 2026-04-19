@@ -1,148 +1,22 @@
 version: '3.8'
 
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: booking_mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: root
-      MYSQL_DATABASE: booking_platform
-      MYSQL_USER: booking_user
-      MYSQL_PASSWORD: booking_password
-    ports:
-      - "3306:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./service/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
-      - ./service/database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
-      - ./service/database/migrations/001-add-hotel-filters.sql:/docker-entrypoint-initdb.d/03-hotel-filters.sql
-      - ./service/database/seed-facilities.sql:/docker-entrypoint-initdb.d/04-seed-facilities.sql
-      - ./service/database/migrations/002-create-admin-users-table.sql:/docker-entrypoint-initdb.d/05-admin-users.sql
-      - ./service/database/migrations/003-create-admin-sessions-table.sql:/docker-entrypoint-initdb.d/06-admin-sessions.sql
-      - ./service/database/migrations/004-create-audit-logs-table.sql:/docker-entrypoint-initdb.d/07-audit-logs.sql
-      - ./service/database/migrations/005-create-admin-alerts-table.sql:/docker-entrypoint-initdb.d/08-admin-alerts.sql
-      - ./service/database/migrations/006-create-alert-history-table.sql:/docker-entrypoint-initdb.d/09-alert-history.sql
-      - ./service/database/migrations/007-create-admin-preferences-table.sql:/docker-entrypoint-initdb.d/10-admin-preferences.sql
-    networks:
-      - booking_network
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-proot"]
-      timeout: 20s
-      retries: 10
-      interval: 5s
-
-  api:
-    build:
-      context: ./service
-      dockerfile: Dockerfile
-    container_name: booking_api
-    restart: always
-    environment:
-      NODE_ENV: development
-      PORT: 3001
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_USER: booking_user
-      DB_PASSWORD: booking_password
-      DB_NAME: booking_platform
-      JWT_SECRET: your-secret-key-change-in-production
-      JWT_REFRESH_SECRET: your-refresh-secret-key-change-in-production
-      JWT_EXPIRY: 24h
-      JWT_REFRESH_EXPIRY: 7d
-      SIGNING_SECRET: your-signing-secret-key-change-in-production
-      CORS_ORIGIN: http://localhost:3000
-      ENABLE_AUTH_ENDPOINTS: "true"
-      ENABLE_USER_ENDPOINTS: "true"
-      ENABLE_HOTEL_ENDPOINTS: "true"
-      ENABLE_CHECKOUT_ENDPOINTS: "true"
-      ENABLE_REGISTRATION: "true"
-      ENABLE_LOGIN: "true"
-      ENABLE_REFRESH_TOKEN: "true"
-      ENABLE_GUEST_CHECKOUT: "true"
-      ENABLE_HOTEL_LISTING: "true"
-      ENABLE_HOTEL_DETAILS: "true"
-      ENABLE_ROOM_AVAILABILITY: "true"
-      ENABLE_HOTEL_BOOKING: "true"
-      ENABLE_CHECKOUT_SESSION: "true"
-      ENABLE_CHECKOUT_ITEMS: "true"
-      ENABLE_CHECKOUT_DISCOUNT: "true"
-      ENABLE_CHECKOUT_CONVERSION: "true"
-      ENABLE_CHECKOUT_COMPLETE: "true"
-      STRIPE_BASE_URL: https://api.stripe.com/v1
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
-      FRONTEND_URL: http://localhost:3000
-      SMTP_HOST: sandbox.smtp.mailtrap.io
-      SMTP_PORT: "2525"
-      SMTP_USER: a7556bfcc38112
-      SMTP_PASS: edc5258bbecbbb
-      SMTP_FROM: noreply@manasik.com
-      SMTP_SECURE: "false"
-    ports:
-      - "3001:3001"
-    depends_on:
-      mysql:
-        condition: service_healthy
-    networks:
-      - booking_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/api/health"]
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-      interval: 10s
-
   frontend:
-    image: node:18-alpine
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
     container_name: booking_frontend
-    restart: always
-    working_dir: /app
+    restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
       WATCHPACK_POLLING: "true"
     ports:
       - "3000:3000"
     volumes:
-      - ./frontend:/app:delegated
-      - frontend_node_modules:/app/node_modules
+      - ./frontend/src:/app/src:delegated
+      - ./frontend/public:/app/public:delegated
+    entrypoint: ["npm", "run", "dev"]
     depends_on:
       - api
     networks:
       - booking_network
-    command: sh -c "npm install && npm run dev"
-
-  management:
-    image: node:18-alpine
-    container_name: booking_management
-    restart: always
-    working_dir: /app
-    environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
-      NEXT_PUBLIC_API_TIMEOUT: 30000
-      NEXT_PUBLIC_JWT_EXPIRY: 86400
-      NEXT_PUBLIC_SESSION_TIMEOUT: 86400
-      NEXT_PUBLIC_APP_NAME: Super Admin Panel
-      NEXT_PUBLIC_APP_VERSION: 1.0.0
-      NEXT_PUBLIC_ENABLE_MFA: "true"
-      NEXT_PUBLIC_ENABLE_ANALYTICS: "true"
-      NEXT_PUBLIC_ENABLE_AUDIT_LOG: "true"
-      NEXT_PUBLIC_LOG_LEVEL: info
-      WATCHPACK_POLLING: "true"
-    ports:
-      - "3002:3000"
-    volumes:
-      - ./management:/app:delegated
-      - management_node_modules:/app/node_modules
-    networks:
-      - booking_network
-    command: sh -c "npm install && npm run dev"
-
-volumes:
-  mysql_data:
-  frontend_node_modules:
-  management_node_modules:
-
-networks:
-  booking_network:
-    driver: bridge

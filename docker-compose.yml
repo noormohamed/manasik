@@ -72,8 +72,8 @@ services:
       ENABLE_CHECKOUT_COMPLETE: "true"
       # Stripe Configuration
       STRIPE_BASE_URL: https://api.stripe.com/v1
-      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
-      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY:-}
+      STRIPE_SECRET_KEY: sk_test_51TL12dIpPUm770mHs1nU33m0lJmVjkCqf7fad9XtoTqEgBYGNDcmYj6mqbCHILXl0ZVdUIGcFl8p52P1KzDSvMvp00ApQNEFR5
+      STRIPE_PUBLISHABLE_KEY: pk_test_51TL12dIpPUm770mHjnphPtKigTnCMl61NBvRS8JCzcX3UkCJ8dGnOgfNe6WUiaLAZ8XTEJkxsia6a6VB3TGpWVB700jPXSOi2q
       FRONTEND_URL: http://localhost:3000
       # SMTP Email Configuration
       SMTP_HOST: sandbox.smtp.mailtrap.io
