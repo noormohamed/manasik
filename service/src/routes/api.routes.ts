@@ -9,6 +9,7 @@ import { userRoutes } from './user.routes';
 import { createHotelRoutes } from '../features/hotel/routes/hotel.routes';
 import { createCreditsRoutes } from './credits.routes';
 import { brokerRoutes } from './broker.routes';
+import { createMessagingRouter } from './messaging.routes';
 
 export const createApiRouter = () => {
     const router = new Router({ prefix: '/api' });
@@ -50,6 +51,11 @@ export const createApiRouter = () => {
     // Broker routes (always enabled)
     router.use(brokerRoutes.routes());
     router.use(brokerRoutes.allowedMethods());
+
+    // Messaging routes (always enabled)
+    const messagingRouter = createMessagingRouter();
+    router.use(messagingRouter.routes());
+    router.use(messagingRouter.allowedMethods());
 
     return router;
 };
