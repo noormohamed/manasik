@@ -14,24 +14,50 @@ import { v4 as uuidv4 } from 'uuid';
 let conversationService: ConversationService;
 let messagingService: MessagingService;
 
+/**
+ * Map database roles to messaging system roles
+ */
+function mapDatabaseRoleToMessagingRole(dbRole: string): 'GUEST' | 'BROKER' | 'HOTEL_STAFF' | 'MANAGER' | 'ADMIN' {
+  const roleMap: Record<string, 'GUEST' | 'BROKER' | 'HOTEL_STAFF' | 'MANAGER' | 'ADMIN'> = {
+    'CUSTOMER': 'GUEST',
+    'AGENT': 'BROKER',
+    'SUPER_ADMIN': 'ADMIN',
+    'COMPANY_ADMIN': 'MANAGER',
+    'GUEST': 'GUEST',
+    'BROKER': 'BROKER',
+    'HOTEL_STAFF': 'HOTEL_STAFF',
+    'MANAGER': 'MANAGER',
+    'ADMIN': 'ADMIN',
+  };
+  return roleMap[dbRole] || 'GUEST';
+}
+
 export function initializeMessagingRoutes(db: Database) {
   conversationService = new ConversationService(db);
   messagingService = new MessagingService(db);
 }
 
 export const createMessagingRouter = () => {
+  console.log('[Messaging] Creating messaging router');
   const router = new Router({ prefix: '/messages' });
 
   // Require authentication for all messaging routes
   router.use(authMiddleware);
+
+  console.log('[Messaging] Router created with prefix /messages');
 
   /**
    * POST /api/messages/conversations
    * Create a new conversation
    */
   router.post('/conversations', async (ctx: AuthContext) => {
+    console.log('[Messaging] POST /conversations called');
     try {
+      // @ts-ignore
       const { hotelId, bookingId, subject, description, participants } = ctx.request.body as any;
+
+      console.log('[Messaging] Request body:', { hotelId, bookingId, subject });
+      console.log('[Messaging] Validation check - hotelId:', !!hotelId, 'subject:', !!subject);
 
       if (!hotelId || !subject) {
         ctx.status = 400;
@@ -51,13 +77,17 @@ export const createMessagingRouter = () => {
         return;
       }
 
+      // Map user's database role to messaging role
+      const userMessagingRole = mapDatabaseRoleToMessagingRole(ctx.user!.role);
+      console.log('[Messaging] Mapped role:', { dbRole: ctx.user!.role, messagingRole: userMessagingRole });
+
       // Ensure creator is included as participant
       const allParticipants = participants;
       const creatorExists = allParticipants.some((p: any) => p.userId === ctx.user?.userId);
       if (!creatorExists) {
         allParticipants.push({
           userId: ctx.user?.userId,
-          userRole: ctx.user?.role,
+          userRole: userMessagingRole,
         });
       }
 
@@ -67,7 +97,7 @@ export const createMessagingRouter = () => {
         subject,
         description,
         createdById: ctx.user!.userId,
-        createdByRole: ctx.user!.role as any,
+        createdByRole: userMessagingRole,
         participants: allParticipants,
       });
 
@@ -96,9 +126,12 @@ export const createMessagingRouter = () => {
       const offset = parseInt(ctx.query.offset as string) || 0;
       const hotelId = ctx.query.hotelId as string;
 
+      // Map user's database role to messaging role
+      const userMessagingRole = mapDatabaseRoleToMessagingRole(ctx.user!.role);
+
       const conversations = await conversationService.getUserConversations(
         ctx.user!.userId,
-        ctx.user!.role,
+        userMessagingRole,
         hotelId,
         limit,
         offset
@@ -192,6 +225,7 @@ export const createMessagingRouter = () => {
   router.post('/conversations/:id/messages', async (ctx: AuthContext) => {
     try {
       const conversationId = ctx.params.id;
+      // @ts-ignore
       const { content, messageType, metadata } = ctx.request.body as any;
 
       if (!content || typeof content !== 'string' || content.trim().length === 0) {
@@ -219,10 +253,11 @@ export const createMessagingRouter = () => {
       }
 
       // Create message
+      const userMessagingRole = mapDatabaseRoleToMessagingRole(ctx.user!.role);
       const message = await messagingService.createMessage({
         conversationId,
         senderId: ctx.user!.userId,
-        senderRole: ctx.user!.role as any,
+        senderRole: userMessagingRole,
         content,
         messageType: messageType || 'TEXT',
         metadata,
@@ -321,6 +356,7 @@ export const createMessagingRouter = () => {
   router.post('/conversations/:id/participants', async (ctx: AuthContext) => {
     try {
       const conversationId = ctx.params.id;
+      // @ts-ignore
       const { userId, userRole, hotelId } = ctx.request.body as any;
 
       if (!userId || !userRole) {
@@ -332,8 +368,9 @@ export const createMessagingRouter = () => {
         return;
       }
 
-      // Check if user is manager/admin
-      if (!['MANAGER', 'ADMIN'].includes(ctx.user!.role)) {
+      // Map user's database role to messaging role and check permissions
+      const userMessagingRole = mapDatabaseRoleToMessagingRole(ctx.user!.role);
+      if (!['MANAGER', 'ADMIN'].includes(userMessagingRole)) {
         ctx.status = 403;
         ctx.body = {
           success: false,
@@ -371,6 +408,7 @@ export const createMessagingRouter = () => {
   router.put('/conversations/:id/status', async (ctx: AuthContext) => {
     try {
       const conversationId = ctx.params.id;
+      // @ts-ignore
       const { status } = ctx.request.body as any;
 
       if (!['ACTIVE', 'ARCHIVED', 'CLOSED'].includes(status)) {
@@ -382,8 +420,9 @@ export const createMessagingRouter = () => {
         return;
       }
 
-      // Check if user is manager/admin
-      if (!['MANAGER', 'ADMIN'].includes(ctx.user!.role)) {
+      // Map user's database role to messaging role and check permissions
+      const userMessagingRole = mapDatabaseRoleToMessagingRole(ctx.user!.role);
+      if (!['MANAGER', 'ADMIN'].includes(userMessagingRole)) {
         ctx.status = 403;
         ctx.body = {
           success: false,

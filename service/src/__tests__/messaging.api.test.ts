@@ -18,35 +18,40 @@ describe('Messaging API', () => {
 
   beforeAll(async () => {
     // Create test tokens for different roles
-    guestToken = authService.generateAccessToken({
-      userId: 'guest-1',
+    const guestTokens = authService.generateTokens({
+      id: 'guest-1',
       email: 'guest@test.com',
       role: 'GUEST',
-    });
+    } as any);
+    guestToken = guestTokens.accessToken;
 
-    brokerToken = authService.generateAccessToken({
-      userId: 'broker-1',
+    const brokerTokens = authService.generateTokens({
+      id: 'broker-1',
       email: 'broker@test.com',
       role: 'BROKER',
-    });
+    } as any);
+    brokerToken = brokerTokens.accessToken;
 
-    hotelStaffToken = authService.generateAccessToken({
-      userId: 'staff-1',
+    const hotelStaffTokens = authService.generateTokens({
+      id: 'staff-1',
       email: 'staff@test.com',
       role: 'HOTEL_STAFF',
-    });
+    } as any);
+    hotelStaffToken = hotelStaffTokens.accessToken;
 
-    managerToken = authService.generateAccessToken({
-      userId: 'manager-1',
+    const managerTokens = authService.generateTokens({
+      id: 'manager-1',
       email: 'manager@test.com',
       role: 'MANAGER',
-    });
+    } as any);
+    managerToken = managerTokens.accessToken;
 
-    adminToken = authService.generateAccessToken({
-      userId: 'admin-1',
+    const adminTokens = authService.generateTokens({
+      id: 'admin-1',
       email: 'admin@test.com',
       role: 'ADMIN',
-    });
+    } as any);
+    adminToken = adminTokens.accessToken;
   });
 
   describe('POST /api/messages/conversations', () => {

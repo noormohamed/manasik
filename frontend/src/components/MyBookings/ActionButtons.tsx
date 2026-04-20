@@ -14,6 +14,7 @@ interface ActionButtonsProps {
   onRefund: () => void;
   onCancel: () => void;
   onPrint: () => void;
+  onMessage: () => void;
 }
 
 const ActionButtons: React.FC<ActionButtonsProps> = ({
@@ -22,6 +23,7 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
   onRefund,
   onCancel,
   onPrint,
+  onMessage,
 }) => {
   const canEdit = isBookingEditable(booking);
   const canRefund = isBookingRefundable(booking);
@@ -36,6 +38,14 @@ const ActionButtons: React.FC<ActionButtonsProps> = ({
         title={!canEdit ? 'This booking cannot be edited' : 'Edit booking details'}
       >
         <i className="ri-edit-line"></i> Edit
+      </button>
+
+      <button
+        className={`${styles.button} ${styles.secondary}`}
+        onClick={onMessage}
+        title="Send a message to the hotel"
+      >
+        <i className="ri-mail-line"></i> Message
       </button>
 
       <button

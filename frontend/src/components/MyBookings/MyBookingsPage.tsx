@@ -136,6 +136,24 @@ const MyBookingsPage: React.FC = () => {
     window.open(`/bookings/${booking.id}/confirmation`, '_blank');
   };
 
+  // Handle message - navigate to messages page with conversation context
+  const handleMessage = (booking: Booking, conversationId?: string) => {
+    if (conversationId) {
+      // If conversation exists, navigate directly to it
+      window.location.href = `/dashboard/messages?conversationId=${conversationId}`;
+    } else {
+      // This shouldn't happen as modal handles first message, but fallback just in case
+      window.location.href = `/dashboard/messages?bookingId=${booking.id}&hotelId=${booking.hotelId}`;
+    }
+  };
+
+  // Handle booking update (e.g., after adding conversation ID)
+  const handleUpdateBooking = (updatedBooking: Booking) => {
+    setBookings((prev) =>
+      prev.map((b) => (b.id === updatedBooking.id ? updatedBooking : b))
+    );
+  };
+
   // Handle refund
   const handleRefund = async (booking: Booking, amount: number, reason: string) => {
     setIsRefundProcessing(true);
@@ -206,6 +224,8 @@ const MyBookingsPage: React.FC = () => {
                   onCancel={handleCancel}
                   onPrint={handlePrint}
                   onRefund={handleRefund}
+                  onMessage={handleMessage}
+                  onUpdateBooking={handleUpdateBooking}
                   isRefundProcessing={isRefundProcessing}
                 />
               }

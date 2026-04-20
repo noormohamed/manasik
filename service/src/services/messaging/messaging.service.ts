@@ -44,7 +44,7 @@ export class MessagingService {
    */
   async createMessage(input: CreateMessageInput): Promise<Message> {
     const id = uuidv4();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Sanitize message content
     const sanitizationResult = messagingSecurityService.sanitizeMessage(input.content);
@@ -130,7 +130,7 @@ export class MessagingService {
    */
   async markMessageAsRead(messageId: string, userId: string): Promise<void> {
     const id = uuidv4();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     const query = `
       INSERT INTO message_read_receipts (id, message_id, user_id, read_at)

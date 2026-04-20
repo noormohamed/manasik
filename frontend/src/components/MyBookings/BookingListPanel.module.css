@@ -27,6 +27,34 @@
   letter-spacing: 0.5px;
 }
 
+.searchContainer {
+  margin-bottom: 10px;
+}
+
+.searchInput {
+  width: 100%;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+  padding: 16px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  background: #f8f9fa;
+  transition: all 0.2s ease;
+}
+
+.searchInput::placeholder {
+  color: #999;
+  font-weight: 600;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #0d6efd;
+  background: white;
+  box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
+}
+
 .filterGroup {
   margin-bottom: 10px;
 }
@@ -64,6 +92,91 @@
   box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1);
 }
 
+/* Dropdown Container */
+.dropdownContainer {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.filterButton {
+  width: 100%;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.filterButton:hover {
+  border-color: #dee2e6;
+  background: #f8f9fa;
+}
+
+.filterButton.filterButtonActive {
+  border-color: #0d6efd;
+  background: #f0f7ff;
+  color: #0d6efd;
+}
+
+.filterButton i:first-child {
+  font-size: 14px;
+}
+
+.filterButton span:nth-child(2) {
+  flex: 1;
+  text-align: left;
+}
+
+.filterBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 4px;
+  background: #0d6efd;
+  color: white;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.arrowOpen {
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+/* Dropdown Menu */
+.dropdownMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  padding: 10px;
+  z-index: 10;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dropdownMenu .filterGroup {
+  margin-bottom: 10px;
+}
+
+.dropdownMenu .filterGroup:last-of-type {
+  margin-bottom: 0;
+}
+
 .clearButton {
   width: 100%;
   padding: 6px 10px;
@@ -83,6 +196,29 @@
 }
 
 .clearButton:hover {
+  background: #e9ecef;
+  border-color: #dee2e6;
+  color: #333;
+}
+
+.clearAllButton {
+  width: 100%;
+  padding: 6px 10px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #666;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.clearAllButton:hover {
   background: #e9ecef;
   border-color: #dee2e6;
   color: #333;
@@ -228,6 +364,15 @@
   .input {
     font-size: 12px;
     padding: 5px 8px;
+  }
+
+  .filterButton {
+    font-size: 12px;
+    padding: 5px 8px;
+  }
+
+  .dropdownMenu {
+    padding: 8px;
   }
 
   .list {

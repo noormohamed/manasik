@@ -112,7 +112,9 @@ dbPromise
     app.use(checkout_routes_1.default.allowedMethods());
     console.error('🔴 Mounting API router...');
     // Mount API router
-    const apiRouter = (0, api_routes_1.createApiRouter)();
+    console.error('🔴 About to call createApiRouter with db:', !!db);
+    const apiRouter = (0, api_routes_1.createApiRouter)(db);
+    console.error('🔴 createApiRouter returned, mounting...');
     app.use(apiRouter.routes());
     app.use(apiRouter.allowedMethods());
     console.error('🔴 Creating server...');

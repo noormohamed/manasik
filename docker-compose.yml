@@ -24,6 +24,8 @@ services:
       - ./service/database/migrations/005-create-admin-alerts-table.sql:/docker-entrypoint-initdb.d/08-admin-alerts.sql
       - ./service/database/migrations/006-create-alert-history-table.sql:/docker-entrypoint-initdb.d/09-alert-history.sql
       - ./service/database/migrations/007-create-admin-preferences-table.sql:/docker-entrypoint-initdb.d/10-admin-preferences.sql
+      - ./service/database/migrations/008-create-haram-gates-table.sql:/docker-entrypoint-initdb.d/11-haram-gates.sql
+      - ./service/database/migrations/014-create-messaging-tables.sql:/docker-entrypoint-initdb.d/12-messaging-tables.sql
     networks:
       - booking_network
     healthcheck:
@@ -72,14 +74,14 @@ services:
       ENABLE_CHECKOUT_COMPLETE: "true"
       # Stripe Configuration
       STRIPE_BASE_URL: https://api.stripe.com/v1
-      STRIPE_SECRET_KEY: sk_test_51TL12dIpPUm770mHs1nU33m0lJmVjkCqf7fad9XtoTqEgBYGNDcmYj6mqbCHILXl0ZVdUIGcFl8p52P1KzDSvMvp00ApQNEFR5
-      STRIPE_PUBLISHABLE_KEY: pk_test_51TL12dIpPUm770mHjnphPtKigTnCMl61NBvRS8JCzcX3UkCJ8dGnOgfNe6WUiaLAZ8XTEJkxsia6a6VB3TGpWVB700jPXSOi2q
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY}
+      STRIPE_PUBLISHABLE_KEY: ${STRIPE_PUBLISHABLE_KEY}
       FRONTEND_URL: http://localhost:3000
       # SMTP Email Configuration
-      SMTP_HOST: sandbox.smtp.mailtrap.io
-      SMTP_PORT: "2525"
-      SMTP_USER: a7556bfcc38112
-      SMTP_PASS: edc5258bbecbbb
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
       SMTP_FROM: noreply@manasik.com
       SMTP_SECURE: "false"
     ports:

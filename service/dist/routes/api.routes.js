@@ -14,7 +14,9 @@ const user_routes_1 = require("./user.routes");
 const hotel_routes_1 = require("../features/hotel/routes/hotel.routes");
 const credits_routes_1 = require("./credits.routes");
 const broker_routes_1 = require("./broker.routes");
-const createApiRouter = () => {
+const messaging_routes_1 = require("./messaging.routes");
+const createApiRouter = (db) => {
+    console.log('[API Router] Creating API router with db:', !!db);
     const router = new koa_router_1.default({ prefix: '/api' });
     router.get('/health', feature_flag_1.logFeatureFlags, (ctx) => {
         ctx.body = {
@@ -47,6 +49,20 @@ const createApiRouter = () => {
     // Broker routes (always enabled)
     router.use(broker_routes_1.brokerRoutes.routes());
     router.use(broker_routes_1.brokerRoutes.allowedMethods());
+    // Messaging routes (always enabled)
+    console.log('[API Router] Initializing messaging routes');
+    if (db) {
+        console.log('[API Router] Database provided, calling initializeMessagingRoutes');
+        (0, messaging_routes_1.initializeMessagingRoutes)(db);
+    }
+    else {
+        console.log('[API Router] No database provided!');
+    }
+    const messagingRouter = (0, messaging_routes_1.createMessagingRouter)();
+    console.log('[API Router] Messaging router created, mounting...');
+    router.use(messagingRouter.routes());
+    router.use(messagingRouter.allowedMethods());
+    console.log('[API Router] Messaging router mounted');
     return router;
 };
 exports.createApiRouter = createApiRouter;

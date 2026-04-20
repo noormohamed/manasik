@@ -1,9 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import Link from "next/link";
 import { apiClient } from "@/lib/api";
-import ConversationList from "./ConversationList";
 import ConversationThread from "./ConversationThread";
 import "./MessagesPage.css";
 
@@ -122,103 +120,112 @@ const MessagesPage = () => {
 
   return (
     <div className="messages-page">
-      <div className="messages-container">
-        {/* Sidebar - Conversation List */}
-        <div className="messages-sidebar">
-          <div className="messages-header">
-            <h2>Messages</h2>
-            {totalUnread > 0 && (
-              <span className="badge bg-danger">{totalUnread}</span>
-            )}
-          </div>
+      {/* Header Banner */}
+      <div className="messages-header-banner">
+        <div className="messages-header-content">
+          <h1 className="messages-title">Messages</h1>
+          <p className="messages-subtitle">View and manage your conversations</p>
+        </div>
+      </div>
 
-          <div className="messages-search">
-            <input
-              type="text"
-              className="form-control"
-              placeholder="Search conversations..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+      {/* Main Content */}
+      <div className="messages-content-wrapper">
+        <div className="messages-content-inner">
+          <div className="messages-container">
+            {/* Sidebar - Conversation List */}
+            <div className="messages-sidebar">
+              <div className="messages-search">
+                <input
+                  type="text"
+                  className="form-control"
+                  placeholder="Search conversations..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
 
-          <div className="messages-actions">
-            <Link href="/dashboard/messages/new" className="btn btn-primary btn-sm w-100">
-              <i className="ri-add-line me-2"></i>
-              New Message
-            </Link>
-          </div>
+              {error && (
+                <div className="alert alert-danger alert-sm" role="alert">
+                  {error}
+                </div>
+              )}
 
-          {error && (
-            <div className="alert alert-danger alert-sm" role="alert">
-              {error}
-            </div>
-          )}
-
-          {filteredConversations.length === 0 ? (
-            <div className="messages-empty">
-              <i className="ri-mail-line"></i>
-              <p>
-                {searchTerm ? "No conversations match your search" : "No conversations yet"}
-              </p>
-              {!searchTerm && (
-                <Link href="/dashboard/messages/new" className="btn btn-outline-primary btn-sm">
-                  Start a conversation
-                </Link>
+              {filteredConversations.length === 0 ? (
+                <div className="messages-empty">
+                  <i className="ri-mail-line"></i>
+                  <p>
+                    {searchTerm ? "No conversations match your search" : "No conversations yet"}
+                  </p>
+                  <p className="text-muted small">
+                    Conversations are initiated from hotel or booking details
+                  </p>
+                </div>
+              ) : (
+                <div className="conversations-list">
+                  {filteredConversations.map((conversation) => (
+                    <div
+                      key={conversation.id}
+                      className={`conversation-item ${
+                        selectedConversation?.id === conversation.id ? "active" : ""
+                      } ${(conversation.unreadCount || 0) > 0 ? "unread" : ""}`}
+                      onClick={() => handleConversationSelect(conversation)}
+                    >
+                      <div className="conversation-item-header">
+                        <h5 className="conversation-subject">{conversation.subject}</h5>
+                        {(conversation.unreadCount || 0) > 0 && (
+                          <span className="badge bg-primary">
+                            {conversation.unreadCount}
+                          </span>
+                        )}
+                      </div>
+                      <p className="conversation-preview">
+                        {conversation.lastMessage?.content?.substring(0, 50) ||
+                          conversation.description?.substring(0, 50) ||
+                          "No messages yet"}
+                        {(conversation.lastMessage?.content?.length || 0) > 50 ? "..." : ""}
+                      </p>
+                      <small className="conversation-date">
+                        {formatDate(conversation.lastMessage?.createdAt || conversation.updatedAt)}
+                      </small>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
-          ) : (
-            <div className="conversations-list">
-              {filteredConversations.map((conversation) => (
-                <div
-                  key={conversation.id}
-                  className={`conversation-item ${
-                    selectedConversation?.id === conversation.id ? "active" : ""
-                  } ${(conversation.unreadCount || 0) > 0 ? "unread" : ""}`}
-                  onClick={() => handleConversationSelect(conversation)}
-                >
-                  <div className="conversation-item-header">
-                    <h5 className="conversation-subject">{conversation.subject}</h5>
-                    {(conversation.unreadCount || 0) > 0 && (
-                      <span className="badge bg-primary">
-                        {conversation.unreadCount}
-                      </span>
-                    )}
-                  </div>
-                  <p className="conversation-preview">
-                    {conversation.lastMessage?.content?.substring(0, 50) ||
-                      conversation.description?.substring(0, 50) ||
-                      "No messages yet"}
-                    {(conversation.lastMessage?.content?.length || 0) > 50 ? "..." : ""}
-                  </p>
-                  <small className="conversation-date">
-                    {formatDate(conversation.lastMessage?.createdAt || conversation.updatedAt)}
-                  </small>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
 
-        {/* Main Content - Conversation Thread */}
-        <div className="messages-content">
-          {selectedConversation ? (
-            <ConversationThread
-              conversation={selectedConversation}
-              onClose={handleConversationClose}
-              onNewMessage={handleNewMessage}
-            />
-          ) : (
-            <div className="messages-empty-state">
-              <i className="ri-mail-open-line"></i>
-              <h3>Select a conversation</h3>
-              <p>Choose a conversation from the list to view messages</p>
-              <Link href="/dashboard/messages/new" className="btn btn-primary">
-                <i className="ri-add-line me-2"></i>
-                Start New Conversation
-              </Link>
+            {/* Main Content - Conversation Thread */}
+            <div className="messages-content">
+              {selectedConversation ? (
+                <ConversationThread
+                  conversation={selectedConversation}
+                  onClose={handleConversationClose}
+                  onNewMessage={handleNewMessage}
+                />
+              ) : (
+                <div className="messages-empty-state">
+                  <i className="ri-mail-open-line"></i>
+                  <h3>Select a conversation</h3>
+                  <p>Choose a conversation from the list to view messages</p>
+                  <p className="text-muted small">
+                    Start conversations from hotel or booking details
+                  </p>
+                  <div className="messages-cta-section">
+                    <p className="messages-cta-title">To start a discussion</p>
+                    <div className="messages-cta-links">
+                      <a href="/stays" className="messages-cta-link">
+                        <i className="ri-building-line"></i>
+                        <span>Explore Hotels</span>
+                      </a>
+                      <a href="/dashboard/bookings" className="messages-cta-link">
+                        <i className="ri-calendar-check-line"></i>
+                        <span>Make a Booking</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

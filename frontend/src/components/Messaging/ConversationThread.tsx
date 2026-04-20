@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { apiClient } from "@/lib/api";
 import MessageComposer from "./MessageComposer";
+import ConversationContext from "./ConversationContext";
 import "./ConversationThread.css";
 
 interface Message {
@@ -161,8 +162,11 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
     );
   }
 
+  // Determine if we should show split view (when there's a booking or hotel context)
+  const showSplitView = conversation.bookingId || conversation.hotelId;
+
   return (
-    <div className="conversation-thread">
+    <div className={`conversation-thread ${showSplitView ? "split-view" : ""}`}>
       {/* Header */}
       <div className="conversation-header">
         <div className="conversation-header-content">
@@ -178,82 +182,98 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
         </button>
       </div>
 
-      {/* Messages */}
-      <div className="conversation-messages">
-        {error && (
-          <div className="alert alert-danger alert-sm" role="alert">
-            {error}
+      {/* Main Content Container */}
+      <div className="conversation-main">
+        {/* Left Side - Context (40%) - Only shown on desktop when split view is enabled */}
+        {showSplitView && (
+          <div className="conversation-context-panel">
+            <ConversationContext
+              bookingId={conversation.bookingId}
+              hotelId={conversation.hotelId}
+            />
           </div>
         )}
 
-        {messages.length === 0 ? (
-          <div className="messages-empty">
-            <i className="ri-mail-open-line"></i>
-            <p>No messages yet. Start the conversation!</p>
-          </div>
-        ) : (
-          <div className="messages-list">
-            {messages.map((message, index) => {
-              const showDate =
-                index === 0 ||
-                formatDate(messages[index - 1].createdAt) !== formatDate(message.createdAt);
+        {/* Right Side - Messages (60% or 100%) */}
+        <div className="conversation-messages-panel">
+          {/* Messages */}
+          <div className="conversation-messages">
+            {error && (
+              <div className="alert alert-danger alert-sm" role="alert">
+                {error}
+              </div>
+            )}
 
-              return (
-                <div key={message.id}>
-                  {showDate && (
-                    <div className="message-date-separator">
-                      <span>{formatDate(message.createdAt)}</span>
-                    </div>
-                  )}
-                  <div className={`message ${message.messageType.toLowerCase()}`}>
-                    <div className="message-header">
-                      <span className={`badge ${getRoleColor(message.senderRole)}`}>
-                        {getRoleLabel(message.senderRole)}
-                      </span>
-                      <small className="text-muted">{formatTime(message.createdAt)}</small>
-                    </div>
-                    <div className="message-content">
-                      {message.messageType === "SYSTEM" ? (
-                        <em className="text-muted">{message.contentSanitized}</em>
-                      ) : (
-                        <p>{message.contentSanitized}</p>
+            {messages.length === 0 ? (
+              <div className="messages-empty">
+                <i className="ri-mail-open-line"></i>
+                <p>No messages yet. Start the conversation!</p>
+              </div>
+            ) : (
+              <div className="messages-list">
+                {messages.map((message, index) => {
+                  const showDate =
+                    index === 0 ||
+                    formatDate(messages[index - 1].createdAt) !== formatDate(message.createdAt);
+
+                  return (
+                    <div key={message.id}>
+                      {showDate && (
+                        <div className="message-date-separator">
+                          <span>{formatDate(message.createdAt)}</span>
+                        </div>
                       )}
-                    </div>
-                    {message.messageType === "UPGRADE_OFFER" && message.metadata?.offer && (
-                      <div className="message-offer">
-                        <div className="offer-details">
-                          <h6>{message.metadata.offer.title}</h6>
-                          <p>{message.metadata.offer.description}</p>
-                          {message.metadata.offer.price && (
-                            <p className="offer-price">
-                              <strong>${message.metadata.offer.price}</strong>
-                            </p>
+                      <div className={`message ${message.messageType.toLowerCase()}`}>
+                        <div className="message-header">
+                          <span className={`badge ${getRoleColor(message.senderRole)}`}>
+                            {getRoleLabel(message.senderRole)}
+                          </span>
+                          <small className="text-muted">{formatTime(message.createdAt)}</small>
+                        </div>
+                        <div className="message-content">
+                          {message.messageType === "SYSTEM" ? (
+                            <em className="text-muted">{message.contentSanitized}</em>
+                          ) : (
+                            <p>{message.contentSanitized}</p>
                           )}
                         </div>
-                        <button className="btn btn-sm btn-primary">
-                          View Offer
-                        </button>
+                        {message.messageType === "UPGRADE_OFFER" && message.metadata?.offer && (
+                          <div className="message-offer">
+                            <div className="offer-details">
+                              <h6>{message.metadata.offer.title}</h6>
+                              <p>{message.metadata.offer.description}</p>
+                              {message.metadata.offer.price && (
+                                <p className="offer-price">
+                                  <strong>${message.metadata.offer.price}</strong>
+                                </p>
+                              )}
+                            </div>
+                            <button className="btn btn-sm btn-primary">
+                              View Offer
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-            <div ref={messagesEndRef} />
+                    </div>
+                  );
+                })}
+                <div ref={messagesEndRef} />
+              </div>
+            )}
           </div>
-        )}
-      </div>
 
-      {/* Message Composer */}
-      <MessageComposer
-        onSendMessage={handleSendMessage}
-        disabled={sending || conversation.status !== "ACTIVE"}
-        placeholder={
-          conversation.status !== "ACTIVE"
-            ? "This conversation is closed"
-            : "Type your message..."
-        }
-      />
+          {/* Message Composer */}
+          <MessageComposer
+            onSendMessage={handleSendMessage}
+            disabled={sending || conversation.status !== "ACTIVE"}
+            placeholder={
+              conversation.status !== "ACTIVE"
+                ? "This conversation is closed"
+                : "Type your message..."
+            }
+          />
+        </div>
+      </div>
     </div>
   );
 };

@@ -5,6 +5,10 @@
   background-color: white;
 }
 
+.conversation-thread.split-view {
+  flex-direction: row;
+}
+
 .conversation-header {
   padding: 20px;
   border-bottom: 1px solid #e9ecef;
@@ -12,6 +16,12 @@
   justify-content: space-between;
   align-items: flex-start;
   background-color: #f8f9fa;
+  flex-shrink: 0;
+  order: -1;
+}
+
+.conversation-thread.split-view .conversation-header {
+  grid-column: 1 / -1;
 }
 
 .conversation-header-content h3 {
@@ -24,6 +34,40 @@
 .conversation-header-content p {
   margin: 0;
   font-size: 0.9rem;
+}
+
+/* Main Content Container for Split View */
+.conversation-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  gap: 0;
+}
+
+.conversation-thread.split-view .conversation-main {
+  display: grid;
+  grid-template-columns: 40% 60%;
+}
+
+/* Context Panel (Left - 40%) */
+.conversation-context-panel {
+  display: none;
+  overflow: hidden;
+  background: white;
+}
+
+.conversation-thread.split-view .conversation-context-panel {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e9ecef;
+}
+
+/* Messages Panel (Right - 60% or 100%) */
+.conversation-messages-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
 }
 
 .conversation-messages {
@@ -195,6 +239,20 @@
 }
 
 /* Responsive Design */
+@media (max-width: 1200px) {
+  .conversation-thread.split-view .conversation-main {
+    grid-template-columns: 1fr;
+  }
+
+  .conversation-thread.split-view .conversation-context-panel {
+    display: none;
+  }
+
+  .conversation-thread.split-view .conversation-messages-panel {
+    flex: 1;
+  }
+}
+
 @media (max-width: 768px) {
   .conversation-header {
     padding: 15px;

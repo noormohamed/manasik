@@ -72,6 +72,9 @@ export interface Booking {
   providerReference?: string;
   providerPhone?: string;
 
+  // Messaging
+  conversationId?: string; // Reference to the conversation for this booking
+
   // Metadata
   customerId?: string;
   agentId?: string;

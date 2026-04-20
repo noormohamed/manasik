@@ -12,6 +12,7 @@ import GuestInformationSection from './GuestInformationSection';
 import PaymentSummarySection from './PaymentSummarySection';
 import ActionButtons from './ActionButtons';
 import RefundModal from './RefundModal';
+import SendMessageModal from './SendMessageModal';
 import styles from './BookingDetailPanel.module.css';
 
 interface BookingDetailPanelProps {
@@ -20,6 +21,8 @@ interface BookingDetailPanelProps {
   onCancel: () => void;
   onPrint: (booking: Booking) => void;
   onRefund: (booking: Booking, amount: number, reason: string) => Promise<void>;
+  onMessage: (booking: Booking, conversationId?: string) => void;
+  onUpdateBooking?: (booking: Booking) => void;
   isRefundProcessing: boolean;
 }
 
@@ -29,9 +32,12 @@ const BookingDetailPanel: React.FC<BookingDetailPanelProps> = ({
   onCancel,
   onPrint,
   onRefund,
+  onMessage,
+  onUpdateBooking,
   isRefundProcessing,
 }) => {
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
 
   if (!booking) {
     return (
@@ -50,6 +56,26 @@ const BookingDetailPanel: React.FC<BookingDetailPanelProps> = ({
     } catch (error) {
       console.error('Refund error:', error);
     }
+  };
+
+  const handleMessageClick = () => {
+    // If conversation already exists, open it directly
+    if (booking?.conversationId) {
+      onMessage(booking, booking.conversationId);
+    } else {
+      // Otherwise show modal to send first message
+      setShowMessageModal(true);
+    }
+  };
+
+  const handleMessageSuccess = (conversationId: string) => {
+    // Update booking with conversation ID
+    if (booking && onUpdateBooking) {
+      const updatedBooking = { ...booking, conversationId };
+      onUpdateBooking(updatedBooking);
+    }
+    // After successful message creation, navigate to the conversation
+    onMessage(booking!, conversationId);
   };
 
   return (
@@ -75,6 +101,7 @@ const BookingDetailPanel: React.FC<BookingDetailPanelProps> = ({
               onRefund={() => setShowRefundModal(true)}
               onCancel={onCancel}
               onPrint={() => onPrint(booking)}
+              onMessage={handleMessageClick}
             />
           </div>
         </div>
@@ -88,6 +115,16 @@ const BookingDetailPanel: React.FC<BookingDetailPanelProps> = ({
         onSubmit={handleRefundSubmit}
         isProcessing={isRefundProcessing}
       />
+
+      {/* Send Message Modal */}
+      {booking && (
+        <SendMessageModal
+          booking={booking}
+          isOpen={showMessageModal}
+          onClose={() => setShowMessageModal(false)}
+          onSuccess={handleMessageSuccess}
+        />
+      )}
     </div>
   );
 };

@@ -18,6 +18,11 @@ function errorHandler(ctx, next) {
         }
         catch (err) {
             const erro = yield err;
+            console.error('[ErrorHandler] Error caught:', {
+                message: erro.message,
+                statusCode: erro.statusCode,
+                stack: erro.stack
+            });
             const body = {
                 error: true,
                 info: erro.info || 'Unknown',

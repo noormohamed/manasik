@@ -9,9 +9,11 @@ import { userRoutes } from './user.routes';
 import { createHotelRoutes } from '../features/hotel/routes/hotel.routes';
 import { createCreditsRoutes } from './credits.routes';
 import { brokerRoutes } from './broker.routes';
-import { createMessagingRouter } from './messaging.routes';
+import { createMessagingRouter, initializeMessagingRoutes } from './messaging.routes';
+import { Database } from '../database/connection';
 
-export const createApiRouter = () => {
+export const createApiRouter = (db?: Database) => {
+    console.log('[API Router] Creating API router with db:', !!db);
     const router = new Router({ prefix: '/api' });
 
     router.get('/health', logFeatureFlags, (ctx: Context) => {
@@ -53,9 +55,18 @@ export const createApiRouter = () => {
     router.use(brokerRoutes.allowedMethods());
 
     // Messaging routes (always enabled)
+    console.log('[API Router] Initializing messaging routes');
+    if (db) {
+        console.log('[API Router] Database provided, calling initializeMessagingRoutes');
+        initializeMessagingRoutes(db);
+    } else {
+        console.log('[API Router] No database provided!');
+    }
     const messagingRouter = createMessagingRouter();
+    console.log('[API Router] Messaging router created, mounting...');
     router.use(messagingRouter.routes());
     router.use(messagingRouter.allowedMethods());
+    console.log('[API Router] Messaging router mounted');
 
     return router;
 };

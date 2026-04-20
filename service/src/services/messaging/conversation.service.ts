@@ -55,7 +55,9 @@ export class ConversationService {
    */
   async createConversation(input: CreateConversationInput): Promise<Conversation> {
     const conversationId = uuidv4();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' '); // Convert to MySQL format: YYYY-MM-DD HH:mm:ss
+
+    console.log('[ConversationService] Creating conversation:', { conversationId, hotelId: input.hotelId, createdByRole: input.createdByRole });
 
     // Create conversation
     const conversationQuery = `
@@ -65,17 +67,23 @@ export class ConversationService {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
 
-    await this.db.query(conversationQuery, [
-      conversationId,
-      input.hotelId,
-      input.bookingId || null,
-      input.subject,
-      input.description || null,
-      input.createdById,
-      input.createdByRole,
-      now,
-      now,
-    ]);
+    try {
+      await this.db.query(conversationQuery, [
+        conversationId,
+        input.hotelId,
+        input.bookingId || null,
+        input.subject,
+        input.description || null,
+        input.createdById,
+        input.createdByRole,
+        now,
+        now,
+      ]);
+      console.log('[ConversationService] Conversation created successfully');
+    } catch (error) {
+      console.error('[ConversationService] Error creating conversation:', error);
+      throw error;
+    }
 
     // Add participants
     const participantQuery = `
@@ -86,17 +94,27 @@ export class ConversationService {
 
     for (const participant of input.participants) {
       const participantId = uuidv4();
-      await this.db.query(participantQuery, [
-        participantId,
-        conversationId,
-        participant.userId,
-        participant.userRole,
-        participant.hotelId || null,
-        now,
-      ]);
+      console.log('[ConversationService] Adding participant:', { participantId, userId: participant.userId, userRole: participant.userRole });
+      try {
+        await this.db.query(participantQuery, [
+          participantId,
+          conversationId,
+          participant.userId,
+          participant.userRole,
+          participant.hotelId || null,
+          now,
+        ]);
+        console.log('[ConversationService] Participant added:', participant.userId);
+      } catch (error) {
+        console.error('[ConversationService] Error adding participant:', error);
+        throw error;
+      }
     }
 
-    return this.getConversationById(conversationId);
+    console.log('[ConversationService] Fetching conversation by ID:', conversationId);
+    const conversation = await this.getConversationById(conversationId);
+    console.log('[ConversationService] Conversation fetched:', { id: conversation.id, subject: conversation.subject });
+    return conversation;
   }
 
   /**
@@ -166,7 +184,7 @@ export class ConversationService {
     hotelId?: string
   ): Promise<ConversationParticipant> {
     const id = uuidv4();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Check if participant already exists
     const existingQuery = `
@@ -417,7 +435,7 @@ export class ConversationService {
     assignById: string
   ): Promise<void> {
     const id = uuidv4();
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().slice(0, 19).replace('T', ' ');
 
     // Remove previous assignment
     const removeQuery = `

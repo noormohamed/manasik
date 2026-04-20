@@ -94,6 +94,7 @@ const Navbar: React.FC = () => {
                   className="nav-link"
                   href="/stay"
                 >
+                  <i className="ri-building-line me-2"></i>
                   Hotels
                 </Link>
               </li>
@@ -103,7 +104,19 @@ const Navbar: React.FC = () => {
                     className="nav-link"
                     href="/me/bookings"
                   >
+                    <i className="ri-calendar-check-line me-2"></i>
                     Bookings
+                  </Link>
+                </li>
+              )}
+              {user && (
+                <li className="nav-item">
+                  <Link
+                    className="nav-link"
+                    href="/dashboard/messages"
+                  >
+                    <i className="ri-mail-line me-2"></i>
+                    Messages
                   </Link>
                 </li>
               )}

@@ -1,0 +1,495 @@
+.messaging-analytics {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+  padding: 20px;
+  background-color: #f8f9fa;
+}
+
+.analytics-header {
+  margin-bottom: 30px;
+}
+
+.analytics-header h2 {
+  margin: 0 0 8px 0;
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.analytics-header p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: #6c757d;
+}
+
+.analytics-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 30px;
+}
+
+.metric-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  border-left: 4px solid #e9ecef;
+}
+
+.metric-icon {
+  width: 50px;
+  height: 50px;
+  border-radius: 8px;
+  background-color: #e7f3ff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  color: #0d6efd;
+  flex-shrink: 0;
+}
+
+.metric-icon.active {
+  background-color: #d1e7dd;
+  color: #198754;
+}
+
+.metric-icon.unread {
+  background-color: #fff3cd;
+  color: #ffc107;
+}
+
+.metric-icon.escalated {
+  background-color: #f8d7da;
+  color: #dc3545;
+}
+
+.metric-content h6 {
+  margin: 0 0 4px 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+}
+
+.metric-value {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  color: #212529;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 20px;
+  margin-bottom: 30px;
+}
+
+.analytics-section {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.analytics-section h3 {
+  margin: 0 0 16px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #212529;
+}
+
+.distribution-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.distribution-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.distribution-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.distribution-label {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #212529;
+}
+
+.distribution-count {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0d6efd;
+}
+
+.distribution-bar {
+  flex: 1;
+  height: 24px;
+  background-color: #e9ecef;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.distribution-fill {
+  height: 100%;
+  background-color: #0d6efd;
+  transition: width 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+
+.distribution-fill.status-active {
+  background-color: #198754;
+}
+
+.distribution-fill.status-archived {
+  background-color: #ffc107;
+}
+
+.distribution-fill.status-closed {
+  background-color: #6c757d;
+}
+
+.distribution-percentage {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6c757d;
+  width: 45px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.hotels-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.hotel-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.hotel-item:hover {
+  background-color: #e9ecef;
+}
+
+.hotel-rank {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #0d6efd;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.hotel-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.hotel-info h6 {
+  margin: 0 0 2px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #212529;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotel-info p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #6c757d;
+}
+
+.hotel-count {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #0d6efd;
+  flex-shrink: 0;
+}
+
+.analytics-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.summary-card {
+  background-color: white;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.summary-card h6 {
+  margin: 0 0 12px 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+}
+
+.summary-value {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #0d6efd;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .analytics-metrics {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .messaging-analytics {
+    padding: 16px;
+  }
+
+  .analytics-header {
+    margin-bottom: 20px;
+  }
+
+  .analytics-header h2 {
+    font-size: 1.5rem;
+  }
+
+  .analytics-metrics {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .metric-card {
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .metric-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 1.2rem;
+  }
+
+  .metric-content h6 {
+    font-size: 0.75rem;
+  }
+
+  .metric-value {
+    font-size: 1.5rem;
+  }
+
+  .analytics-grid {
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .analytics-section {
+    padding: 16px;
+  }
+
+  .analytics-section h3 {
+    font-size: 1rem;
+    margin-bottom: 12px;
+  }
+
+  .distribution-list {
+    gap: 10px;
+  }
+
+  .distribution-info {
+    width: 90px;
+  }
+
+  .distribution-label {
+    font-size: 0.85rem;
+  }
+
+  .distribution-percentage {
+    width: 40px;
+  }
+
+  .hotel-item {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .hotel-rank {
+    width: 28px;
+    height: 28px;
+    font-size: 0.8rem;
+  }
+
+  .hotel-info h6 {
+    font-size: 0.9rem;
+  }
+
+  .hotel-count {
+    font-size: 1.1rem;
+  }
+
+  .analytics-summary {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .summary-card {
+    padding: 16px;
+  }
+
+  .summary-value {
+    font-size: 1.75rem;
+  }
+}
+
+@media (max-width: 576px) {
+  .messaging-analytics {
+    padding: 12px;
+  }
+
+  .analytics-header h2 {
+    font-size: 1.25rem;
+  }
+
+  .analytics-metrics {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .metric-card {
+    padding: 12px;
+    gap: 10px;
+  }
+
+  .metric-icon {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+
+  .metric-content h6 {
+    font-size: 0.7rem;
+  }
+
+  .metric-value {
+    font-size: 1.25rem;
+  }
+
+  .analytics-grid {
+    gap: 12px;
+    margin-bottom: 16px;
+  }
+
+  .analytics-section {
+    padding: 12px;
+  }
+
+  .analytics-section h3 {
+    font-size: 0.95rem;
+    margin-bottom: 10px;
+  }
+
+  .distribution-list {
+    gap: 8px;
+  }
+
+  .distribution-item {
+    gap: 8px;
+  }
+
+  .distribution-info {
+    width: 80px;
+  }
+
+  .distribution-label {
+    font-size: 0.8rem;
+  }
+
+  .distribution-count {
+    font-size: 0.8rem;
+  }
+
+  .distribution-bar {
+    height: 20px;
+  }
+
+  .distribution-percentage {
+    width: 35px;
+    font-size: 0.8rem;
+  }
+
+  .hotel-item {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .hotel-rank {
+    width: 24px;
+    height: 24px;
+    font-size: 0.7rem;
+  }
+
+  .hotel-info h6 {
+    font-size: 0.85rem;
+  }
+
+  .hotel-info p {
+    font-size: 0.8rem;
+  }
+
+  .hotel-count {
+    font-size: 1rem;
+  }
+
+  .summary-card {
+    padding: 12px;
+  }
+
+  .summary-card h6 {
+    font-size: 0.75rem;
+    margin-bottom: 8px;
+  }
+
+  .summary-value {
+    font-size: 1.5rem;
+  }
+}

@@ -8,6 +8,12 @@ export async function errorHandler(ctx: Context, next: Next) {
     } catch (err: any) {
         const erro = await err;
 
+        console.error('[ErrorHandler] Error caught:', {
+            message: erro.message,
+            statusCode: erro.statusCode,
+            stack: erro.stack
+        });
+
         const body = {
             error: true,
             info: erro.info || 'Unknown',

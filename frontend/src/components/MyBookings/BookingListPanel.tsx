@@ -3,7 +3,7 @@
  * Left column: displays filterable, sortable list of bookings with selection state
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Booking, BookingFilters, BookingListPanelProps } from './types';
 import { applyFilters, sortBookingsByCheckIn, getUniqueHotels } from './utils';
 import BookingCard from './BookingCard';
@@ -18,6 +18,8 @@ const BookingListPanel: React.FC<BookingListPanelProps> = ({
   loading,
   error,
 }) => {
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+
   // Get unique hotels for filter dropdown
   const hotels = useMemo(() => getUniqueHotels(bookings), [bookings]);
 
@@ -34,100 +36,125 @@ const BookingListPanel: React.FC<BookingListPanelProps> = ({
     onFilterChange('searchGuest', '');
   };
 
-  const hasActiveFilters =
-    filters.status || filters.hotel || filters.date || filters.searchGuest;
+  const hasAdvancedFilters = filters.status || filters.hotel || filters.date;
+  const hasActiveFilters = hasAdvancedFilters || filters.searchGuest;
 
   return (
     <div className={styles.panel}>
       {/* Filter Bar */}
       <div className={styles.filterBar}>
-        <h3 className={styles.title}>My Bookings</h3>
-
-        {/* Status Filter */}
-        <div className={styles.filterGroup}>
-          <label htmlFor="status-filter" className={styles.label}>
-            Status
-          </label>
-          <select
-            id="status-filter"
-            className={styles.select}
-            value={filters.status}
-            onChange={(e) => onFilterChange('status', e.target.value)}
-          >
-            <option value="">All Statuses</option>
-            <option value="CONFIRMED">Confirmed</option>
-            <option value="PENDING">Pending</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="CANCELLED">Cancelled</option>
-            <option value="REFUNDED">Refunded</option>
-          </select>
-        </div>
-
-        {/* Hotel Filter */}
-        {hotels.length > 0 && (
-          <div className={styles.filterGroup}>
-            <label htmlFor="hotel-filter" className={styles.label}>
-              Hotel
-            </label>
-            <select
-              id="hotel-filter"
-              className={styles.select}
-              value={filters.hotel}
-              onChange={(e) => onFilterChange('hotel', e.target.value)}
-            >
-              <option value="">All Hotels</option>
-              {hotels.map((hotel) => (
-                <option key={hotel.id} value={hotel.id}>
-                  {hotel.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Date Filter */}
-        <div className={styles.filterGroup}>
-          <label htmlFor="date-filter" className={styles.label}>
-            Check-in Date
-          </label>
-          <input
-            id="date-filter"
-            type="date"
-            className={styles.input}
-            value={filters.date ? filters.date.toISOString().split('T')[0] : ''}
-            onChange={(e) => {
-              if (e.target.value) {
-                onFilterChange('date', new Date(e.target.value));
-              } else {
-                onFilterChange('date', null);
-              }
-            }}
-          />
-        </div>
-
-        {/* Search Filter */}
-        <div className={styles.filterGroup}>
-          <label htmlFor="search-filter" className={styles.label}>
-            Search Guest
-          </label>
+        {/* Search Filter - Always Visible */}
+        <div className={styles.searchContainer}>
           <input
             id="search-filter"
             type="text"
-            className={styles.input}
-            placeholder="Name or email..."
+            className={styles.searchInput}
+            placeholder="Search bookings..."
             value={filters.searchGuest}
             onChange={(e) => onFilterChange('searchGuest', e.target.value)}
           />
         </div>
 
-        {/* Clear Filters Button */}
+        {/* Advanced Filters Dropdown */}
+        <div className={styles.dropdownContainer}>
+          <button
+            className={`${styles.filterButton} ${hasAdvancedFilters ? styles.filterButtonActive : ''}`}
+            onClick={() => setDropdownOpen(!dropdownOpen)}
+            aria-label="Toggle advanced filters"
+          >
+            <i className="ri-filter-line"></i>
+            <span>Filters</span>
+            {hasAdvancedFilters && <span className={styles.filterBadge}>{Object.values(filters).filter(v => v && v !== '').length - (filters.searchGuest ? 1 : 0)}</span>}
+            <i className={`ri-arrow-down-s-line ${dropdownOpen ? styles.arrowOpen : ''}`}></i>
+          </button>
+
+          {/* Dropdown Menu */}
+          {dropdownOpen && (
+            <div className={styles.dropdownMenu}>
+              {/* Status Filter */}
+              <div className={styles.filterGroup}>
+                <label htmlFor="status-filter" className={styles.label}>
+                  Status
+                </label>
+                <select
+                  id="status-filter"
+                  className={styles.select}
+                  value={filters.status}
+                  onChange={(e) => onFilterChange('status', e.target.value)}
+                >
+                  <option value="">All Statuses</option>
+                  <option value="CONFIRMED">Confirmed</option>
+                  <option value="PENDING">Pending</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="REFUNDED">Refunded</option>
+                </select>
+              </div>
+
+              {/* Hotel Filter */}
+              {hotels.length > 0 && (
+                <div className={styles.filterGroup}>
+                  <label htmlFor="hotel-filter" className={styles.label}>
+                    Hotel
+                  </label>
+                  <select
+                    id="hotel-filter"
+                    className={styles.select}
+                    value={filters.hotel}
+                    onChange={(e) => onFilterChange('hotel', e.target.value)}
+                  >
+                    <option value="">All Hotels</option>
+                    {hotels.map((hotel) => (
+                      <option key={hotel.id} value={hotel.id}>
+                        {hotel.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Date Filter */}
+              <div className={styles.filterGroup}>
+                <label htmlFor="date-filter" className={styles.label}>
+                  Check-in Date
+                </label>
+                <input
+                  id="date-filter"
+                  type="date"
+                  className={styles.input}
+                  value={filters.date ? filters.date.toISOString().split('T')[0] : ''}
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      onFilterChange('date', new Date(e.target.value));
+                    } else {
+                      onFilterChange('date', null);
+                    }
+                  }}
+                />
+              </div>
+
+              {/* Clear Filters Button */}
+              {hasAdvancedFilters && (
+                <button
+                  className={styles.clearButton}
+                  onClick={handleClearAllFilters}
+                  aria-label="Clear all filters"
+                >
+                  <i className="ri-close-line"></i> Clear Filters
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Clear All Filters Button (visible when any filter is active) */}
         {hasActiveFilters && (
           <button
-            className={styles.clearButton}
+            className={styles.clearAllButton}
             onClick={handleClearAllFilters}
             aria-label="Clear all filters"
           >
-            <i className="ri-close-line"></i> Clear Filters
+            <i className="ri-close-line"></i> Clear All
           </button>
         )}
       </div>
