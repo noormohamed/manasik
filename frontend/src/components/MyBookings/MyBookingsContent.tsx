@@ -191,7 +191,7 @@ const MyBookingsContent: React.FC = () => {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case "CONFIRMED":
+      case "COMPLETED":
         return "bg-success";
       case "PENDING":
         return "bg-warning text-dark";
@@ -208,7 +208,7 @@ const MyBookingsContent: React.FC = () => {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case "CONFIRMED":
+      case "COMPLETED":
         return "ri-check-line";
       case "PENDING":
         return "ri-time-line";
@@ -371,7 +371,7 @@ const MyBookingsContent: React.FC = () => {
             border-radius: 4px;
             font-weight: bold;
           }
-          .status-CONFIRMED { background: #d4edda; color: #155724; }
+          .status-COMPLETED { background: #d4edda; color: #155724; }
           .status-PENDING { background: #fff3cd; color: #856404; }
           .status-CANCELLED { background: #f8d7da; color: #721c24; }
           .status-COMPLETED { background: #d1ecf1; color: #0c5460; }
@@ -812,7 +812,7 @@ const MyBookingsContent: React.FC = () => {
 
         <!-- 8. FOOTER -->
         <div class="footer">
-          <p>Booking confirmed on: ${new Date(booking.createdAt).toLocaleString()}</p>
+          <p>Booking completed on: ${new Date(booking.createdAt).toLocaleString()}</p>
           <p>Thank you for your booking! We look forward to hosting you.</p>
           <p style="margin-top: 12px; font-size: 10px; color: #999;">Booking Reference: ${booking.id}</p>
         </div>
@@ -883,7 +883,6 @@ const MyBookingsContent: React.FC = () => {
             >
               <option value="">All Bookings</option>
               <option value="PENDING">Pending</option>
-              <option value="CONFIRMED">Confirmed</option>
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="REFUNDED">Refunded</option>
@@ -1129,9 +1128,9 @@ const MyBookingsContent: React.FC = () => {
                   </div>
                   <div className="col-md-3">
                     <h4 className="mb-0 text-success">
-                      {bookings.filter((b) => b.status === "CONFIRMED").length}
+                      {bookings.filter((b) => b.status === "COMPLETED").length}
                     </h4>
-                    <small className="text-muted">Confirmed</small>
+                    <small className="text-muted">Completed</small>
                   </div>
                   <div className="col-md-3">
                     <h4 className="mb-0 text-warning">

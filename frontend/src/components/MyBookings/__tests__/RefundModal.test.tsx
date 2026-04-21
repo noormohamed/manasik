@@ -15,7 +15,7 @@ describe('RefundModal', () => {
     total: 1000,
     refundAmount: 0,
     currency: 'USD',
-    status: 'CONFIRMED',
+    status: 'COMPLETED',
     subtotal: 900,
     tax: 100,
     hotelId: 'hotel-1',

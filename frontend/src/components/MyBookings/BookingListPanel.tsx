@@ -83,7 +83,6 @@ const BookingListPanel: React.FC<BookingListPanelProps> = ({
                   onChange={(e) => onFilterChange('status', e.target.value)}
                 >
                   <option value="">All Statuses</option>
-                  <option value="CONFIRMED">Confirmed</option>
                   <option value="PENDING">Pending</option>
                   <option value="COMPLETED">Completed</option>
                   <option value="CANCELLED">Cancelled</option>

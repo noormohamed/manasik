@@ -144,7 +144,7 @@ export default function BookingsPage() {
           <div>
             <span
               className={`px-2 py-1 rounded-full text-xs font-medium ${
-                row.status === 'CONFIRMED'
+                row.status === 'COMPLETED'
                   ? 'bg-green-100 text-green-800'
                   : row.status === 'CANCELLED'
                   ? 'bg-red-100 text-red-800'
@@ -277,7 +277,6 @@ export default function BookingsPage() {
             >
               <option value="">All Statuses</option>
               <option value="PENDING">Pending</option>
-              <option value="CONFIRMED">Confirmed</option>
               <option value="COMPLETED">Completed</option>
               <option value="CANCELLED">Cancelled</option>
               <option value="REFUNDED">Refunded</option>

@@ -17,7 +17,7 @@ describe('BookingCard', () => {
     nights: 5,
     total: 500,
     currency: 'USD',
-    status: 'CONFIRMED',
+    status: 'COMPLETED',
     subtotal: 450,
     tax: 50,
     hotelId: 'hotel-1',
@@ -98,7 +98,7 @@ describe('BookingCard', () => {
       />
     );
 
-    expect(screen.getByText('CONFIRMED')).toBeInTheDocument();
+    expect(screen.getByText('COMPLETED')).toBeInTheDocument();
   });
 
   it('should format currency correctly', () => {

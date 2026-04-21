@@ -294,7 +294,7 @@ export default function BookingDetailPage() {
             <div>
               <p className="text-gray-600 text-sm">Status</p>
               <p className={`font-semibold px-3 py-1 rounded-full w-fit ${
-                detail.status === 'CONFIRMED' ? 'bg-green-100 text-green-800' :
+                detail.status === 'COMPLETED' ? 'bg-green-100 text-green-800' :
                 detail.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
                 detail.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' :
                 'bg-gray-100 text-gray-800'

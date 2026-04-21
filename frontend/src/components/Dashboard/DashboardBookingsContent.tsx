@@ -326,7 +326,7 @@ const DashboardBookingsContent: React.FC = () => {
 
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
-      case 'CONFIRMED':
+      case 'COMPLETED':
         return 'bg-success';
       case 'PENDING':
         return 'bg-warning';
@@ -343,7 +343,7 @@ const DashboardBookingsContent: React.FC = () => {
 
   const getStatusBorderColor = (status: string) => {
     switch (status) {
-      case 'CONFIRMED':
+      case 'COMPLETED':
         return '#28a745';
       case 'PENDING':
         return '#ffc107';
@@ -547,7 +547,7 @@ const DashboardBookingsContent: React.FC = () => {
             border-radius: 4px;
             font-weight: bold;
           }
-          .status-CONFIRMED { background: #d4edda; color: #155724; }
+          .status-COMPLETED { background: #d4edda; color: #155724; }
           .status-PENDING { background: #fff3cd; color: #856404; }
           .status-CANCELLED { background: #f8d7da; color: #721c24; }
           .status-COMPLETED { background: #d1ecf1; color: #0c5460; }
@@ -960,7 +960,7 @@ const DashboardBookingsContent: React.FC = () => {
 
         <!-- 8. FOOTER -->
         <div class="footer">
-          <p>Booking confirmed on: ${new Date(selectedBooking.createdAt).toLocaleString()}</p>
+          <p>Booking completed on: ${new Date(selectedBooking.createdAt).toLocaleString()}</p>
           <p>Thank you for your booking! We look forward to hosting you.</p>
           <p style="margin-top: 12px; font-size: 10px; color: #999;">Booking Reference: ${selectedBooking.id}</p>
         </div>
@@ -1105,7 +1105,6 @@ const DashboardBookingsContent: React.FC = () => {
                     >
                       <option value="">All Statuses</option>
                       <option value="PENDING">Pending</option>
-                      <option value="CONFIRMED">Confirmed</option>
                       <option value="COMPLETED">Completed</option>
                       <option value="CANCELLED">Cancelled</option>
                       <option value="REFUNDED">Refunded</option>
@@ -1289,29 +1288,29 @@ const DashboardBookingsContent: React.FC = () => {
                       <div className="col-md-3">
                         <div 
                           className="card text-center"
-                          onClick={() => handleStatusClick('CONFIRMED')}
+                          onClick={() => handleStatusClick('COMPLETED')}
                           style={{ 
                             cursor: 'pointer',
-                            border: filterStatus === 'CONFIRMED' ? '2px solid #28a745' : '1px solid #dee2e6',
-                            backgroundColor: filterStatus === 'CONFIRMED' ? '#d4edda' : 'white',
+                            border: filterStatus === 'COMPLETED' ? '2px solid #28a745' : '1px solid #dee2e6',
+                            backgroundColor: filterStatus === 'COMPLETED' ? '#d4edda' : 'white',
                             transition: 'all 0.2s'
                           }}
                           onMouseEnter={(e) => {
-                            if (filterStatus !== 'CONFIRMED') {
+                            if (filterStatus !== 'COMPLETED') {
                               e.currentTarget.style.backgroundColor = '#f8f9fa';
                             }
                           }}
                           onMouseLeave={(e) => {
-                            if (filterStatus !== 'CONFIRMED') {
+                            if (filterStatus !== 'COMPLETED') {
                               e.currentTarget.style.backgroundColor = 'white';
                             }
                           }}
                         >
                           <div className="card-body">
                             <h3 className="mb-0 text-success">
-                              {bookings.filter(b => b.status === 'CONFIRMED').length}
+                              {bookings.filter(b => b.status === 'COMPLETED').length}
                             </h3>
-                            <small className="text-muted">Confirmed</small>
+                            <small className="text-muted">Completed</small>
                           </div>
                         </div>
                       </div>
@@ -1494,7 +1493,7 @@ const DashboardBookingsContent: React.FC = () => {
                                 <i className="ri-hotel-line me-1"></i>
                                 View Hotel
                               </Link>
-                              {(booking.status === 'CONFIRMED' || booking.status === 'COMPLETED' || booking.status === 'PENDING') && (
+                              {(booking.status === 'COMPLETED' || booking.status === 'COMPLETED' || booking.status === 'PENDING') && (
                                 <button 
                                   className="btn btn-sm btn-warning"
                                   onClick={() => {
@@ -1825,7 +1824,7 @@ const DashboardBookingsContent: React.FC = () => {
                 >
                   Close
                 </button>
-                {(selectedBooking.status === 'CONFIRMED' || selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'PENDING') && (
+                {(selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'PENDING') && (
                   <button 
                     type="button" 
                     className="btn btn-warning"
