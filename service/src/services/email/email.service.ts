@@ -127,6 +127,93 @@ export class EmailService {
     });
   }
 
+  async sendStaffBookingConfirmation(params: {
+    guestEmail: string;
+    guestName: string;
+    bookingId: string;
+    hotelName: string;
+    hotelAddress: string;
+    roomType: string;
+    checkInDate: string;
+    checkOutDate: string;
+    nights: number;
+    total: number;
+    currency: string;
+    paymentLinkUrl?: string;
+  }): Promise<boolean> {
+    return this.sendEmail({
+      to: params.guestEmail,
+      subject: `Booking Confirmation - ${params.hotelName}`,
+      html: this.staffBookingConfirmationTemplate(params),
+    });
+  }
+
+  async sendPaymentLinkEmail(params: {
+    guestEmail: string;
+    guestName: string;
+    bookingId: string;
+    hotelName: string;
+    paymentLinkUrl: string;
+    amount: number;
+    currency: string;
+    expiresAt: Date;
+  }): Promise<boolean> {
+    return this.sendEmail({
+      to: params.guestEmail,
+      subject: `Payment Link - ${params.hotelName}`,
+      html: this.paymentLinkTemplate(params),
+    });
+  }
+
+  async sendPaymentConfirmation(params: {
+    guestEmail: string;
+    guestName: string;
+    bookingId: string;
+    hotelName: string;
+    hotelAddress: string;
+    paymentAmount: number;
+    currency: string;
+    paymentDate: Date;
+    paymentMethod: string;
+    checkInDate: string;
+    checkOutDate: string;
+    roomType: string;
+  }): Promise<boolean> {
+    return this.retryEmailWithBackoff(async () => {
+      return this.sendEmail({
+        to: params.guestEmail,
+        subject: `Payment Confirmation - ${params.hotelName}`,
+        html: this.paymentConfirmationTemplate(params),
+      });
+    });
+  }
+
+  private async retryEmailWithBackoff(
+    emailFn: () => Promise<boolean>,
+    maxRetries: number = 3
+  ): Promise<boolean> {
+    let lastError: any;
+    let delay = 1000; // Start with 1 second
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const result = await emailFn();
+        if (result) {
+          return true;
+        }
+      } catch (error) {
+        lastError = error;
+        if (attempt < maxRetries - 1) {
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2; // Exponential backoff
+        }
+      }
+    }
+
+    console.error('Email failed after retries:', lastError);
+    return false;
+  }
+
   private stripHtml(html: string): string {
     return html.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
   }
@@ -210,6 +297,111 @@ export class EmailService {
         <div class="row"><span>Hotel</span><span>${d.hotelName}</span></div>
         <div class="row"><span>Amount</span><span style="color:#10b981;font-size:20px"><b>${d.currency} ${d.amount.toFixed(2)}</b></span></div>
       </div>
+    `);
+  }
+
+  private staffBookingConfirmationTemplate(params: {
+    guestEmail: string;
+    guestName: string;
+    bookingId: string;
+    hotelName: string;
+    hotelAddress: string;
+    roomType: string;
+    checkInDate: string;
+    checkOutDate: string;
+    nights: number;
+    total: number;
+    currency: string;
+    paymentLinkUrl?: string;
+  }): string {
+    const paymentLinkHtml = params.paymentLinkUrl
+      ? `<div style="text-align:center;margin:30px 0">
+           <a href="${params.paymentLinkUrl}" style="display:inline-block;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+             Pay Now
+           </a>
+         </div>`
+      : '';
+
+    return this.baseTemplate(`
+      <div style="text-align:center"><span style="background:#10b981;color:#fff;padding:8px 16px;border-radius:20px">✓ Booking Confirmed</span></div>
+      <h1>Thank you for your booking!</h1>
+      <p>Hi ${params.guestName},</p>
+      <p>Your booking has been confirmed:</p>
+      <div class="box">
+        <div class="row"><span>Booking ID</span><span><b>${params.bookingId}</b></span></div>
+        <div class="row"><span>Hotel</span><span><b>${params.hotelName}</b></span></div>
+        <div class="row"><span>Address</span><span>${params.hotelAddress}</span></div>
+        <div class="row"><span>Room Type</span><span>${params.roomType}</span></div>
+        <div class="row"><span>Check-in</span><span>${params.checkInDate}</span></div>
+        <div class="row"><span>Check-out</span><span>${params.checkOutDate}</span></div>
+        <div class="row"><span>Duration</span><span>${params.nights} night(s)</span></div>
+        <div class="row"><span>Total</span><span style="color:#2563eb;font-size:18px"><b>${params.currency} ${params.total.toFixed(2)}</b></span></div>
+      </div>
+      ${paymentLinkHtml}
+      <p>We look forward to welcoming you!</p>
+    `);
+  }
+
+  private paymentLinkTemplate(params: {
+    guestEmail: string;
+    guestName: string;
+    bookingId: string;
+    hotelName: string;
+    paymentLinkUrl: string;
+    amount: number;
+    currency: string;
+    expiresAt: Date;
+  }): string {
+    const expiryDate = new Date(params.expiresAt).toLocaleDateString();
+    return this.baseTemplate(`
+      <h1>Payment Link - ${params.hotelName}</h1>
+      <p>Hi ${params.guestName},</p>
+      <p>Your payment link is ready. Please complete payment by ${expiryDate}:</p>
+      <div class="box">
+        <div class="row"><span>Booking ID</span><span><b>${params.bookingId}</b></span></div>
+        <div class="row"><span>Amount Due</span><span style="color:#2563eb;font-size:18px"><b>${params.currency} ${params.amount.toFixed(2)}</b></span></div>
+      </div>
+      <div style="text-align:center;margin:30px 0">
+        <a href="${params.paymentLinkUrl}" style="display:inline-block;padding:14px 32px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
+          Pay Now
+        </a>
+      </div>
+      <p style="font-size:12px;color:#6b7280">Link expires on ${expiryDate}</p>
+    `);
+  }
+
+  private paymentConfirmationTemplate(params: {
+    guestEmail: string;
+    guestName: string;
+    bookingId: string;
+    hotelName: string;
+    hotelAddress: string;
+    paymentAmount: number;
+    currency: string;
+    paymentDate: Date;
+    paymentMethod: string;
+    checkInDate: string;
+    checkOutDate: string;
+    roomType: string;
+  }): string {
+    const paymentDateStr = new Date(params.paymentDate).toLocaleDateString();
+    return this.baseTemplate(`
+      <div style="text-align:center"><span style="background:#10b981;color:#fff;padding:8px 16px;border-radius:20px">✓ Payment Confirmed</span></div>
+      <h1>Payment Received!</h1>
+      <p>Hi ${params.guestName},</p>
+      <p>Thank you for your payment. Your booking is now confirmed:</p>
+      <div class="box">
+        <div class="row"><span>Booking ID</span><span><b>${params.bookingId}</b></span></div>
+        <div class="row"><span>Hotel</span><span><b>${params.hotelName}</b></span></div>
+        <div class="row"><span>Address</span><span>${params.hotelAddress}</span></div>
+        <div class="row"><span>Room Type</span><span>${params.roomType}</span></div>
+        <div class="row"><span>Check-in</span><span>${params.checkInDate}</span></div>
+        <div class="row"><span>Check-out</span><span>${params.checkOutDate}</span></div>
+        <div class="row"><span>Payment Amount</span><span style="color:#10b981;font-size:18px"><b>${params.currency} ${params.paymentAmount.toFixed(2)}</b></span></div>
+        <div class="row"><span>Payment Date</span><span>${paymentDateStr}</span></div>
+        <div class="row"><span>Payment Method</span><span>${params.paymentMethod}</span></div>
+      </div>
+      <p>Your booking is fully paid and confirmed. We look forward to welcoming you!</p>
     `);
   }
 }

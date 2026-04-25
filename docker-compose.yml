@@ -101,17 +101,23 @@ services:
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
+      dockerfile: Dockerfile.dev
     container_name: booking_frontend
     restart: always
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:3001
+      NODE_ENV: development
     ports:
       - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
     depends_on:
       - api
     networks:
       - booking_network
+    command: npm run dev
 
   management:
     build:

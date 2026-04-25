@@ -300,45 +300,81 @@ exports.userRoutes.post('/me/bookings/:bookingId/cancel', auth_middleware_1.auth
 /**
  * GET /api/users/me/bookings
  * Get bookings for the current user (as a customer)
+ * Query parameters:
+ *   - date: Filter by date (YYYY-MM-DD format) - returns bookings that check-in, check-out, or are staying over that date (optional)
  */
 exports.userRoutes.get('/me/bookings', auth_middleware_1.authMiddleware, (ctx) => __awaiter(void 0, void 0, void 0, function* () {
     try {
         const userId = ctx.state.userId;
+        const { date } = ctx.query;
         const pool = (0, connection_1.getPool)();
-        // Fetch bookings where user is the customer, joining with hotels for address and times
-        const [bookings] = yield pool.query(`SELECT 
-        b.id,
-        b.service_type as serviceType,
-        b.status,
-        b.currency,
-        b.subtotal,
-        b.tax,
-        b.total,
-        b.refund_amount as refundAmount,
-        b.refund_reason as refundReason,
-        b.refunded_at as refundedAt,
-        b.payment_status as paymentStatus,
-        b.metadata,
-        b.created_at as createdAt,
-        b.updated_at as updatedAt,
-        b.hotel_id as hotelId,
-        h.name as hotelName,
-        h.address as hotelAddress,
-        h.city as hotelCity,
-        h.country as hotelCountry,
-        h.check_in_time as checkInTime,
-        h.check_out_time as checkOutTime,
-        h.star_rating as starRating
-      FROM bookings b
-      LEFT JOIN hotels h ON b.hotel_id = h.id
-      WHERE b.customer_id = ?
-      ORDER BY b.created_at DESC
-      LIMIT 100`, [userId]);
+        // Build query with optional date filter
+        let query = `SELECT 
+      b.id,
+      b.service_type as serviceType,
+      b.status,
+      b.currency,
+      b.subtotal,
+      b.tax,
+      b.total,
+      b.refund_amount as refundAmount,
+      b.refund_reason as refundReason,
+      b.refunded_at as refundedAt,
+      b.payment_status as paymentStatus,
+      b.metadata,
+      b.created_at as createdAt,
+      b.updated_at as updatedAt,
+      b.hotel_id as hotelId,
+      h.name as hotelName,
+      h.address as hotelAddress,
+      h.city as hotelCity,
+      h.country as hotelCountry,
+      h.check_in_time as checkInTime,
+      h.check_out_time as checkOutTime,
+      h.star_rating as starRating
+    FROM bookings b
+    LEFT JOIN hotels h ON b.hotel_id = h.id
+    WHERE b.customer_id = ?`;
+        const params = [userId];
+        // Filter by date if provided
+        // Returns bookings that:
+        // 1. Check-in on that date, OR
+        // 2. Check-out on that date, OR
+        // 3. Are staying over that date (check-in before, check-out after)
+        if (date) {
+            query += `
+        AND (
+          DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) = ? OR
+          DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) = ? OR
+          (
+            DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) < ? AND
+            DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) > ?
+          )
+        )
+      `;
+            params.push(date, date, date, date);
+        }
+        query += ` ORDER BY b.created_at DESC LIMIT 100`;
+        // Fetch bookings where user is the customer (not hotel bookings they manage)
+        const [bookings] = yield pool.query(query, params);
         // For each booking, get the gate information
         const formattedBookings = yield Promise.all(bookings.map((booking) => __awaiter(void 0, void 0, void 0, function* () {
             const metadata = typeof booking.metadata === 'string'
                 ? JSON.parse(booking.metadata)
                 : booking.metadata || {};
+            // Fetch hotel name from hotels table if not in metadata or booking (for old bookings)
+            let hotelName = booking.hotelName || metadata.hotelName;
+            if (!hotelName && (booking.hotelId || metadata.hotelId)) {
+                try {
+                    const [hotelRows] = yield pool.query('SELECT name FROM hotels WHERE id = ? LIMIT 1', [booking.hotelId || metadata.hotelId]);
+                    if (hotelRows && hotelRows.length > 0) {
+                        hotelName = hotelRows[0].name;
+                    }
+                }
+                catch (err) {
+                    console.error('Error fetching hotel name:', err);
+                }
+            }
             // Build full address from hotel table data
             const hotelFullAddress = [booking.hotelAddress, booking.hotelCity, booking.hotelCountry]
                 .filter(Boolean)
@@ -412,7 +448,7 @@ exports.userRoutes.get('/me/bookings', auth_middleware_1.authMiddleware, (ctx) =
                 refundedAt: booking.refundedAt || null,
                 paymentStatus: booking.paymentStatus,
                 hotelId: booking.hotelId || metadata.hotelId,
-                hotelName: booking.hotelName || metadata.hotelName,
+                hotelName: hotelName || 'Unknown Hotel',
                 hotelAddress: booking.hotelAddress || metadata.hotelAddress,
                 hotelCity: booking.hotelCity || metadata.hotelCity,
                 hotelCountry: booking.hotelCountry || metadata.hotelCountry,

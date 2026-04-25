@@ -4,6 +4,7 @@
   z-index: 99;
   padding-top: 30px;
   padding-bottom: 30px;
+  transition: all 0.3s ease-in-out;
 }
 .navbar .navbar-brand {
   margin-right: 30px;
@@ -234,8 +235,8 @@
   box-shadow: 0 2px 28px 0 rgba(0, 0, 0, 0.09);
   animation: 500ms ease-in-out 0s normal none 1 running fadeInDown;
   background-color: var(--whiteColor) !important;
-  padding-top: 15px;
-  padding-bottom: 15px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 .navbar .navbar-toggler {
   color: var(--headingColor);

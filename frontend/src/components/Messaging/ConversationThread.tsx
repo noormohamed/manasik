@@ -11,6 +11,8 @@ interface Message {
   conversationId: string;
   senderId: string;
   senderRole: string;
+  senderName?: string;
+  senderHotelName?: string;
   content: string;
   contentSanitized: string;
   messageType: string;
@@ -18,6 +20,15 @@ interface Message {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+}
+
+interface Booking {
+  id: string;
+  checkIn: string;
+  checkOut: string;
+  guests: number;
+  status: string;
+  total: number;
 }
 
 interface Conversation {
@@ -34,6 +45,7 @@ interface Conversation {
   participants?: any[];
   lastMessage?: any;
   unreadCount?: number;
+  booking?: Booking;
 }
 
 interface ConversationThreadProps {
@@ -51,6 +63,7 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [conversationData, setConversationData] = useState<Conversation>(conversation);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -72,9 +85,22 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
       const response = (await apiClient.get(
         `/messages/conversations/${conversation.id}?limit=50&offset=0`
       )) as {
-        data?: { messages?: Message[] };
+        success?: boolean;
+        data?: {
+          conversation?: Conversation;
+          messages?: Message[];
+          pagination?: any;
+        };
       };
+      console.log('[ConversationThread] API Response:', response);
+      
+      // Update conversation data with booking info
+      if (response.data?.conversation) {
+        setConversationData(response.data.conversation);
+      }
+      
       const fetchedMessages = response.data?.messages || [];
+      console.log('[ConversationThread] Fetched messages:', fetchedMessages);
       setMessages(fetchedMessages.reverse()); // Reverse to show oldest first
       setError(null);
     } catch (err: any) {
@@ -89,13 +115,22 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
     try {
       setSending(true);
       const response = (await apiClient.post(
-        `/messages/conversations/${conversation.id}/messages`,
+        `/messages/conversations/${conversationData.id}/messages`,
         { content }
-      )) as { data?: Message };
+      )) as {
+        success?: boolean;
+        data?: Message;
+      };
 
-      if (response.data) {
-        setMessages([...messages, response.data]);
-        onNewMessage(conversation.id);
+      console.log('[ConversationThread] Send message response:', response);
+      const message = response.data;
+
+      if (message && message.id) {
+        console.log('[ConversationThread] Adding message to thread:', message);
+        setMessages([...messages, message]);
+        onNewMessage(conversationData.id);
+      } else {
+        console.warn('[ConversationThread] No message data in response:', response);
       }
     } catch (err: any) {
       console.error("Error sending message:", err);
@@ -128,6 +163,13 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
     });
   };
 
+  const formatBookingDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+    });
+  };
+
   const getRoleColor = (role: string) => {
     switch (role) {
       case "GUEST":
@@ -149,6 +191,18 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
     return role.replace(/_/g, " ");
   };
 
+  const getSenderName = (message: Message): string => {
+    if (message.senderName) {
+      // If it's a hotel staff member, show "Name (on behalf of Hotel)"
+      if (message.senderRole === "HOTEL_STAFF" && message.senderHotelName) {
+        return `${message.senderName} (on behalf of ${message.senderHotelName})`;
+      }
+      return message.senderName;
+    }
+    // Fallback - should rarely happen as backend provides the name
+    return `User ${message.senderId.substring(0, 8)}`;
+  };
+
   if (loading) {
     return (
       <div className="conversation-thread">
@@ -163,15 +217,48 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
   }
 
   // Determine if we should show split view (when there's a booking or hotel context)
-  const showSplitView = conversation.bookingId || conversation.hotelId;
+  // Disabled for now - show messages only
+  const showSplitView = false;
 
   return (
     <div className={`conversation-thread ${showSplitView ? "split-view" : ""}`}>
       {/* Header */}
       <div className="conversation-header">
         <div className="conversation-header-content">
-          <h3>{conversation.subject}</h3>
-          <p className="text-muted mb-0">{conversation.description}</p>
+          <h3>{conversationData.subject}</h3>
+          <p className="text-muted mb-0">{conversationData.description}</p>
+          
+          {/* Booking Info */}
+          {conversationData.bookingId && conversationData.booking && (
+            <div className="booking-info mt-3">
+              <div className="booking-details">
+                <div className="booking-detail-item">
+                  <span className="label">Check-in:</span>
+                  <span className="value">{formatBookingDate(conversationData.booking.checkIn)}</span>
+                </div>
+                <div className="booking-detail-item">
+                  <span className="label">Check-out:</span>
+                  <span className="value">{formatBookingDate(conversationData.booking.checkOut)}</span>
+                </div>
+                <div className="booking-detail-item">
+                  <span className="label">Guests:</span>
+                  <span className="value">{conversationData.booking.guests}</span>
+                </div>
+                <div className="booking-detail-item">
+                  <span className="label">Status:</span>
+                  <span className={`badge badge-${conversationData.booking.status.toLowerCase()}`}>
+                    {conversationData.booking.status}
+                  </span>
+                </div>
+              </div>
+              <button 
+                className="btn btn-sm btn-primary mt-3"
+                onClick={() => window.location.href = `/dashboard/bookings?bookingId=${conversationData.bookingId}`}
+              >
+                <i className="ri-eye-line"></i> View Booking
+              </button>
+            </div>
+          )}
         </div>
         <button
           className="btn btn-sm btn-outline-secondary"
@@ -188,14 +275,41 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
         {showSplitView && (
           <div className="conversation-context-panel">
             <ConversationContext
-              bookingId={conversation.bookingId}
-              hotelId={conversation.hotelId}
+              bookingId={conversationData.bookingId}
+              hotelId={conversationData.hotelId}
             />
           </div>
         )}
 
         {/* Right Side - Messages (60% or 100%) */}
         <div className="conversation-messages-panel">
+          {/* Context Info Bar */}
+          {conversationData.booking && (
+            <div className="conversation-context-bar">
+              <div className="context-info">
+                <div className="context-section">
+                  <span className="context-label">Hotel:</span>
+                  <span className="context-value">{conversationData.hotelId}</span>
+                </div>
+                <div className="context-divider">•</div>
+                <div className="context-section">
+                  <span className="context-label">Check-in:</span>
+                  <span className="context-value">{formatBookingDate(conversationData.booking.checkIn)}</span>
+                </div>
+                <div className="context-divider">•</div>
+                <div className="context-section">
+                  <span className="context-label">Check-out:</span>
+                  <span className="context-value">{formatBookingDate(conversationData.booking.checkOut)}</span>
+                </div>
+                <div className="context-divider">•</div>
+                <div className="context-section">
+                  <span className="context-label">Guests:</span>
+                  <span className="context-value">{conversationData.booking.guests}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Messages */}
           <div className="conversation-messages">
             {error && (
@@ -225,9 +339,12 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
                       )}
                       <div className={`message ${message.messageType.toLowerCase()}`}>
                         <div className="message-header">
-                          <span className={`badge ${getRoleColor(message.senderRole)}`}>
-                            {getRoleLabel(message.senderRole)}
-                          </span>
+                          <div className="message-sender-info">
+                            <strong className="message-sender-name">{getSenderName(message)}</strong>
+                            <span className={`badge ${getRoleColor(message.senderRole)}`}>
+                              {getRoleLabel(message.senderRole)}
+                            </span>
+                          </div>
                           <small className="text-muted">{formatTime(message.createdAt)}</small>
                         </div>
                         <div className="message-content">
@@ -265,9 +382,9 @@ const ConversationThread: React.FC<ConversationThreadProps> = ({
           {/* Message Composer */}
           <MessageComposer
             onSendMessage={handleSendMessage}
-            disabled={sending || conversation.status !== "ACTIVE"}
+            disabled={sending || conversationData.status !== "ACTIVE"}
             placeholder={
-              conversation.status !== "ACTIVE"
+              conversationData.status !== "ACTIVE"
                 ? "This conversation is closed"
                 : "Type your message..."
             }

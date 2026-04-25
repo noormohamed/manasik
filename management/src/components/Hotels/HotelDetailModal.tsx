@@ -23,10 +23,12 @@ export default function HotelDetailModal({
   const [transactions, setTransactions] = useState<HotelTransactionsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'rooms' | 'bookings' | 'reviews' | 'transactions' | 'amenities'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'rooms' | 'bookings' | 'reviews' | 'transactions' | 'amenities' | 'edit'>(initialTab);
   const [statusUpdating, setStatusUpdating] = useState(false);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<any>({});
 
   useEffect(() => {
     if (isOpen && hotelId) {
@@ -55,6 +57,13 @@ export default function HotelDetailModal({
       const response = await hotelsService.getHotelDetail(hotelId);
       if (response.success) {
         setHotel(response.data);
+        // Initialize edit form with hotel data
+        setEditForm({
+          checkInTime: response.data.checkInTime || '14:00',
+          checkOutTime: response.data.checkOutTime || '11:00',
+          cancellationPolicy: response.data.cancellationPolicy || '',
+          hotelRules: response.data.hotelRules || '',
+        });
       } else {
         setError('Failed to load hotel details');
       }
@@ -111,6 +120,29 @@ export default function HotelDetailModal({
     }
   };
 
+  const handleUpdateHotelDetails = async () => {
+    if (!hotelId || !hotel) return;
+    setStatusUpdating(true);
+    try {
+      const response = await hotelsService.updateHotelDetails(hotelId, editForm);
+      if (response.success) {
+        setHotel(response.data);
+        setIsEditing(false);
+        // Update edit form with new data
+        setEditForm({
+          checkInTime: response.data.checkInTime || '14:00',
+          checkOutTime: response.data.checkOutTime || '11:00',
+          cancellationPolicy: response.data.cancellationPolicy || '',
+          hotelRules: response.data.hotelRules || '',
+        });
+      }
+    } catch (err) {
+      console.error('Update hotel details error:', err);
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
   if (!isOpen) return null;
 
   const getStatusBadgeColor = (status: string) => {
@@ -134,7 +166,7 @@ export default function HotelDetailModal({
     ));
   };
 
-  const tabs = ['overview', 'rooms', 'bookings', 'reviews', 'transactions', 'amenities'] as const;
+  const tabs = ['overview', 'rooms', 'bookings', 'reviews', 'transactions', 'amenities', 'edit'] as const;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -420,6 +452,115 @@ export default function HotelDetailModal({
                         ))}
                       </div>
                     ) : <p className="text-gray-500 text-center py-8">No amenities listed</p>}
+                  </div>
+                )}
+
+                {activeTab === 'edit' && (
+                  <div className="space-y-6">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-semibold">Edit Hotel Policies</h3>
+                      {!isEditing && (
+                        <button
+                          onClick={() => setIsEditing(true)}
+                          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                        >
+                          Edit
+                        </button>
+                      )}
+                    </div>
+
+                    {isEditing ? (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Check-in Time</label>
+                          <input
+                            type="time"
+                            value={editForm.checkInTime}
+                            onChange={(e) => setEditForm({ ...editForm, checkInTime: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Check-out Time</label>
+                          <input
+                            type="time"
+                            value={editForm.checkOutTime}
+                            onChange={(e) => setEditForm({ ...editForm, checkOutTime: e.target.value })}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Cancellation Policy</label>
+                          <textarea
+                            value={editForm.cancellationPolicy}
+                            onChange={(e) => setEditForm({ ...editForm, cancellationPolicy: e.target.value })}
+                            rows={4}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Enter cancellation policy details..."
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">Hotel Rules</label>
+                          <textarea
+                            value={editForm.hotelRules}
+                            onChange={(e) => setEditForm({ ...editForm, hotelRules: e.target.value })}
+                            rows={4}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            placeholder="Enter hotel rules and guidelines..."
+                          />
+                        </div>
+
+                        <div className="flex gap-2 pt-4">
+                          <button
+                            onClick={handleUpdateHotelDetails}
+                            disabled={statusUpdating}
+                            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                          >
+                            {statusUpdating ? 'Saving...' : 'Save Changes'}
+                          </button>
+                          <button
+                            onClick={() => {
+                              setIsEditing(false);
+                              // Reset form to current hotel data
+                              setEditForm({
+                                checkInTime: hotel.checkInTime || '14:00',
+                                checkOutTime: hotel.checkOutTime || '11:00',
+                                cancellationPolicy: hotel.cancellationPolicy || '',
+                                hotelRules: hotel.hotelRules || '',
+                              });
+                            }}
+                            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm text-gray-600 mb-1">Check-in Time</p>
+                          <p className="text-lg font-medium text-gray-900">{editForm.checkInTime}</p>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm text-gray-600 mb-1">Check-out Time</p>
+                          <p className="text-lg font-medium text-gray-900">{editForm.checkOutTime}</p>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm text-gray-600 mb-2">Cancellation Policy</p>
+                          <p className="text-gray-700 whitespace-pre-wrap">{editForm.cancellationPolicy || 'Not set'}</p>
+                        </div>
+
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm text-gray-600 mb-2">Hotel Rules</p>
+                          <p className="text-gray-700 whitespace-pre-wrap">{editForm.hotelRules || 'Not set'}</p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

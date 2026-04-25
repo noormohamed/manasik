@@ -118,57 +118,8 @@ const DashboardListingContent: React.FC = () => {
 
   return (
     <>
-      <div className="container pt-5 pb-5">
-        <div className="row">
-          <div className="col-xl-8 col-xxl-9">
-            <ul className="nav nav-tabs most-popular-tab">
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/dashboard/bookings"
-                    className={`dropdown-item ${
-                      currentRoute === "/dashboard/bookings" ? "active" : ""
-                    }`}
-                  >Your Bookings</Link>
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/dashboard/listings"
-                    className={`dropdown-item ${
-                      currentRoute === "/dashboard/listings" ? "active" : ""
-                    }`}
-                  >Your Listings</Link>
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/account/"
-                    className={`dropdown-item ${
-                      currentRoute === "/account/" ? "active" : ""
-                    }`}
-                  >Account</Link>
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/payments/"
-                    className={`dropdown-item ${
-                      currentRoute === "/payments/" ? "active" : ""
-                    }`}
-                  >Payments</Link>
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="author-area">
-        <div className="container">
+      <div className="author-area" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+        <div style={{ width: '100%', maxWidth: '1640px', padding: '0 24px' }}>
           <div className="row">
             <div className="col-xl-8 col-xxl-9">
               <div className="author-content-wrap">

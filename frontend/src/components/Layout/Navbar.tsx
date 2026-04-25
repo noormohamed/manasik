@@ -71,7 +71,7 @@ const Navbar: React.FC = () => {
             />
           </Link>
 
-          {/* Toggle navigation */}
+          {/* Hamburger Toggle Button */}
           <button
             onClick={toggleNavbar}
             className={classTwo}
@@ -87,110 +87,99 @@ const Navbar: React.FC = () => {
             <span className="icon-bar bottom-bar"></span>
           </button>
 
+          {/* Main Navigation - 3 Links (Collapsible on mobile) */}
           <div className={classOne} id="navbarSupportedContent">
-            <ul className="navbar-nav me-auto ms-70">
+            <ul className="navbar-nav ms-auto me-auto">
               <li className="nav-item">
-                <Link
-                  className="nav-link"
-                  href="/stay"
-                >
+                <Link className="nav-link" href="/stay">
                   <i className="ri-building-line me-2"></i>
                   Hotels
                 </Link>
               </li>
               {user && (
-                <li className="nav-item">
-                  <Link
-                    className="nav-link"
-                    href="/me/bookings"
-                  >
-                    <i className="ri-calendar-check-line me-2"></i>
-                    Bookings
-                  </Link>
-                </li>
-              )}
-              {user && (
-                <li className="nav-item">
-                  <Link
-                    className="nav-link"
-                    href="/dashboard/messages"
-                  >
-                    <i className="ri-mail-line me-2"></i>
-                    Messages
-                  </Link>
-                </li>
+                <>
+                  <li className="nav-item">
+                    <Link className="nav-link" href="/me/bookings">
+                      <i className="ri-calendar-check-line me-2"></i>
+                      Bookings
+                    </Link>
+                  </li>
+                  <li className="nav-item">
+                    <Link className="nav-link" href="/dashboard/messages">
+                      <i className="ri-mail-line me-2"></i>
+                      Messages
+                    </Link>
+                  </li>
+                </>
               )}
             </ul>
           </div>
 
-          {/* others-options */}
+          {/* Right Side - Account Menu & Cart */}
           <div className="others-options">
-            <ul className="navbar-nav me-auto ms-70">
-                {user && (
-                  <li className="nav-item dropdown">
+            <ul className="navbar-nav ms-auto">
+              {/* Account Dropdown */}
+              {user && (
+                <li className="nav-item dropdown">
+                  <button
+                    className="btn btn-link nav-link dropdown-toggle p-0"
+                    type="button"
+                    id="accountDropdown"
+                    data-bs-toggle="dropdown"
+                    aria-expanded="false"
+                  >
+                    <i className="ri-user-line" style={{ fontSize: '20px' }}></i>
+                  </button>
+                  <ul className="dropdown-menu dropdown-menu-end" aria-labelledby="accountDropdown">
+                    <li>
                       <Link
-                          className="nav-link dropdown-toggle"
-                          href="#"
-                          onClick={(e) => e.preventDefault()}
+                        href="/dashboard/listings/bookings/"
+                        className={`dropdown-item ${
+                          currentRoute?.includes('/dashboard/listings/bookings') ? "active" : ""
+                        }`}
                       >
-                          {user.firstName} {user.lastName}
+                        <i className="ri-building-4-line me-2"></i>
+                        Management
                       </Link>
-                      <ul className="dropdown-menu">
-                          <li>
-                              <Link
-                                  href="/dashboard"
-                                  className={`dropdown-item ${
-                                      currentRoute === "/dashboard" ? "active" : ""
-                                  }`}
-                              >Dashboard</Link>
-                          </li>
-                          <li>
-                              <Link
-                                  href="/dashboard/bookings"
-                                  className={`dropdown-item ${
-                                      currentRoute === "/stay/bookings" ? "active" : ""
-                                  }`}
-                              >Your Bookings</Link>
-                          </li>
-                          <li>
-                              <Link
-                                  href="/dashboard/listings"
-                                  className={`dropdown-item ${
-                                      currentRoute === "/stay/listings" ? "active" : ""
-                                  }`}
-                              >Your Listings</Link>
-                          </li>
-                          <li>
-                              <Link
-                                  href="/account/"
-                                  className={`dropdown-item ${
-                                      currentRoute === "/account/" ? "active" : ""
-                                  }`}
-                              >Account</Link>
-                          </li>
-                          <li>
-                              <Link
-                                  href="/payments/"
-                                  className={`dropdown-item ${
-                                      currentRoute === "/payments/" ? "active" : ""
-                                  }`}
-                              >Payments</Link>
-                          </li>
-                          <li className="dropdown-divider"></li>
-                          <li>
-                              <button
-                                  onClick={handleLogout}
-                                  className="dropdown-item"
-                                  style={{ cursor: 'pointer', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
-                              >
-                                  <i className="ri-logout-box-line me-2"></i>
-                                  Logout
-                              </button>
-                          </li>
-                      </ul>
-                  </li>
-                )}
-              
+                    </li>
+                    <li className="dropdown-divider"></li>
+                    <li>
+                      <Link
+                        href="/account/"
+                        className={`dropdown-item ${
+                          currentRoute === "/account/" ? "active" : ""
+                        }`}
+                      >
+                        <i className="ri-user-settings-line me-2"></i>
+                        Account
+                      </Link>
+                    </li>
+                    <li>
+                      <Link
+                        href="/payments/"
+                        className={`dropdown-item ${
+                          currentRoute === "/payments/" ? "active" : ""
+                        }`}
+                      >
+                        <i className="ri-wallet-line me-2"></i>
+                        Payments
+                      </Link>
+                    </li>
+                    <li className="dropdown-divider"></li>
+                    <li>
+                      <button
+                        onClick={handleLogout}
+                        className="dropdown-item"
+                        style={{ cursor: 'pointer', background: 'none', border: 'none', width: '100%', textAlign: 'left' }}
+                      >
+                        <i className="ri-logout-box-line me-2"></i>
+                        Logout
+                      </button>
+                    </li>
+                  </ul>
+                </li>
+              )}
+
               {/* Cart Icon */}
               <li className="nav-item">
                 <Link href="/checkout" className="nav-link position-relative">
@@ -206,30 +195,22 @@ const Navbar: React.FC = () => {
                 </Link>
               </li>
 
+              {/* Login Button */}
               <li>
                 {loading ? (
-                  <span className="default-btn active d-none d-lg-block">Loading...</span>
+                  <span className="default-btn active">Loading...</span>
                 ) : user ? (
-                    <></>
+                  <></>
                 ) : (
-                  <>
-                    <Link
-                      href="/auth/"
-                      className="default-btn active d-none d-lg-block"
-                    >
-                      Login Now
-                    </Link>
-                    <Link href="/auth/" className="d-lg-none account">
-                      <i className="flaticon-account"></i>
-                    </Link>
-                  </>
+                  <Link href="/auth/" className="default-btn active">
+                    Login Now
+                  </Link>
                 )}
               </li>
             </ul>
           </div>
         </div>
       </nav>
-
     </>
   );
 };

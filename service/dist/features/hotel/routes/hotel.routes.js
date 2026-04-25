@@ -421,6 +421,11 @@ const createHotelRoutes = () => {
     /**
      * GET /api/hotels/bookings
      * Get all bookings for hotels managed by the logged-in user
+     * Query parameters:
+     *   - page: Page number (default: 1)
+     *   - limit: Results per page (default: 50)
+     *   - status: Filter by booking status (optional)
+     *   - date: Filter by date (YYYY-MM-DD format) - returns bookings that check-in, check-out, or are staying over that date (optional)
      */
     router.get('/bookings', auth_middleware_1.authMiddleware, (0, feature_flag_1.requireFeature)('hotelListing'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
         var _a;
@@ -431,29 +436,13 @@ const createHotelRoutes = () => {
                 ctx.body = { error: 'Unauthorized' };
                 return;
             }
-            const { page = 1, limit = 50, status } = ctx.query;
+            const { page = 1, limit = 50, status, date } = ctx.query;
             const pageNum = parseInt(page);
             const limitNum = parseInt(limit);
             const offset = (pageNum - 1) * limitNum;
-            const hotelRepository = new hotel_repository_1.HotelRepository();
-            // Get all hotels managed by this user
-            const managedHotels = yield hotelRepository.findByUserManaged(userId, 1000, 0);
-            const hotelIds = managedHotels.map(h => h.id);
-            if (hotelIds.length === 0) {
-                ctx.body = {
-                    bookings: [],
-                    pagination: {
-                        page: pageNum,
-                        limit: limitNum,
-                        total: 0,
-                        totalPages: 0,
-                    },
-                };
-                return;
-            }
-            // Fetch bookings for these hotels with customer, agent, and hotel provider info
-            // Note: metadata may use either 'hotelId' or 'hotel_id' depending on how booking was created
             const pool = (0, connection_1.getPool)();
+            // Fetch bookings for hotels managed by this user
+            // Extract hotel_id from metadata JSON and join with hotels table to verify user manages the hotel
             let query = `
         SELECT 
           b.id,
@@ -466,6 +455,9 @@ const createHotelRoutes = () => {
           b.agent_id,
           b.customer_id,
           b.payment_status,
+          b.refund_amount,
+          b.refund_reason,
+          b.refunded_at,
           b.metadata,
           b.hold_expires_at,
           b.created_at,
@@ -475,24 +467,37 @@ const createHotelRoutes = () => {
           u.email as customer_email,
           ag.name as agent_name,
           ag.email as agent_email,
-          h.provider_name,
-          h.provider_reference,
-          h.provider_phone
+          h.name as hotel_name
         FROM bookings b
         LEFT JOIN users u ON b.customer_id = u.id
         LEFT JOIN agents ag ON b.agent_id = ag.id
-        LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id 
-          OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) = h.id
+        LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
         WHERE b.service_type = 'HOTEL'
-          AND (
-            JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) IN (${hotelIds.map(() => '?').join(',')})
-            OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) IN (${hotelIds.map(() => '?').join(',')})
-          )
+          AND JSON_EXTRACT(b.metadata, '$.hotelId') IS NOT NULL
+          AND h.agent_id = ?
       `;
-            const params = [...hotelIds, ...hotelIds];
+            const params = [userId];
             if (status) {
                 query += ' AND b.status = ?';
                 params.push(status);
+            }
+            // Filter by date if provided
+            // Returns bookings that:
+            // 1. Check-in on that date, OR
+            // 2. Check-out on that date, OR
+            // 3. Are staying over that date (check-in before, check-out after)
+            if (date) {
+                query += `
+          AND (
+            DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) = ? OR
+            DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) = ? OR
+            (
+              DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) < ? AND
+              DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) > ?
+            )
+          )
+        `;
+                params.push(date, date, date, date);
             }
             query += ' ORDER BY b.created_at DESC LIMIT ? OFFSET ?';
             params.push(limitNum, offset);
@@ -501,16 +506,29 @@ const createHotelRoutes = () => {
             let countQuery = `
         SELECT COUNT(*) as total
         FROM bookings b
+        LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
         WHERE b.service_type = 'HOTEL'
-          AND (
-            JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) IN (${hotelIds.map(() => '?').join(',')})
-            OR JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotel_id')) IN (${hotelIds.map(() => '?').join(',')})
-          )
+          AND JSON_EXTRACT(b.metadata, '$.hotelId') IS NOT NULL
+          AND h.agent_id = ?
       `;
-            const countParams = [...hotelIds, ...hotelIds];
+            const countParams = [userId];
             if (status) {
                 countQuery += ' AND b.status = ?';
                 countParams.push(status);
+            }
+            // Apply same date filter to count query
+            if (date) {
+                countQuery += `
+          AND (
+            DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) = ? OR
+            DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) = ? OR
+            (
+              DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) < ? AND
+              DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) > ?
+            )
+          )
+        `;
+                countParams.push(date, date, date, date);
             }
             const [countResult] = yield pool.query(countQuery, countParams);
             const total = countResult[0].total;
@@ -524,6 +542,19 @@ const createHotelRoutes = () => {
                     (booking.customer_first_name ? `${booking.customer_first_name} ${booking.customer_last_name}` : 'Guest');
                 const guestEmail = metadata.guestEmail || metadata.guest_email || booking.customer_email || '';
                 const guestPhone = metadata.guestPhone || metadata.guest_phone || '';
+                // Fetch hotel name from hotels table if not in metadata (for old bookings)
+                let hotelName = metadata.hotelName || metadata.hotel_name || booking.hotel_name;
+                if (!hotelName && (metadata.hotelId || metadata.hotel_id)) {
+                    try {
+                        const [hotelRows] = yield pool.query('SELECT name FROM hotels WHERE id = ? LIMIT 1', [metadata.hotelId || metadata.hotel_id]);
+                        if (hotelRows && hotelRows.length > 0) {
+                            hotelName = hotelRows[0].name;
+                        }
+                    }
+                    catch (err) {
+                        console.error('Error fetching hotel name:', err);
+                    }
+                }
                 // Fetch guests for this booking from guests table
                 const [guestRows] = yield pool.query(`SELECT id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger 
            FROM guests WHERE booking_id = ? ORDER BY is_lead_passenger DESC`, [booking.id]);
@@ -538,6 +569,53 @@ const createHotelRoutes = () => {
                     dateOfBirth: g.date_of_birth,
                     isLeadPassenger: g.is_lead_passenger === 1,
                 }));
+                // Generate visible dates array (one entry for each day the booking spans)
+                const checkInDate = new Date(metadata.checkInDate || metadata.check_in);
+                const checkOutDate = new Date(metadata.checkOutDate || metadata.check_out);
+                const visibleDates = [];
+                const currentDate = new Date(checkInDate);
+                while (currentDate < checkOutDate) {
+                    visibleDates.push(currentDate.toISOString().split('T')[0]);
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+                // Fetch Haram gate information for this hotel
+                const [gateData] = yield pool.query(`
+          SELECT 
+            hgd.distance_meters,
+            hgd.walking_time_minutes,
+            hg.gate_number,
+            hg.name_english,
+            hg.has_direct_kaaba_access
+          FROM hotel_gate_distances hgd
+          JOIN haram_gates hg ON hgd.gate_id = hg.id
+          WHERE hgd.hotel_id = ?
+          ORDER BY hgd.distance_meters ASC
+        `, [metadata.hotelId || metadata.hotel_id]);
+                // Extract closest gate and Kaaba gate
+                let closestGate = null;
+                let kaabaGate = null;
+                if (gateData && gateData.length > 0) {
+                    // Closest gate is the first one (sorted by distance)
+                    const closest = gateData[0];
+                    closestGate = {
+                        name: closest.name_english,
+                        gateNumber: closest.gate_number,
+                        distance: closest.distance_meters,
+                        walkingTime: closest.walking_time_minutes,
+                        hasDirectKaabaAccess: closest.has_direct_kaaba_access === 1,
+                    };
+                    // Kaaba gate is the one with direct access, but only if it's different from closest gate
+                    const kaaba = gateData.find((g) => g.has_direct_kaaba_access === 1);
+                    if (kaaba && kaaba.gate_number !== closest.gate_number) {
+                        kaabaGate = {
+                            name: kaaba.name_english,
+                            gateNumber: kaaba.gate_number,
+                            distance: kaaba.distance_meters,
+                            walkingTime: kaaba.walking_time_minutes,
+                            hasDirectKaabaAccess: true,
+                        };
+                    }
+                }
                 return {
                     id: booking.id,
                     status: booking.status,
@@ -545,10 +623,13 @@ const createHotelRoutes = () => {
                     subtotal: parseFloat(booking.subtotal),
                     tax: parseFloat(booking.tax),
                     total: parseFloat(booking.total),
+                    refundAmount: booking.refund_amount ? parseFloat(booking.refund_amount) : null,
+                    refundReason: booking.refund_reason,
+                    refundedAt: booking.refunded_at,
                     paymentStatus: booking.payment_status,
                     bookingSource: booking.booking_source || 'DIRECT',
                     hotelId: metadata.hotelId || metadata.hotel_id,
-                    hotelName: metadata.hotelName || metadata.hotel_name,
+                    hotelName: hotelName || 'Unknown Hotel',
                     roomTypeId: metadata.roomTypeId || metadata.room_type_id,
                     roomName: metadata.roomType || metadata.room_type,
                     checkIn: metadata.checkInDate || metadata.check_in,
@@ -571,6 +652,11 @@ const createHotelRoutes = () => {
                     providerPhone: booking.provider_phone,
                     // Hold info for broker bookings
                     holdExpiresAt: booking.hold_expires_at,
+                    // Haram gate access
+                    closestGate,
+                    kaabaGate,
+                    // Visible dates for calendar display
+                    visibleDates,
                     // Timestamps
                     createdAt: booking.created_at,
                     updatedAt: booking.updated_at,
@@ -657,6 +743,9 @@ const createHotelRoutes = () => {
                     checkInTime: hotelRow.check_in_time,
                     checkOutTime: hotelRow.check_out_time,
                     cancellationPolicy: hotelRow.cancellation_policy,
+                    customPolicies: typeof hotelRow.custom_policies === 'string'
+                        ? JSON.parse(hotelRow.custom_policies)
+                        : (hotelRow.custom_policies || []),
                     status: hotelRow.status,
                     // New conversion-critical fields
                     manasikScore: hotelRow.manasik_score ? parseFloat(hotelRow.manasik_score) : null,
@@ -706,7 +795,7 @@ const createHotelRoutes = () => {
         try {
             const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
             const { id } = ctx.params;
-            const { name, description, address, city, state, country, zipCode, latitude, longitude, starRating, checkInTime, checkOutTime, cancellationPolicy, status } = ctx.request.body;
+            const { name, description, address, city, state, country, zipCode, latitude, longitude, starRating, checkInTime, checkOutTime, cancellationPolicy, customPolicies, status } = ctx.request.body;
             if (!userId) {
                 ctx.status = 401;
                 ctx.body = { error: 'Unauthorized' };
@@ -748,6 +837,8 @@ const createHotelRoutes = () => {
                 updateData.check_out_time = checkOutTime;
             if (cancellationPolicy !== undefined)
                 updateData.cancellation_policy = cancellationPolicy;
+            if (customPolicies !== undefined)
+                updateData.custom_policies = JSON.stringify(customPolicies);
             if (status !== undefined)
                 updateData.status = status;
             updateData.updated_at = new Date();
@@ -849,6 +940,78 @@ const createHotelRoutes = () => {
             console.error('Refund booking error:', error);
             ctx.status = 500;
             ctx.body = { error: 'Failed to process refund' };
+        }
+    }));
+    /**
+     * PATCH /api/hotels/bookings/:id/payment-status
+     * Update payment status for a booking (hotel manager only)
+     * Changes booking status to 'CONFIRMED' when payment is marked as paid
+     */
+    router.patch('/bookings/:id/payment-status', auth_middleware_1.authMiddleware, (0, feature_flag_1.requireFeature)('hotelListing'), (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
+        try {
+            const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
+            const bookingId = ctx.params.id;
+            // @ts-ignore
+            const { paymentStatus } = ctx.request.body;
+            if (!userId) {
+                ctx.status = 401;
+                ctx.body = { error: 'Unauthorized' };
+                return;
+            }
+            if (!paymentStatus) {
+                ctx.status = 400;
+                ctx.body = { error: 'Missing required field: paymentStatus' };
+                return;
+            }
+            const pool = (0, connection_1.getPool)();
+            const hotelRepository = new hotel_repository_1.HotelRepository();
+            // Get the booking
+            const [bookingRows] = yield pool.query('SELECT * FROM bookings WHERE id = ?', [bookingId]);
+            if (!bookingRows || bookingRows.length === 0) {
+                ctx.status = 404;
+                ctx.body = { error: 'Booking not found' };
+                return;
+            }
+            const booking = bookingRows[0];
+            const metadata = typeof booking.metadata === 'string'
+                ? JSON.parse(booking.metadata)
+                : booking.metadata;
+            const hotelId = metadata.hotelId || metadata.hotel_id;
+            // Verify user manages this hotel
+            const isManager = yield hotelRepository.isUserManagingHotel(userId, hotelId);
+            if (!isManager) {
+                ctx.status = 403;
+                ctx.body = { error: 'You do not have permission to update payment status for this hotel' };
+                return;
+            }
+            // Update booking payment status and change status to CONFIRMED if payment is PAID
+            const newStatus = paymentStatus === 'PAID' ? 'CONFIRMED' : booking.status;
+            const [result] = yield pool.query(`UPDATE bookings 
+         SET payment_status = ?,
+             status = ?,
+             updated_at = NOW()
+         WHERE id = ?`, [paymentStatus, newStatus, bookingId]);
+            if (result.affectedRows === 0) {
+                ctx.status = 500;
+                ctx.body = { error: 'Failed to update payment status' };
+                return;
+            }
+            ctx.body = {
+                success: true,
+                message: 'Payment status updated successfully',
+                booking: {
+                    bookingId,
+                    paymentStatus,
+                    status: newStatus,
+                    updatedAt: new Date().toISOString(),
+                },
+            };
+        }
+        catch (error) {
+            console.error('Update payment status error:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to update payment status' };
         }
     }));
     /**

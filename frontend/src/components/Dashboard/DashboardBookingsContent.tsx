@@ -6,6 +6,8 @@ import { apiClient } from "@/lib/api";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import AuthorSidebar from "./AuthorSidebar";
+import CreateBookingModal from "./CreateBookingModal";
+import crypto from 'crypto';
 
 interface Booking {
   id: string;
@@ -69,6 +71,7 @@ interface Booking {
   agentId?: string;
   agentName?: string;
   agentEmail?: string;
+  visibleDates?: string[];
   createdAt: string;
   updatedAt: string;
 }
@@ -82,6 +85,7 @@ const DashboardBookingsContent: React.FC = () => {
   const { user } = useAuth();
   const currentRoute = usePathname();
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [allHotels, setAllHotels] = useState<Hotel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
@@ -93,16 +97,46 @@ const DashboardBookingsContent: React.FC = () => {
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [refundAmount, setRefundAmount] = useState<string>('');
   const [refundReason, setRefundReason] = useState<string>('');
   const [processingRefund, setProcessingRefund] = useState(false);
+  const [processingPayment, setProcessingPayment] = useState(false);
+  const [showCreateBookingModal, setShowCreateBookingModal] = useState(false);
+  const [selectedHotelId, setSelectedHotelId] = useState<string>('');
 
   const userName = user ? `${user.firstName} ${user.lastName}` : 'User';
 
-  // Fetch bookings when filters change
+  // Fetch hotels and bookings on component mount
+  useEffect(() => {
+    fetchHotels();
+  }, []);
+
+  // Fetch bookings when filters change or user changes
   useEffect(() => {
     fetchBookings();
-  }, [filterStatus, filterHotel, filterDate, searchGuest]);
+  }, [user, filterStatus, filterHotel, filterDate, searchGuest]);
+
+  // Fetch user's managed hotels
+  const fetchHotels = async () => {
+    try {
+      const response = (await apiClient.get('/hotels/listings')) as { hotels?: any[] };
+      const hotelsList = response.hotels || [];
+      
+      // Filter for active hotels only
+      const activeHotels = hotelsList
+        .filter((h: any) => h.status === 'ACTIVE')
+        .map((h: any) => ({
+          id: h.id,
+          name: h.name,
+        }));
+      
+      setAllHotels(activeHotels);
+    } catch (err: any) {
+      console.error('Error fetching user hotels:', err);
+      setAllHotels([]);
+    }
+  };
 
   // Extract unique hotels from bookings for the filter dropdown
   const getUniqueHotels = (): Hotel[] => {
@@ -130,9 +164,27 @@ const DashboardBookingsContent: React.FC = () => {
         params.status = filterStatus;
       }
 
-      // Use user bookings endpoint for customer's own bookings
-      const response = (await apiClient.get('/users/me/bookings', { params })) as { bookings?: Booking[] };
+      // Add date parameter if a date is selected
+      if (filterDate) {
+        params.date = filterDate.toISOString().split('T')[0];
+      }
+
+      // Determine which endpoint to use based on current route
+      // /dashboard/listings/bookings = hotel manager view (use /hotels/bookings)
+      // /dashboard/bookings = customer view (use /users/me/bookings)
+      let endpoint = '/users/me/bookings';
+      
+      // Check if we're on the hotel listings bookings page
+      if (currentRoute && currentRoute.includes('/dashboard/listings/bookings')) {
+        endpoint = '/hotels/bookings';
+      }
+
+      console.log('[Bookings] Route:', currentRoute, 'Using endpoint:', endpoint, 'Params:', params);
+
+      const response = (await apiClient.get(endpoint, { params })) as { bookings?: Booking[] };
       let fetchedBookings = response.bookings || [];
+      
+      console.log('[Bookings] API Response:', { bookingCount: fetchedBookings.length, endpoint, firstBooking: fetchedBookings[0] });
       
       // Map the response to match our Booking interface
       fetchedBookings = fetchedBookings.map((b: any) => ({
@@ -160,18 +212,19 @@ const DashboardBookingsContent: React.FC = () => {
         kaabaGate: b.kaabaGate || null,
         roomTypeId: b.metadata?.roomTypeId || b.roomTypeId || '',
         roomName: b.roomType || b.metadata?.roomType || 'Room',
-        checkIn: b.checkInDate || b.metadata?.checkInDate || '',
-        checkOut: b.checkOutDate || b.metadata?.checkOutDate || '',
+        checkIn: b.checkIn || b.checkInDate || b.metadata?.checkInDate || '',
+        checkOut: b.checkOut || b.checkOutDate || b.metadata?.checkOutDate || '',
         nights: b.nights || b.metadata?.nights || 1,
         guestName: b.metadata?.guestName || '',
         guestEmail: b.metadata?.guestEmail || '',
         guestPhone: b.metadata?.guestPhone || '',
-        guestCount: b.guests || b.metadata?.guests || 1,
-        guests: b.guestDetails || [],
+        guestCount: b.guestCount || b.metadata?.guests || 1,
+        guests: Array.isArray(b.guests) ? b.guests : [],
         customerId: b.customerId,
         agentId: b.agentId,
         agentName: b.agentName,
         agentEmail: b.agentEmail,
+        visibleDates: b.visibleDates || [],
         createdAt: b.createdAt,
         updatedAt: b.updatedAt,
       }));
@@ -184,17 +237,6 @@ const DashboardBookingsContent: React.FC = () => {
       // Filter by hotel on client side
       if (filterHotel) {
         fetchedBookings = fetchedBookings.filter((b: Booking) => b.hotelId === filterHotel);
-      }
-      
-      // Filter by date on client side
-      if (filterDate) {
-        const filterDateStr = filterDate.toISOString().split('T')[0];
-        fetchedBookings = fetchedBookings.filter((b: Booking) => {
-          const checkIn = new Date(b.checkIn);
-          const checkOut = new Date(b.checkOut);
-          const selectedDate = new Date(filterDateStr);
-          return selectedDate >= checkIn && selectedDate < checkOut;
-        });
       }
       
       // Filter by guest name or email on client side
@@ -241,6 +283,62 @@ const DashboardBookingsContent: React.FC = () => {
       
       return currentDate >= checkIn && currentDate < checkOut;
     });
+  };
+
+  // Get expanded bookings for calendar display (each booking appears on all its dates)
+  const getExpandedBookingsForDateRange = () => {
+    const expandedBookings: { [dateStr: string]: Booking[] } = {};
+    
+    bookings.forEach(booking => {
+      const checkIn = new Date(booking.checkIn);
+      const checkOut = new Date(booking.checkOut);
+      
+      // Iterate through each day of the booking
+      const currentDate = new Date(checkIn);
+      while (currentDate < checkOut) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        if (!expandedBookings[dateStr]) {
+          expandedBookings[dateStr] = [];
+        }
+        expandedBookings[dateStr].push(booking);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+    });
+    
+    return expandedBookings;
+  };
+
+  const expandedBookings = getExpandedBookingsForDateRange();
+
+  // Count check-ins for a specific date
+  const getCheckInsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return bookings.filter(booking => {
+      const checkInDate = new Date(booking.checkIn).toISOString().split('T')[0];
+      return checkInDate === dateStr;
+    }).reduce((sum, booking) => sum + booking.guestCount, 0);
+  };
+
+  // Count check-outs for a specific date
+  const getCheckOutsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return bookings.filter(booking => {
+      const checkOutDate = new Date(booking.checkOut).toISOString().split('T')[0];
+      return checkOutDate === dateStr;
+    }).reduce((sum, booking) => sum + booking.guestCount, 0);
+  };
+
+  // Count pending bookings for a specific date
+  const getPendingBookingsForDate = (date: Date) => {
+    const dateStr = date.toISOString().split('T')[0];
+    return bookings.filter(booking => {
+      const checkIn = new Date(booking.checkIn);
+      const checkOut = new Date(booking.checkOut);
+      const currentDate = new Date(dateStr);
+      
+      // Booking is active on this date if it's between check-in and check-out
+      return currentDate >= checkIn && currentDate < checkOut && booking.status === 'PENDING';
+    }).reduce((sum, booking) => sum + booking.guestCount, 0);
   };
 
   // Calculate current month revenue based on calendar view
@@ -324,9 +422,22 @@ const DashboardBookingsContent: React.FC = () => {
     }
   };
 
+  const getStatusDisplayText = (status: string) => {
+    switch (status) {
+      case 'PENDING':
+        return 'Awaiting Payment';
+      case 'CONFIRMED':
+        return 'Confirmed';
+      default:
+        return status;
+    }
+  };
+
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'COMPLETED':
+        return 'bg-success';
+      case 'CONFIRMED':
         return 'bg-success';
       case 'PENDING':
         return 'bg-warning';
@@ -344,6 +455,8 @@ const DashboardBookingsContent: React.FC = () => {
   const getStatusBorderColor = (status: string) => {
     switch (status) {
       case 'COMPLETED':
+        return '#28a745';
+      case 'CONFIRMED':
         return '#28a745';
       case 'PENDING':
         return '#ffc107';
@@ -371,6 +484,14 @@ const DashboardBookingsContent: React.FC = () => {
       style: 'currency',
       currency: currency || 'USD',
     }).format(amount);
+  };
+
+  const getNetPaid = (booking: Booking) => {
+    return booking.total - (booking.refundAmount || 0);
+  };
+
+  const getMD5Reference = (bookingId: string) => {
+    return crypto.createHash('md5').update(bookingId).digest('hex').substring(0, 8).toUpperCase();
   };
 
   const handleViewDetails = (booking: Booking) => {
@@ -433,6 +554,51 @@ const DashboardBookingsContent: React.FC = () => {
     } finally {
       setProcessingRefund(false);
     }
+  };
+
+  const handleOpenPaymentModal = () => {
+    if (selectedBooking) {
+      setShowPaymentModal(true);
+    }
+  };
+
+  const handleClosePaymentModal = () => {
+    setShowPaymentModal(false);
+  };
+
+  const handleMarkAsPaid = async () => {
+    if (!selectedBooking) return;
+
+    setProcessingPayment(true);
+    try {
+      await apiClient.patch(`/hotels/bookings/${selectedBooking.id}/payment-status`, {
+        paymentStatus: 'PAID',
+      });
+
+      alert('Payment status updated to Paid!');
+      handleClosePaymentModal();
+      setShowDetailsModal(false);
+      setSelectedBooking(null);
+      // Force a fresh fetch of bookings
+      await fetchBookings();
+    } catch (err: any) {
+      alert(err.error || 'Failed to update payment status');
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const handleCreateBooking = () => {
+    // Get the first hotel ID from bookings, or use empty string
+    const firstHotelId = bookings.length > 0 ? bookings[0].hotelId : '';
+    setSelectedHotelId(firstHotelId);
+    setShowCreateBookingModal(true);
+  };
+
+  const handleBookingCreated = () => {
+    setShowCreateBookingModal(false);
+    // Refresh bookings list
+    fetchBookings();
   };
 
   const handlePrintConfirmation = () => {
@@ -775,7 +941,7 @@ const DashboardBookingsContent: React.FC = () => {
           <h1>🏨 Booking Confirmation</h1>
           <div class="header-content">
             <span class="booking-id">${selectedBooking.id}</span>
-            <span class="status-badge status-${selectedBooking.status}">${selectedBooking.status}</span>
+            <span class="status-badge status-${selectedBooking.status}">${getStatusDisplayText(selectedBooking.status)}</span>
           </div>
         </div>
 
@@ -997,74 +1163,10 @@ const DashboardBookingsContent: React.FC = () => {
     }
   };
 
-  const getPaymentStatusBadge = (status: string) => {
-    switch (status) {
-      case 'PAID':
-        return { class: 'bg-success', label: 'Paid' };
-      case 'PENDING':
-        return { class: 'bg-warning', label: 'Pending' };
-      case 'REFUNDED':
-        return { class: 'bg-info', label: 'Refunded' };
-      case 'FAILED':
-        return { class: 'bg-danger', label: 'Failed' };
-      default:
-        return { class: 'bg-secondary', label: status || 'Unknown' };
-    }
-  };
-
   return (
     <>
-      <div className="container pt-5 pb-5">
-        <div className="row">
-          <div className="col-xl-8 col-xxl-9">
-            <ul className="nav nav-tabs most-popular-tab">
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/dashboard/bookings"
-                    className={`dropdown-item ${
-                      currentRoute === "/dashboard/bookings" ? "active" : ""
-                    }`}
-                  >Your Bookings</Link>
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/dashboard/listings"
-                    className={`dropdown-item ${
-                      currentRoute === "/dashboard/listings" || currentRoute === "/dashboard/listings/bookings" ? "active" : ""
-                    }`}
-                  >Your Listings</Link>
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/account/"
-                    className={`dropdown-item ${
-                      currentRoute === "/account/" ? "active" : ""
-                    }`}
-                  >Account</Link>
-                </button>
-              </li>
-              <li className="nav-item" role="presentation">
-                <button>
-                  <Link
-                    href="/payments/"
-                    className={`dropdown-item ${
-                      currentRoute === "/payments/" ? "active" : ""
-                    }`}
-                  >Payments</Link>
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div className="author-area">
-        <div className="container">
+      <div className="author-area" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+        <div style={{ width: '100%', maxWidth: '1640px', padding: '0 24px' }}>
           <div className="row">
             <div className="col-xl-8 col-xxl-9">
               <div className="author-content-wrap">
@@ -1075,6 +1177,25 @@ const DashboardBookingsContent: React.FC = () => {
                       ? "View and manage all bookings for your hotels."
                       : "View and manage your bookings."}
                   </p>
+                  
+                  {/* Create Booking Button for Hotel Managers */}
+                  <div className="mt-3 mb-3">
+                    <button
+                      className="btn btn-primary"
+                      onClick={() => {
+                        // Get the first hotel ID from all active hotels
+                        const hotelId = allHotels.length > 0 ? allHotels[0].id : '';
+                        if (hotelId) {
+                          setSelectedHotelId(hotelId);
+                          setShowCreateBookingModal(true);
+                        } else {
+                          alert('No hotels found. Please create a hotel first.');
+                        }
+                      }}
+                    >
+                      <i className="ri-add-line me-2"></i>Create Booking
+                    </button>
+                  </div>
                   
                   {/* Filter Controls */}
                   <div className="d-flex gap-2 mt-3 mb-4 flex-wrap">
@@ -1189,6 +1310,9 @@ const DashboardBookingsContent: React.FC = () => {
                     <div className="d-flex gap-2" style={{ minWidth: 'max-content' }}>
                       {calendarDates.map((date, index) => {
                         const bookingsOnDate = getBookingsForDate(date);
+                        const checkIns = getCheckInsForDate(date);
+                        const checkOuts = getCheckOutsForDate(date);
+                        const pending = getPendingBookingsForDate(date);
                         const isToday = date.toDateString() === new Date().toDateString();
                         const isSelected = filterDate && filterDate.toDateString() === date.toDateString();
                         const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
@@ -1201,7 +1325,7 @@ const DashboardBookingsContent: React.FC = () => {
                             className="card text-center"
                             onClick={() => handleDateClick(date)}
                             style={{
-                              minWidth: calendarView === 'day' ? '80px' : '60px',
+                              minWidth: calendarView === 'day' ? '100px' : '80px',
                               backgroundColor: isSelected ? '#fff3cd' : (isToday ? '#e3f2fd' : 'white'),
                               border: isSelected ? '2px solid #ffc107' : (isToday ? '2px solid #2196f3' : '1px solid #dee2e6'),
                               cursor: 'pointer',
@@ -1239,12 +1363,33 @@ const DashboardBookingsContent: React.FC = () => {
                                   {bookingsOnDate.length}
                                 </div>
                               )}
+                              {(checkIns > 0 || pending > 0 || checkOuts > 0) && (
+                                <div style={{ marginTop: '6px', fontSize: '0.7rem', lineHeight: '1.3', display: 'flex', justifyContent: 'center', gap: '4px' }}>
+                                  {checkIns > 0 && (
+                                    <div style={{ color: '#28a745', fontWeight: '700', minWidth: '16px' }}>
+                                      {checkIns}
+                                    </div>
+                                  )}
+                                  {pending > 0 && (
+                                    <div style={{ color: '#ffc107', fontWeight: '700', minWidth: '16px' }}>
+                                      {pending}
+                                    </div>
+                                  )}
+                                  {checkOuts > 0 && (
+                                    <div style={{ color: '#dc3545', fontWeight: '700', minWidth: '16px' }}>
+                                      {checkOuts}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
+
+
                 </div>
 
                 {/* Loading State */}
@@ -1364,159 +1509,365 @@ const DashboardBookingsContent: React.FC = () => {
                       </div>
                     </div>
 
-                    {/* Bookings Table */}
-                    <div className="list-group">
-                      {bookings.map((booking) => (
-                        <div 
-                          key={booking.id} 
-                          className="list-group-item mb-3 p-0 rounded"
-                          style={{
-                            border: '1px solid #dee2e6',
-                            borderLeftWidth: '6px',
-                            borderLeftColor: getStatusBorderColor(booking.status),
-                          }}
-                        >
-                          <div className="p-3">
-                            {/* Top row: Booked on date (left) and Status badge (right) */}
-                            <div className="d-flex justify-content-between align-items-center mb-2">
-                              <small className="text-muted" style={{ fontSize: '0.85rem' }}>
-                                Booked on {formatDate(booking.createdAt)}
-                              </small>
-                              <span className={`badge ${getStatusBadgeClass(booking.status)}`}>
-                                {booking.status}
-                              </span>
-                            </div>
-
-                            {/* Hotel and Room name */}
-                            <div className="mb-2">
-                              <h5 className="mb-1">{booking.hotelName}</h5>
-                              <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
-                                {booking.roomName}
-                              </p>
-                            </div>
-
-                            {/* Single row with guest info, dates, and price */}
-                            <div className="d-flex justify-content-between align-items-end mb-3">
-                              <div className="d-flex gap-4">
-                                {/* Guest info */}
-                                <div>
-                                  <small className="text-muted d-block">
-                                    <i className="ri-user-line me-1"></i>
-                                    {booking.guestName}
-                                  </small>
-                                  <small className="text-muted d-block">
-                                    <i className="ri-mail-line me-1"></i>
-                                    {booking.guestEmail}
-                                  </small>
-                                  <small className="text-muted d-block">
-                                    <i className="ri-group-line me-1"></i>
-                                    {booking.guestCount} {booking.guestCount === 1 ? 'guest' : 'guests'}
-                                  </small>
+                    {/* Bookings Table - Expanded by Visible Dates */}
+                    <div className="row">
+                      {/* Left Column: Check-ins and Check-outs */}
+                      <div className="col-lg-6">
+                        {(() => {
+                          // Calculate check-ins & check-outs count
+                          const checkInOutCount = bookings.flatMap((booking) => {
+                            let visibleDates = booking.visibleDates;
+                            if (!visibleDates || visibleDates.length === 0) {
+                              visibleDates = [];
+                              const checkIn = new Date(booking.checkIn);
+                              const checkOut = new Date(booking.checkOut);
+                              const currentDate = new Date(checkIn);
+                              while (currentDate < checkOut) {
+                                visibleDates.push(currentDate.toISOString().split('T')[0]);
+                                currentDate.setDate(currentDate.getDate() + 1);
+                              }
+                            }
+                            return (visibleDates || []).map((dateStr, dateIndex) => ({
+                              booking,
+                              date: new Date(dateStr),
+                              dateStr,
+                              isFirstDay: dateIndex === 0,
+                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
+                            }));
+                          }).filter((entry) => {
+                            const today = new Date().toISOString().split('T')[0];
+                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
+                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
+                            const isExpired = entry.booking.status === 'COMPLETED' && checkOutDateStr < today;
+                            return ((entry.isFirstDay && today === checkInDateStr) || (entry.isLastDay && today === checkOutDateStr)) && !isExpired;
+                          }).length;
+                          
+                          return (
+                            <h5 className="mb-3">
+                              <i className="ri-login-box-line me-2"></i>Check-ins & Check-outs
+                              {checkInOutCount > 0 && (
+                                <span className="badge bg-primary ms-2">{checkInOutCount}</span>
+                              )}
+                            </h5>
+                          );
+                        })()}
+                        <div className="list-group">
+                          {bookings.flatMap((booking) => {
+                            let visibleDates = booking.visibleDates;
+                            if (!visibleDates || visibleDates.length === 0) {
+                              visibleDates = [];
+                              const checkIn = new Date(booking.checkIn);
+                              const checkOut = new Date(booking.checkOut);
+                              const currentDate = new Date(checkIn);
+                              while (currentDate < checkOut) {
+                                visibleDates.push(currentDate.toISOString().split('T')[0]);
+                                currentDate.setDate(currentDate.getDate() + 1);
+                              }
+                            }
+                            return (visibleDates || []).map((dateStr, dateIndex) => ({
+                              booking,
+                              date: new Date(dateStr),
+                              dateStr,
+                              isFirstDay: dateIndex === 0,
+                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
+                            }));
+                          }).filter((entry) => {
+                            const today = new Date().toISOString().split('T')[0];
+                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
+                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
+                            // Only show check-ins/check-outs if today is the check-in or check-out date
+                            // Exclude expired bookings (COMPLETED with past check-out date)
+                            const isExpired = entry.booking.status === 'COMPLETED' && checkOutDateStr < today;
+                            return ((entry.isFirstDay && today === checkInDateStr) || (entry.isLastDay && today === checkOutDateStr)) && !isExpired;
+                          }).map((entry) => {
+                            let borderColor = getStatusBorderColor(entry.booking.status);
+                            if (filterDate) {
+                              const selectedDateStr = filterDate.toISOString().split('T')[0];
+                              const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
+                              const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
+                              if (selectedDateStr === checkInDateStr) {
+                                borderColor = '#28a745';
+                              } else if (selectedDateStr === checkOutDateStr) {
+                                borderColor = '#dc3545';
+                              } else if (entry.booking.status === 'PENDING') {
+                                borderColor = '#ffc107';
+                              }
+                            }
+                            return (
+                            <div 
+                              key={`${entry.booking.id}-${entry.dateStr}`} 
+                              className="list-group-item mb-3 p-0 rounded"
+                              style={{
+                                border: '1px solid #dee2e6',
+                                borderLeftWidth: '6px',
+                                borderLeftColor: borderColor,
+                              }}
+                            >
+                              <div className="p-3">
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <div className="d-flex align-items-center gap-2">
+                                    <small className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                      Booked on {formatDate(entry.booking.createdAt)}
+                                    </small>
+                                    {entry.isFirstDay && (
+                                      <span className="badge bg-info" style={{ fontSize: '0.7rem' }}>
+                                        <i className="ri-login-box-line me-1"></i>Check-in
+                                      </span>
+                                    )}
+                                    {entry.isLastDay && (
+                                      <span className="badge bg-warning" style={{ fontSize: '0.7rem' }}>
+                                        <i className="ri-logout-box-line me-1"></i>Check-out
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="d-flex align-items-center gap-2">
+                                    <span className="badge bg-secondary" style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                                      REF: {getMD5Reference(entry.booking.id)}
+                                    </span>
+                                    {entry.booking.status !== 'REFUNDED' && (
+                                      <span className={`badge ${getStatusBadgeClass(entry.booking.status)}`} style={{ fontSize: '0.7rem' }}>
+                                        {entry.booking.status}
+                                      </span>
+                                    )}
+                                  </div>
                                 </div>
-                                
-                                {/* Date info */}
-                                <div>
-                                  <small className="text-muted d-block">
-                                    <i className="ri-calendar-check-line me-1"></i>
-                                    {formatDate(booking.checkIn)}
-                                  </small>
+                                <div className="mb-2">
+                                  <h5 className="mb-1">{entry.booking.hotelName}</h5>
+                                  <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+                                    {entry.booking.roomName}
+                                  </p>
+                                </div>
+                                <div className="mb-2">
                                   <small className="text-muted d-block">
                                     <i className="ri-calendar-line me-1"></i>
-                                    {formatDate(booking.checkOut)}
-                                  </small>
-                                  <small className="text-muted d-block">
-                                    <i className="ri-moon-line me-1"></i>
-                                    {booking.nights} {booking.nights === 1 ? 'night' : 'nights'}
+                                    {formatDate(entry.dateStr)}
                                   </small>
                                 </div>
-                              </div>
-
-                              {/* Price section */}
-                              <div className="text-end">
-                                <h5 className="mb-0 text-primary">
-                                  {booking.refundAmount && booking.refundAmount > 0
-                                    ? formatCurrency(
-                                        booking.total - booking.refundAmount,
-                                        booking.currency
-                                      )
-                                    : formatCurrency(booking.total, booking.currency)}
-                                </h5>
-                                {booking.refundAmount && booking.refundAmount > 0 && (
-                                  <small className="text-muted d-block mb-2" style={{ textDecoration: 'line-through' }}>
-                                    {formatCurrency(booking.total, booking.currency)}
-                                  </small>
-                                )}
-                                <small className="text-muted d-block mb-2">
-                                  {booking.refundAmount && booking.refundAmount > 0 ? (
-                                    <>
-                                      (Subtotal: {formatCurrency(
-                                        booking.subtotal - (booking.refundAmount * booking.subtotal / booking.total),
-                                        booking.currency
-                                      )} + Tax: {formatCurrency(
-                                        booking.tax - (booking.refundAmount * booking.tax / booking.total),
-                                        booking.currency
-                                      )})
-                                    </>
-                                  ) : (
-                                    <>
-                                      (Subtotal: {formatCurrency(booking.subtotal, booking.currency)} + 
-                                      Tax: {formatCurrency(booking.tax, booking.currency)})
-                                    </>
-                                  )}
-                                </small>
-                                {/* Visual scale for nights */}
-                                <div className="d-flex align-items-center justify-content-end gap-1">
-                                  {Array.from({ length: booking.nights }, (_, i) => (
-                                    <div
-                                      key={i}
-                                      style={{
-                                        width: '8px',
-                                        height: '8px',
-                                        borderRadius: '50%',
-                                        backgroundColor: '#6c757d',
-                                      }}
-                                    ></div>
-                                  ))}
-                                  <small className="text-muted ms-1" style={{ fontSize: '0.7rem' }}>
-                                    {booking.nights}n
-                                  </small>
+                                <div className="d-flex justify-content-between align-items-end mb-3">
+                                  <div className="d-flex gap-4">
+                                    <div>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-user-line me-1"></i>
+                                        {entry.booking.guestName}
+                                      </small>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-group-line me-1"></i>
+                                        {entry.booking.guestCount} {entry.booking.guestCount === 1 ? 'guest' : 'guests'}
+                                      </small>
+                                    </div>
+                                    <div>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-calendar-check-line me-1"></i>
+                                        {formatDate(entry.booking.checkIn)}
+                                      </small>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-calendar-close-line me-1"></i>
+                                        {formatDate(entry.booking.checkOut)}
+                                      </small>
+                                    </div>
+                                  </div>
+                                  <div className="text-end">
+                                    <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0d6efd' }}>
+                                      {formatCurrency(getNetPaid(entry.booking), entry.booking.currency)}
+                                    </div>
+                                    {entry.booking.refundAmount && entry.booking.refundAmount > 0 && (
+                                      <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>
+                                        (Refunded: {formatCurrency(entry.booking.refundAmount, entry.booking.currency)})
+                                      </small>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="d-flex gap-2">
+                                  <button 
+                                    className="btn btn-sm btn-outline-secondary"
+                                    onClick={() => handleViewDetails(entry.booking)}
+                                  >
+                                    <i className="ri-file-text-line me-1"></i>
+                                    View Details
+                                  </button>
                                 </div>
                               </div>
                             </div>
-
-                            {/* Action buttons */}
-                            <div className="d-flex gap-2">
-                              <Link
-                                href={`/dashboard/stay-details/?hotelId=${booking.hotelId}`}
-                                className="btn btn-sm btn-outline-primary"
-                              >
-                                <i className="ri-hotel-line me-1"></i>
-                                View Hotel
-                              </Link>
-                              {(booking.status === 'COMPLETED' || booking.status === 'COMPLETED' || booking.status === 'PENDING') && (
-                                <button 
-                                  className="btn btn-sm btn-warning"
-                                  onClick={() => {
-                                    setSelectedBooking(booking);
-                                    handleOpenRefundModal();
-                                  }}
-                                >
-                                  <i className="ri-refund-2-line me-1"></i>
-                                  Refund
-                                </button>
-                              )}
-                              <button 
-                                className="btn btn-sm btn-outline-secondary"
-                                onClick={() => handleViewDetails(booking)}
-                              >
-                                <i className="ri-file-text-line me-1"></i>
-                                View Details
-                              </button>
-                            </div>
-                          </div>
+                            );
+                          })}
                         </div>
-                      ))}
+                      </div>
+
+                      {/* Right Column: Staying Over */}
+                      <div className="col-lg-6">
+                        {(() => {
+                          // Calculate staying over count
+                          const stayingOverCount = bookings.flatMap((booking) => {
+                            let visibleDates = booking.visibleDates;
+                            if (!visibleDates || visibleDates.length === 0) {
+                              visibleDates = [];
+                              const checkIn = new Date(booking.checkIn);
+                              const checkOut = new Date(booking.checkOut);
+                              const currentDate = new Date(checkIn);
+                              while (currentDate < checkOut) {
+                                visibleDates.push(currentDate.toISOString().split('T')[0]);
+                                currentDate.setDate(currentDate.getDate() + 1);
+                              }
+                            }
+                            return (visibleDates || []).map((dateStr, dateIndex) => ({
+                              booking,
+                              date: new Date(dateStr),
+                              dateStr,
+                              isFirstDay: dateIndex === 0,
+                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
+                            }));
+                          }).filter((entry) => {
+                            const today = new Date().toISOString().split('T')[0];
+                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
+                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
+                            // Only show staying over if:
+                            // - Check-in was before today (not today)
+                            // - Check-out is after today (not today)
+                            // - Booking is not COMPLETED status
+                            return checkInDateStr < today && checkOutDateStr > today && entry.booking.status !== 'COMPLETED';
+                          }).length;
+                          
+                          return (
+                            <h5 className="mb-3">
+                              <i className="ri-hotel-bed-line me-2"></i>Staying Over
+                              {stayingOverCount > 0 && (
+                                <span className="badge bg-primary ms-2">{stayingOverCount}</span>
+                              )}
+                            </h5>
+                          );
+                        })()}
+                        <div className="list-group">
+                          {bookings.flatMap((booking) => {
+                            let visibleDates = booking.visibleDates;
+                            if (!visibleDates || visibleDates.length === 0) {
+                              visibleDates = [];
+                              const checkIn = new Date(booking.checkIn);
+                              const checkOut = new Date(booking.checkOut);
+                              const currentDate = new Date(checkIn);
+                              while (currentDate < checkOut) {
+                                visibleDates.push(currentDate.toISOString().split('T')[0]);
+                                currentDate.setDate(currentDate.getDate() + 1);
+                              }
+                            }
+                            return (visibleDates || []).map((dateStr, dateIndex) => ({
+                              booking,
+                              date: new Date(dateStr),
+                              dateStr,
+                              isFirstDay: dateIndex === 0,
+                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
+                            }));
+                          }).filter((entry) => {
+                            const today = new Date().toISOString().split('T')[0];
+                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
+                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
+                            // Only show staying over if:
+                            // - Check-in was before today (not today)
+                            // - Check-out is after today (not today)
+                            // - Booking is not COMPLETED status
+                            return checkInDateStr < today && checkOutDateStr > today && entry.booking.status !== 'COMPLETED';
+                          }).map((entry) => {
+                            let borderColor = getStatusBorderColor(entry.booking.status);
+                            if (filterDate) {
+                              const selectedDateStr = filterDate.toISOString().split('T')[0];
+                              const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
+                              const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
+                              if (selectedDateStr === checkInDateStr) {
+                                borderColor = '#28a745';
+                              } else if (selectedDateStr === checkOutDateStr) {
+                                borderColor = '#dc3545';
+                              } else if (entry.booking.status === 'PENDING') {
+                                borderColor = '#ffc107';
+                              }
+                            }
+                            return (
+                            <div 
+                              key={`${entry.booking.id}-${entry.dateStr}`} 
+                              className="list-group-item mb-3 p-0 rounded"
+                              style={{
+                                border: '1px solid #dee2e6',
+                                borderLeftWidth: '6px',
+                                borderLeftColor: borderColor,
+                              }}
+                            >
+                              <div className="p-3">
+                                <div className="d-flex justify-content-between align-items-center mb-2">
+                                  <small className="text-muted" style={{ fontSize: '0.85rem' }}>
+                                    Booked on {formatDate(entry.booking.createdAt)}
+                                  </small>
+                                  <div className="d-flex align-items-center gap-2">
+                                    <span className="badge bg-secondary" style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
+                                      REF: {getMD5Reference(entry.booking.id)}
+                                    </span>
+                                    {entry.booking.status !== 'REFUNDED' && (
+                                      <span className={`badge ${getStatusBadgeClass(entry.booking.status)}`} style={{ fontSize: '0.7rem' }}>
+                                        {entry.booking.status}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="mb-2">
+                                  <h5 className="mb-1">{entry.booking.hotelName}</h5>
+                                  <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
+                                    {entry.booking.roomName}
+                                  </p>
+                                </div>
+                                <div className="mb-2">
+                                  <small className="text-muted d-block">
+                                    <i className="ri-calendar-line me-1"></i>
+                                    {formatDate(entry.dateStr)}
+                                  </small>
+                                </div>
+                                <div className="d-flex justify-content-between align-items-end mb-3">
+                                  <div className="d-flex gap-4">
+                                    <div>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-user-line me-1"></i>
+                                        {entry.booking.guestName}
+                                      </small>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-group-line me-1"></i>
+                                        {entry.booking.guestCount} {entry.booking.guestCount === 1 ? 'guest' : 'guests'}
+                                      </small>
+                                    </div>
+                                    <div>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-calendar-check-line me-1"></i>
+                                        {formatDate(entry.booking.checkIn)}
+                                      </small>
+                                      <small className="text-muted d-block">
+                                        <i className="ri-calendar-close-line me-1"></i>
+                                        {formatDate(entry.booking.checkOut)}
+                                      </small>
+                                    </div>
+                                  </div>
+                                  <div className="text-end">
+                                    <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0d6efd' }}>
+                                      {formatCurrency(getNetPaid(entry.booking), entry.booking.currency)}
+                                    </div>
+                                    {entry.booking.refundAmount && entry.booking.refundAmount > 0 && (
+                                      <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>
+                                        (Refunded: {formatCurrency(entry.booking.refundAmount, entry.booking.currency)})
+                                      </small>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="d-flex gap-2">
+                                  <button 
+                                    className="btn btn-sm btn-outline-secondary"
+                                    onClick={() => handleViewDetails(entry.booking)}
+                                  >
+                                    <i className="ri-file-text-line me-1"></i>
+                                    View Details
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                            );
+                          })}
+                        </div>
+                      </div>
                     </div>
+
                   </>
                 )}
               </div>
@@ -1561,10 +1912,7 @@ const DashboardBookingsContent: React.FC = () => {
                   </div>
                   <div className="d-flex gap-2">
                     <span className={`badge ${getStatusBadgeClass(selectedBooking.status)}`}>
-                      {selectedBooking.status}
-                    </span>
-                    <span className={`badge ${getPaymentStatusBadge(selectedBooking.paymentStatus || '').class}`}>
-                      {getPaymentStatusBadge(selectedBooking.paymentStatus || '').label}
+                      {getStatusDisplayText(selectedBooking.status)}
                     </span>
                   </div>
                 </div>
@@ -1754,19 +2102,19 @@ const DashboardBookingsContent: React.FC = () => {
                       </div>
                       
                       {/* Refund Information */}
-                      {selectedBooking.refundAmount && selectedBooking.refundAmount > 0 && (
+                      {(selectedBooking.refundAmount && selectedBooking.refundAmount > 0) || selectedBooking.status === 'REFUNDED' || selectedBooking.paymentStatus === 'REFUNDED' ? (
                         <>
                           <hr style={{ borderStyle: 'dashed', borderColor: '#28a745' }} />
                           <div className="d-flex justify-content-between mb-2">
                             <span className="text-success">
                               <i className="ri-refund-2-line me-1"></i>
-                              {selectedBooking.refundAmount >= selectedBooking.total ? 'Full Refund' : 'Partial Refund'}
+                              {selectedBooking.refundAmount && selectedBooking.refundAmount >= selectedBooking.total ? 'Full Refund' : 'Partial Refund'}
                             </span>
                             <strong className="text-success">
-                              -{formatCurrency(selectedBooking.refundAmount, selectedBooking.currency)}
+                              -{formatCurrency(selectedBooking.refundAmount || 0, selectedBooking.currency)}
                             </strong>
                           </div>
-                          {selectedBooking.refundAmount < selectedBooking.total && (
+                          {selectedBooking.refundAmount && selectedBooking.refundAmount < selectedBooking.total && (
                             <div className="d-flex justify-content-between">
                               <strong>Net Amount Paid</strong>
                               <strong className="text-primary fs-5">
@@ -1787,7 +2135,7 @@ const DashboardBookingsContent: React.FC = () => {
                             </small>
                           )}
                         </>
-                      )}
+                      ) : null}
                       
                       {/* Cancelled without refund */}
                       {selectedBooking.status === 'CANCELLED' && !selectedBooking.refundAmount && (
@@ -1824,6 +2172,16 @@ const DashboardBookingsContent: React.FC = () => {
                 >
                   Close
                 </button>
+                {selectedBooking.status === 'PENDING' && selectedBooking.paymentStatus !== 'PAID' && (
+                  <button 
+                    type="button" 
+                    className="btn btn-success"
+                    onClick={handleOpenPaymentModal}
+                  >
+                    <i className="ri-check-line me-2"></i>
+                    Mark as Paid
+                  </button>
+                )}
                 {(selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'PENDING') && (
                   <button 
                     type="button" 
@@ -1834,14 +2192,14 @@ const DashboardBookingsContent: React.FC = () => {
                     Process Refund
                   </button>
                 )}
-                <button 
-                  type="button" 
+                <Link
+                  href={`/bookings/${selectedBooking.id}/confirmation`}
                   className="btn btn-outline-primary"
-                  onClick={handlePrintConfirmation}
+                  target="_blank"
                 >
                   <i className="ri-printer-line me-2"></i>
                   Print Confirmation
-                </button>
+                </Link>
                 <Link
                   href={`/dashboard/stay-details/?hotelId=${selectedBooking.hotelId}`}
                   className="btn btn-primary"
@@ -1997,6 +2355,100 @@ const DashboardBookingsContent: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Payment Status Modal */}
+      {showPaymentModal && selectedBooking && (
+        <div 
+          className="modal fade show" 
+          style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={handleClosePaymentModal}
+        >
+          <div 
+            className="modal-dialog modal-dialog-centered"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-content">
+              <div className="modal-header bg-success bg-opacity-10">
+                <h5 className="modal-title">
+                  <i className="ri-check-double-line me-2 text-success"></i>
+                  Mark Payment as Paid
+                </h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={handleClosePaymentModal}
+                ></button>
+              </div>
+              <div className="modal-body">
+                {/* Booking Summary */}
+                <div className="mb-4 p-3 rounded" style={{ backgroundColor: '#f8f9fa' }}>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Booking ID</span>
+                    <strong className="font-monospace">REF: {getMD5Reference(selectedBooking.id)}</strong>
+                  </div>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Guest</span>
+                    <strong>{selectedBooking.guestName}</strong>
+                  </div>
+                  <div className="d-flex justify-content-between mb-2">
+                    <span className="text-muted">Hotel</span>
+                    <strong>{selectedBooking.hotelName}</strong>
+                  </div>
+                  <div className="d-flex justify-content-between">
+                    <span className="text-muted">Total Amount</span>
+                    <strong className="text-primary fs-5">{formatCurrency(selectedBooking.total, selectedBooking.currency)}</strong>
+                  </div>
+                </div>
+
+                {/* Confirmation Message */}
+                <div className="alert alert-info mb-0">
+                  <i className="ri-information-line me-2"></i>
+                  <strong>Confirm Payment:</strong> Are you sure you want to mark this booking payment as <strong>Paid</strong>? This action will update the payment status and the booking will no longer show as "Awaiting Payment".
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={handleClosePaymentModal}
+                  disabled={processingPayment}
+                >
+                  Cancel
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-success"
+                  onClick={handleMarkAsPaid}
+                  disabled={processingPayment}
+                >
+                  {processingPayment ? (
+                    <>
+                      <span className="spinner-border spinner-border-sm me-2"></span>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <i className="ri-check-line me-2"></i>
+                      Mark as Paid
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Create Booking Modal */}
+      <CreateBookingModal
+        isOpen={showCreateBookingModal}
+        onClose={() => setShowCreateBookingModal(false)}
+        hotelId={selectedHotelId}
+        onBookingCreated={(booking) => {
+          // Refresh bookings list
+          fetchBookings();
+        }}
+      />
     </>
   );
 };

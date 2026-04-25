@@ -61,21 +61,16 @@ const Amenities: React.FC<AmenitiesProps> = ({ amenities }) => {
 
   return (
     <>
-      <div className="stay-amenities box-style mb-4">
-        <div className="box-title">
-          <h4>Amenities</h4>
-          <p>About the property&apos;s amenities and services</p>
-        </div>
-
+      <div className="stay-amenities box-style mb-4" style={{ padding: '12px' }}>
         <div className="row">
           {availableAmenities.map((amenity) => (
             <div key={amenity} className="col-lg-4 col-sm-6">
-              <div className="d-flex align-items-center mb-25">
+              <div className="d-flex align-items-center" style={{ marginBottom: '12px' }}>
                 <i 
                   className={amenityIcons[amenity] || 'ri-check-line'} 
                   style={{ fontSize: '20px', color: '#10B981' }}
                 ></i>
-                <span className="ms-3">{amenityLabels[amenity] || amenity}</span>
+                <span className="ms-2" style={{ fontSize: '0.95rem' }}>{amenityLabels[amenity] || amenity}</span>
               </div>
             </div>
           ))}

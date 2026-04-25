@@ -965,10 +965,7 @@ export const createHotelRoutes = () => {
 
       ctx.body = {
         message: 'Hotel updated successfully',
-        hotel: updatedHotel ? {
-          ...updatedHotel,
-          customPolicies: (updatedHotel as any).custom_policies ? JSON.parse((updatedHotel as any).custom_policies) : [],
-        } : null,
+        hotel: updatedHotel,
       };
     } catch (error) {
       console.error('Error updating hotel:', error);

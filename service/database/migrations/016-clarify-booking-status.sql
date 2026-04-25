@@ -1,0 +1,21 @@
+-- Migration: Clarify booking status values
+-- This documents the booking status lifecycle:
+-- PENDING: Booking is awaiting confirmation/payment
+-- CONFIRMED: Booking is confirmed and active
+-- COMPLETED: Booking has been completed (guest checked out)
+-- CANCELLED: Booking was cancelled by customer
+-- REFUNDED: Booking was refunded (full refund)
+
+-- Note: The existing ENUM already supports these values, this is just documentation
+-- The payment_status field (added in migration 015) tracks the payment state separately:
+-- PENDING: Payment not yet received
+-- PAID: Full payment received
+-- PARTIAL_REFUND: Partial refund issued (some amount refunded)
+-- FULLY_REFUNDED: Full refund issued (entire amount refunded)
+-- FAILED: Payment failed
+
+-- Example scenarios:
+-- 1. Normal booking: status=COMPLETED, payment_status=PAID
+-- 2. Booking with partial refund: status=COMPLETED, payment_status=PARTIAL_REFUND, refund_amount=X
+-- 3. Cancelled booking: status=CANCELLED, payment_status=FULLY_REFUNDED, refund_amount=total
+-- 4. Pending payment: status=CONFIRMED, payment_status=PENDING

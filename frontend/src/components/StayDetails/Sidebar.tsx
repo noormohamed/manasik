@@ -6,35 +6,69 @@ interface SidebarProps {
     starRating: number;
     averageRating: number;
     totalReviews: number;
+    cancellationPolicy: string;
     rooms: Array<{
+      id: string;
+      name: string;
       basePrice: number;
       currency: string;
+      capacity: number;
     }>;
   };
   checkIn: string;
   checkOut: string;
-  guests: number;
+  adults: number;
+  children: number;
   nights: number;
+  selectedRooms?: Array<{ roomId: string; quantity: number }>;
+  onCheckout?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, guests, nights }) => {
-  const minPrice = hotel.rooms.length > 0 
-    ? Math.min(...hotel.rooms.map(r => Number(r.basePrice)))
-    : 0;
-  const currency = hotel.rooms.length > 0 ? hotel.rooms[0].currency : 'USD';
+const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, adults, children, nights, selectedRooms = [], onCheckout }) => {
+  // Calculate total price from all selected rooms
+  const calculateTotalPrice = () => {
+    return selectedRooms.reduce((total, selected) => {
+      const room = hotel.rooms.find(r => r.id === selected.roomId);
+      return total + (room ? Number(room.basePrice) * selected.quantity * (nights || 1) : 0);
+    }, 0);
+  };
 
-  const subtotal = minPrice * (nights || 1);
+  // Get the first selected room's currency, or default to USD
+  const currency = selectedRooms.length > 0 
+    ? hotel.rooms.find(r => r.id === selectedRooms[0].roomId)?.currency || 'USD'
+    : (hotel.rooms.length > 0 ? hotel.rooms[0].currency : 'USD');
+
+  // Calculate per-night price (average across selected rooms)
+  const perNightPrice = selectedRooms.length > 0
+    ? calculateTotalPrice() / (nights || 1)
+    : (hotel.rooms.length > 0 ? Math.min(...hotel.rooms.map(r => Number(r.basePrice))) : 0);
+
+  const subtotal = calculateTotalPrice();
   const serviceCharge = 0;
   const total = subtotal + serviceCharge;
 
+  // Calculate total guest capacity
+  const totalCapacity = selectedRooms.reduce((total, selected) => {
+    const room = hotel.rooms.find(r => r.id === selected.roomId);
+    return total + (room ? room.capacity * selected.quantity : 0);
+  }, 0);
+
   return (
     <>
-      <div className="stay-details-sidebar">
+      <div 
+        className="stay-details-sidebar"
+        style={{
+          position: 'sticky',
+          top: 'calc(100px + 1.75rem + 50px)',
+          maxHeight: 'calc(100vh - 120px)',
+          overflowY: 'auto',
+        }}
+      >
         <div className="stay-single-sidebar-item">
           <div className="per-person">
             <div className="d-flex align-items-center justify-content-between mb-4">
               <h4>
-                ${minPrice} <span>/ Per Night</span>
+                ${perNightPrice.toFixed(2)} <span>/ Per Night</span>
               </h4>
 
               <div className="d-flex align-items-center">
@@ -49,19 +83,68 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, guests, nig
             </div>
 
             <div className="booking-date">
+              {selectedRooms.length > 0 && (
+                <div className="d-flex align-items-start p-30 divider">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                  >
+                    <path
+                      d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-2 15l-5-5 1.41-1.41L8 12.17l7.59-7.59L17 6l-9 9z"
+                      fill="#10B981"
+                    />
+                  </svg>
+
+                  <div className="ms-3">
+                    <h4>Rooms Selected ({selectedRooms.length})</h4>
+                    <div className="text-muted" style={{ fontSize: '0.9rem' }}>
+                      {selectedRooms.map((selected, idx) => {
+                        const room = hotel.rooms.find(r => r.id === selected.roomId);
+                        return (
+                          <div key={selected.roomId}>
+                            {room?.name} {selected.quantity > 1 ? `x${selected.quantity}` : ''}
+                          </div>
+                        );
+                      })}
+                      <div className="mt-2">
+                        <strong>Total capacity: {totalCapacity} guests</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="d-flex align-items-center p-30 divider">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="20"
-                  height="20"
-                  viewBox="0 0 20 20"
-                  fill="none"
-                >
-                  <path
-                    d="M15.8337 2.70829H15.6253V1.66663C15.6253 1.32496 15.342 1.04163 15.0003 1.04163C14.6587 1.04163 14.3753 1.32496 14.3753 1.66663V2.70829H10.6253V1.66663C10.6253 1.32496 10.342 1.04163 10.0003 1.04163C9.65866 1.04163 9.37533 1.32496 9.37533 1.66663V2.70829H5.62533V1.66663C5.62533 1.32496 5.34199 1.04163 5.00033 1.04163C4.65866 1.04163 4.37533 1.32496 4.37533 1.66663V2.70829H4.16699C2.44199 2.70829 1.04199 4.10829 1.04199 5.83329V15.8333C1.04199 17.5583 2.44199 18.9583 4.16699 18.9583H15.8337C17.5587 18.9583 18.9587 17.5583 18.9587 15.8333V5.83329C18.9587 4.10829 17.5587 2.70829 15.8337 2.70829ZM4.16699 3.95829H4.37533V4.99996C4.37533 5.34163 4.65866 5.62496 5.00033 5.62496C5.34199 5.62496 5.62533 5.34163 5.62533 4.99996V3.95829H9.37533V4.99996C9.37533 5.34163 9.65866 5.62496 10.0003 5.62496C10.342 5.62496 10.6253 5.34163 10.6253 4.99996V3.95829H14.3753V4.99996C14.3753 5.34163 14.6587 5.62496 15.0003 5.62496C15.342 5.62496 15.6253 5.34163 15.6253 4.99996V3.95829H15.8337C16.867 3.95829 17.7087 4.79996 17.7087 5.83329V7.70829H2.29199V5.83329C2.29199 4.79996 3.13366 3.95829 4.16699 3.95829ZM15.8337 17.7083H4.16699C3.13366 17.7083 2.29199 16.8666 2.29199 15.8333V8.95829H17.7087V15.8333C17.7087 16.8666 16.867 17.7083 15.8337 17.7083Z"
-                    fill="#10B981"
-                  />
-                </svg>
+                {checkIn && checkOut && nights > 0 ? (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                  >
+                    <path
+                      d="M10 0C4.48 0 0 4.48 0 10s4.48 10 10 10 10-4.48 10-10S15.52 0 10 0zm-2 15l-5-5 1.41-1.41L8 12.17l7.59-7.59L17 6l-9 9z"
+                      fill="#10B981"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                  >
+                    <path
+                      d="M15.8337 2.70829H15.6253V1.66663C15.6253 1.32496 15.342 1.04163 15.0003 1.04163C14.6587 1.04163 14.3753 1.32496 14.3753 1.66663V2.70829H10.6253V1.66663C10.6253 1.32496 10.342 1.04163 10.0003 1.04163C9.65866 1.04163 9.37533 1.32496 9.37533 1.66663V2.70829H5.62533V1.66663C5.62533 1.32496 5.34199 1.04163 5.00033 1.04163C4.65866 1.04163 4.37533 1.32496 4.37533 1.66663V2.70829H4.16699C2.44199 2.70829 1.04199 4.10829 1.04199 5.83329V15.8333C1.04199 17.5583 2.44199 18.9583 4.16699 18.9583H15.8337C17.5587 18.9583 18.9587 17.5583 18.9587 15.8333V5.83329C18.9587 4.10829 17.5587 2.70829 15.8337 2.70829ZM4.16699 3.95829H4.37533V4.99996C4.37533 5.34163 4.65866 5.62496 5.00033 5.62496C5.34199 5.62496 5.62533 5.34163 5.62533 4.99996V3.95829H9.37533V4.99996C9.37533 5.34163 9.65866 5.62496 10.0003 5.62496C10.342 5.62496 10.6253 5.34163 10.6253 4.99996V3.95829H14.3753V4.99996C14.3753 5.34163 14.6587 5.62496 15.0003 5.62496C15.342 5.62496 15.6253 5.34163 15.6253 4.99996V3.95829H15.8337C16.867 3.95829 17.7087 4.79996 17.7087 5.83329V7.70829H2.29199V5.83329C2.29199 4.79996 3.13366 3.95829 4.16699 3.95829ZM15.8337 17.7083H4.16699C3.13366 17.7083 2.29199 16.8666 2.29199 15.8333V8.95829H17.7087V15.8333C17.7087 16.8666 16.867 17.7083 15.8337 17.7083Z"
+                      fill="#10B981"
+                    />
+                  </svg>
+                )}
 
                 <div className="ms-3">
                   <h4>Booking Dates</h4>
@@ -96,7 +179,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, guests, nig
                 <div className="ms-3">
                   <h4>Guests</h4>
                   <div className="text-muted" style={{ fontSize: '0.9rem' }}>
-                    {guests} {guests === 1 ? 'guest' : 'guests'}
+                    {adults + children} total ({adults} adult{adults !== 1 ? 's' : ''}, {children} child{children !== 1 ? 'ren' : ''})
                   </div>
                 </div>
               </div>
@@ -106,7 +189,7 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, guests, nig
               <>
                 <ul className="ps-0 pe-0 list-unstyled fe-list">
                   <li className="d-flex align-items-center justify-content-between">
-                    <span>${minPrice} x {nights} night{nights !== 1 ? 's' : ''}</span>
+                    <span>${perNightPrice.toFixed(2)} x {nights} night{nights !== 1 ? 's' : ''}</span>
                     <span>${subtotal.toFixed(2)}</span>
                   </li>
 
@@ -123,10 +206,22 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, guests, nig
               </>
             )}
 
-            <div className="alert alert-info mt-3" style={{ fontSize: '0.85rem' }}>
-              <i className="ri-information-line me-2"></i>
-              Select a room below to add to cart or book directly
-            </div>
+            {selectedRooms.length === 0 && nights > 0 && (
+              <div className="alert alert-info mt-3" style={{ fontSize: '0.85rem' }}>
+                <i className="ri-information-line me-2"></i>
+                Select a room below to add to cart or book directly
+              </div>
+            )}
+
+            {selectedRooms.length > 0 && onCheckout && (
+              <button
+                className="btn btn-primary btn-lg w-100 mt-3"
+                onClick={onCheckout}
+              >
+                <i className="ri-shopping-cart-line me-2"></i>
+                Checkout - ${total.toFixed(2)} {currency}
+              </button>
+            )}
           </div>
         </div>
 
@@ -153,6 +248,32 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, guests, nig
             <div className="alert alert-success">
               <i className="ri-checkbox-circle-line me-2"></i>
               <strong>{hotel.rooms.length}</strong> room type{hotel.rooms.length !== 1 ? 's' : ''} available
+            </div>
+
+            <div className="mt-4 pt-3" style={{ borderTop: '1px solid #e0e0e0' }}>
+              <div className="d-flex align-items-center mb-3">
+                <i className="ri-time-line" style={{ fontSize: '20px', color: '#6B7280' }}></i>
+                <div className="ms-3">
+                  <h6 className="mb-1">Check-in</h6>
+                  <p className="mb-0 text-muted" style={{ fontSize: '0.9rem' }}>14:00</p>
+                </div>
+              </div>
+
+              <div className="d-flex align-items-center mb-3">
+                <i className="ri-time-line" style={{ fontSize: '20px', color: '#6B7280' }}></i>
+                <div className="ms-3">
+                  <h6 className="mb-1">Check-out</h6>
+                  <p className="mb-0 text-muted" style={{ fontSize: '0.9rem' }}>11:00</p>
+                </div>
+              </div>
+
+              <div className="d-flex align-items-start">
+                <i className="ri-file-text-line" style={{ fontSize: '20px', color: '#6B7280', marginTop: '2px' }}></i>
+                <div className="ms-3">
+                  <h6 className="mb-1">Cancellation Policy</h6>
+                  <p className="mb-0 text-muted" style={{ fontSize: '0.9rem' }}>{hotel.cancellationPolicy}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>

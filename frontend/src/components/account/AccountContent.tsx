@@ -24,7 +24,7 @@ const AccountContent = () => {
             <ul className="nav nav-tabs most-popular-tab">
               <li className="nav-item" role="presentation">
                 <button>
-                  <Link href="/dashboard/bookings" className={`dropdown-item ${currentRoute === "/dashboard/bookings" ? "active" : ""}`}>
+                  <Link href={currentRoute && currentRoute.includes('/dashboard/listings') ? "/dashboard/listings/bookings" : "/dashboard/bookings"} className={`dropdown-item ${(currentRoute === "/dashboard/bookings" || currentRoute === "/dashboard/listings/bookings") ? "active" : ""}`}>
                     Your Bookings
                   </Link>
                 </button>

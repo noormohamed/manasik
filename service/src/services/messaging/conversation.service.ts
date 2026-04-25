@@ -123,11 +123,13 @@ export class ConversationService {
   async getConversationById(conversationId: string): Promise<Conversation> {
     const query = `
       SELECT 
-        id, hotel_id as hotelId, booking_id as bookingId, subject, description,
-        status, created_by_id as createdById, created_by_role as createdByRole,
-        created_at as createdAt, updated_at as updatedAt
-      FROM conversations
-      WHERE id = ?
+        c.id, c.hotel_id as hotelId, c.booking_id as bookingId, c.subject, c.description,
+        c.status, c.created_by_id as createdById, c.created_by_role as createdByRole,
+        c.created_at as createdAt, c.updated_at as updatedAt,
+        b.status as bookingStatus, b.total, b.metadata as bookingMetadata
+      FROM conversations c
+      LEFT JOIN bookings b ON c.booking_id = b.id
+      WHERE c.id = ?
     `;
 
     const results = await this.db.query(query, [conversationId]);
@@ -136,6 +138,31 @@ export class ConversationService {
     }
 
     const conversation = results[0];
+
+    // Add booking info if available
+    if (conversation.bookingId && conversation.bookingMetadata) {
+      try {
+        // Handle both string and object metadata
+        const metadata = typeof conversation.bookingMetadata === 'string' 
+          ? JSON.parse(conversation.bookingMetadata)
+          : conversation.bookingMetadata;
+        
+        conversation.booking = {
+          id: conversation.bookingId,
+          checkIn: metadata.checkInDate,
+          checkOut: metadata.checkOutDate,
+          guests: metadata.guests,
+          status: conversation.bookingStatus,
+          total: conversation.total,
+        };
+      } catch (error) {
+        console.error('[ConversationService] Error parsing booking metadata:', error);
+      }
+      // Remove the flattened booking fields
+      delete conversation.bookingStatus;
+      delete conversation.total;
+      delete conversation.bookingMetadata;
+    }
 
     // Get participants
     const participants = await this.getConversationParticipants(conversationId);
@@ -293,8 +320,7 @@ export class ConversationService {
       params.push(hotelId);
     }
 
-    query += ` ORDER BY c.updated_at DESC LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
+    query += ` ORDER BY c.updated_at DESC LIMIT ${limit} OFFSET ${offset}`;
 
     const results = await this.db.query(query, params);
 
@@ -348,10 +374,10 @@ export class ConversationService {
       FROM conversations
       WHERE hotel_id = ?
       ORDER BY updated_at DESC
-      LIMIT ? OFFSET ?
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const results = await this.db.query(query, [hotelId, limit, offset]);
+    const results = await this.db.query(query, [hotelId]);
 
     // Enrich with participants and last message
     for (const conversation of results) {
@@ -413,8 +439,7 @@ export class ConversationService {
       params.push(hotelId);
     }
 
-    query += ` ORDER BY updated_at DESC LIMIT ?`;
-    params.push(limit);
+    query += ` ORDER BY updated_at DESC LIMIT ${limit}`;
 
     const results = await this.db.query(query, params);
 

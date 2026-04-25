@@ -19,6 +19,7 @@ export class Hotel {
   checkInTime: string = '14:00';
   checkOutTime: string = '11:00';
   cancellationPolicy?: string;
+  customPolicies?: any[];
   averageRating: number = 0;
   totalReviews: number = 0;
   createdAt: Date = new Date();

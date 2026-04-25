@@ -56,6 +56,16 @@ const DashboardContent: React.FC = () => {
                         <li className="nav-item" role="presentation">
                             <button>
                                 <Link
+                                    href="/dashboard/listings/bookings/"
+                                    className={`dropdown-item ${
+                                        currentRoute === "/dashboard/listings/bookings/" ? "active" : ""
+                                    }`}
+                                >Management</Link>
+                            </button>
+                        </li>
+                        <li className="nav-item" role="presentation">
+                            <button>
+                                <Link
                                     href="/account/"
                                     className={`dropdown-item ${
                                         currentRoute === "/account/" ? "active" : ""

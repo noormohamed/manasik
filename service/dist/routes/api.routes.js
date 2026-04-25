@@ -11,10 +11,12 @@ const feature_flag_1 = require("../middleware/feature-flag");
 const feature_flags_1 = require("../utils/feature-flags");
 const auth_routes_1 = require("./auth.routes");
 const user_routes_1 = require("./user.routes");
+const bookings_routes_1 = require("./bookings.routes");
 const hotel_routes_1 = require("../features/hotel/routes/hotel.routes");
 const credits_routes_1 = require("./credits.routes");
 const broker_routes_1 = require("./broker.routes");
 const messaging_routes_1 = require("./messaging.routes");
+const staff_booking_routes_1 = require("./staff-booking.routes");
 const createApiRouter = (db) => {
     console.log('[API Router] Creating API router with db:', !!db);
     const router = new koa_router_1.default({ prefix: '/api' });
@@ -37,6 +39,12 @@ const createApiRouter = (db) => {
         router.use(user_routes_1.userRoutes.routes());
         router.use(user_routes_1.userRoutes.allowedMethods());
     }
+    // Bookings routes (always enabled)
+    router.use(bookings_routes_1.bookingsRoutes.routes());
+    router.use(bookings_routes_1.bookingsRoutes.allowedMethods());
+    // Staff booking routes (always enabled)
+    router.use(staff_booking_routes_1.staffBookingRoutes.routes());
+    router.use(staff_booking_routes_1.staffBookingRoutes.allowedMethods());
     if (feature_flags_1.featureFlags.isEnabled('hotels')) {
         const hotelRoutes = (0, hotel_routes_1.createHotelRoutes)();
         router.use(hotelRoutes.routes());

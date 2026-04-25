@@ -20,6 +20,8 @@ export interface Message {
   conversationId: string;
   senderId: string;
   senderRole: string;
+  senderName?: string;
+  senderHotelName?: string;
   content: string;
   contentSanitized: string;
   messageType: string;
@@ -78,12 +80,16 @@ export class MessagingService {
   async getMessageById(messageId: string): Promise<Message> {
     const query = `
       SELECT 
-        id, conversation_id as conversationId, sender_id as senderId,
-        sender_role as senderRole, content, content_sanitized as contentSanitized,
-        message_type as messageType, metadata, created_at as createdAt,
-        updated_at as updatedAt, deleted_at as deletedAt
-      FROM messages
-      WHERE id = ? AND deleted_at IS NULL
+        m.id, m.conversation_id as conversationId, m.sender_id as senderId,
+        m.sender_role as senderRole, m.content, m.content_sanitized as contentSanitized,
+        m.message_type as messageType, m.metadata, m.created_at as createdAt,
+        m.updated_at as updatedAt, m.deleted_at as deletedAt,
+        CONCAT(u.first_name, ' ', u.last_name) as senderName, h.name as senderHotelName
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id AND m.sender_id = cp.user_id
+      LEFT JOIN hotels h ON cp.hotel_id = h.id
+      WHERE m.id = ? AND m.deleted_at IS NULL
     `;
 
     const results = await this.db.query(query, [messageId]);
@@ -108,17 +114,21 @@ export class MessagingService {
   ): Promise<Message[]> {
     const query = `
       SELECT 
-        id, conversation_id as conversationId, sender_id as senderId,
-        sender_role as senderRole, content, content_sanitized as contentSanitized,
-        message_type as messageType, metadata, created_at as createdAt,
-        updated_at as updatedAt, deleted_at as deletedAt
-      FROM messages
-      WHERE conversation_id = ? AND deleted_at IS NULL
-      ORDER BY created_at DESC
-      LIMIT ? OFFSET ?
+        m.id, m.conversation_id as conversationId, m.sender_id as senderId,
+        m.sender_role as senderRole, m.content, m.content_sanitized as contentSanitized,
+        m.message_type as messageType, m.metadata, m.created_at as createdAt,
+        m.updated_at as updatedAt, m.deleted_at as deletedAt,
+        CONCAT(u.first_name, ' ', u.last_name) as senderName, h.name as senderHotelName
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id AND m.sender_id = cp.user_id
+      LEFT JOIN hotels h ON cp.hotel_id = h.id
+      WHERE m.conversation_id = ? AND m.deleted_at IS NULL
+      ORDER BY m.created_at DESC
+      LIMIT ${limit} OFFSET ${offset}
     `;
 
-    const results = await this.db.query(query, [conversationId, limit, offset]);
+    const results = await this.db.query(query, [conversationId]);
     return results.map((msg: any) => ({
       ...msg,
       metadata: msg.metadata ? JSON.parse(msg.metadata) : null,
@@ -240,16 +250,20 @@ export class MessagingService {
   ): Promise<Message[]> {
     const query = `
       SELECT 
-        id, conversation_id as conversationId, sender_id as senderId,
-        sender_role as senderRole, content, content_sanitized as contentSanitized,
-        message_type as messageType, metadata, created_at as createdAt,
-        updated_at as updatedAt, deleted_at as deletedAt
-      FROM messages
-      WHERE conversation_id = ? 
-        AND deleted_at IS NULL
-        AND (content LIKE ? OR content_sanitized LIKE ?)
-      ORDER BY created_at DESC
-      LIMIT ?
+        m.id, m.conversation_id as conversationId, m.sender_id as senderId,
+        m.sender_role as senderRole, m.content, m.content_sanitized as contentSanitized,
+        m.message_type as messageType, m.metadata, m.created_at as createdAt,
+        m.updated_at as updatedAt, m.deleted_at as deletedAt,
+        CONCAT(u.first_name, ' ', u.last_name) as senderName, h.name as senderHotelName
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id AND m.sender_id = cp.user_id
+      LEFT JOIN hotels h ON cp.hotel_id = h.id
+      WHERE m.conversation_id = ? 
+        AND m.deleted_at IS NULL
+        AND (m.content LIKE ? OR m.content_sanitized LIKE ?)
+      ORDER BY m.created_at DESC
+      LIMIT ${limit}
     `;
 
     const searchPattern = `%${searchTerm}%`;
@@ -257,7 +271,6 @@ export class MessagingService {
       conversationId,
       searchPattern,
       searchPattern,
-      limit,
     ]);
 
     return results.map((msg: any) => ({
@@ -272,15 +285,19 @@ export class MessagingService {
   async getMessagesWithSensitiveData(conversationId: string): Promise<Message[]> {
     const query = `
       SELECT 
-        id, conversation_id as conversationId, sender_id as senderId,
-        sender_role as senderRole, content, content_sanitized as contentSanitized,
-        message_type as messageType, metadata, created_at as createdAt,
-        updated_at as updatedAt, deleted_at as deletedAt
-      FROM messages
-      WHERE conversation_id = ? 
-        AND deleted_at IS NULL
-        AND content != content_sanitized
-      ORDER BY created_at DESC
+        m.id, m.conversation_id as conversationId, m.sender_id as senderId,
+        m.sender_role as senderRole, m.content, m.content_sanitized as contentSanitized,
+        m.message_type as messageType, m.metadata, m.created_at as createdAt,
+        m.updated_at as updatedAt, m.deleted_at as deletedAt,
+        CONCAT(u.first_name, ' ', u.last_name) as senderName, h.name as senderHotelName
+      FROM messages m
+      LEFT JOIN users u ON m.sender_id = u.id
+      LEFT JOIN conversation_participants cp ON m.conversation_id = cp.conversation_id AND m.sender_id = cp.user_id
+      LEFT JOIN hotels h ON cp.hotel_id = h.id
+      WHERE m.conversation_id = ? 
+        AND m.deleted_at IS NULL
+        AND m.content != m.content_sanitized
+      ORDER BY m.created_at DESC
     `;
 
     const results = await this.db.query(query, [conversationId]);

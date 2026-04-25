@@ -22,6 +22,20 @@ class HotelRepository extends repository_1.BaseRepository {
         this.filterService = new hotel_filter_service_1.HotelFilterService();
     }
     /**
+     * Find hotel by ID with proper field parsing
+     */
+    findById(id) {
+        return __awaiter(this, void 0, void 0, function* () {
+            const query = `SELECT * FROM ${this.tableName} WHERE id = ?`;
+            const results = yield this.query(query, [id]);
+            if (results.length === 0) {
+                return null;
+            }
+            const row = results[0];
+            return this.mapRowToHotel(row);
+        });
+    }
+    /**
      * Find hotels by company
      */
     findByCompany(companyId_1) {
@@ -176,6 +190,7 @@ class HotelRepository extends repository_1.BaseRepository {
                     checkInTime: row.check_in_time,
                     checkOutTime: row.check_out_time,
                     cancellationPolicy: row.cancellation_policy,
+                    customPolicies: row.custom_policies ? (typeof row.custom_policies === 'string' ? JSON.parse(row.custom_policies) : row.custom_policies) : [],
                     averageRating: row.average_rating,
                     totalReviews: row.total_reviews,
                     images: images.map(img => img.image_url),
@@ -457,7 +472,7 @@ class HotelRepository extends repository_1.BaseRepository {
      * Map database row to Hotel model
      */
     mapRowToHotel(row) {
-        return hotel_1.Hotel.create({
+        const hotel = hotel_1.Hotel.create({
             id: row.id,
             companyId: row.company_id,
             agentId: row.agent_id,
@@ -473,6 +488,21 @@ class HotelRepository extends repository_1.BaseRepository {
                 longitude: row.longitude,
             },
         });
+        // Add additional fields
+        hotel.starRating = row.star_rating;
+        hotel.totalRooms = row.total_rooms;
+        hotel.checkInTime = row.check_in_time;
+        hotel.checkOutTime = row.check_out_time;
+        hotel.cancellationPolicy = row.cancellation_policy;
+        // Handle both string and object types for custom_policies (MySQL JSON column returns object)
+        hotel.customPolicies = typeof row.custom_policies === 'string'
+            ? JSON.parse(row.custom_policies)
+            : (row.custom_policies || []);
+        hotel.averageRating = row.average_rating;
+        hotel.totalReviews = row.total_reviews;
+        hotel.createdAt = row.created_at;
+        hotel.updatedAt = row.updated_at;
+        return hotel;
     }
     /**
      * Create a new hotel (raw SQL)

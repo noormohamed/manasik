@@ -61,8 +61,8 @@ const LoginForm = () => {
       await login(email, password);
       addToast('Welcome back! Login successful.', 'success');
 
-      // Redirect to the original page or dashboard after successful login
-      const destination = redirectPath || '/dashboard';
+      // Redirect to the original page or homepage after successful login
+      const destination = redirectPath || '/';
       console.log('[Login] Redirecting to:', destination);
       router.push(destination);
     } catch (err: any) {

@@ -296,7 +296,9 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
     setSaveSuccess(false);
 
     try {
-      await apiClient.put(`/hotels/${hotelId}`, {
+      console.log('Saving hotel with customPolicies:', editingRules);
+      
+      const response = await apiClient.put<{ hotel: Hotel }>(`/hotels/${hotelId}`, {
         name: editingHotel.name,
         description: editingHotel.description,
         address: editingHotel.address,
@@ -312,16 +314,26 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
         status: editingHotel.status,
       });
 
-      // Update local state
-      setHotel({
-        ...editingHotel,
-        customPolicies: editingRules,
-      });
+      console.log('Hotel saved successfully. Response:', response);
+
+      // Update local state with the response from server
+      if (response && response.hotel) {
+        setHotel(response.hotel);
+      } else {
+        // Fallback: update with local state
+        setHotel({
+          ...editingHotel,
+          customPolicies: editingRules,
+        });
+      }
+      
       setSaveSuccess(true);
       
       // Close modal after short delay
       setTimeout(() => {
         handleCloseHotelModal();
+        // Refresh hotel details to ensure we have latest data
+        fetchHotelDetails();
       }, 1500);
     } catch (err: any) {
       console.error('Error updating hotel:', err);

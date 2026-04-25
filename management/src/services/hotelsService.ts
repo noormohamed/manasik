@@ -72,6 +72,7 @@ export interface HotelDetail extends Hotel {
   checkInTime: string;
   checkOutTime: string;
   cancellationPolicy: string;
+  hotelRules?: string;
   images: HotelImage[];
   amenities: HotelAmenity[];
   rooms: HotelRoom[];
@@ -176,6 +177,10 @@ export const hotelsService = {
 
   async updateHotelStatus(id: string, status: string): Promise<{ success: boolean; data: HotelDetail }> {
     return apiClient.post(`/api/admin/hotels/${id}/status`, { status });
+  },
+
+  async updateHotelDetails(id: string, updates: Partial<HotelDetail>): Promise<{ success: boolean; data: HotelDetail }> {
+    return apiClient.put(`/api/hotels/${id}`, updates);
   },
 
   async getTransactionStats(options: {

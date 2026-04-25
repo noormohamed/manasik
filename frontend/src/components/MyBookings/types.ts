@@ -7,6 +7,7 @@ export interface HaramGate {
   gateNumber: number;
   distance: number; // in kilometers
   walkingTime: number; // in minutes
+  hasDirectKaabaAccess?: boolean;
 }
 
 export interface Guest {

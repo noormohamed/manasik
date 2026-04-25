@@ -6,10 +6,12 @@ import { requireFeature, logFeatureFlags } from '../middleware/feature-flag';
 import { featureFlags } from '../utils/feature-flags';
 import { authRoutes } from './auth.routes';
 import { userRoutes } from './user.routes';
+import { bookingsRoutes } from './bookings.routes';
 import { createHotelRoutes } from '../features/hotel/routes/hotel.routes';
 import { createCreditsRoutes } from './credits.routes';
 import { brokerRoutes } from './broker.routes';
 import { createMessagingRouter, initializeMessagingRoutes } from './messaging.routes';
+import { staffBookingRoutes } from './staff-booking.routes';
 import { Database } from '../database/connection';
 
 export const createApiRouter = (db?: Database) => {
@@ -38,6 +40,14 @@ export const createApiRouter = (db?: Database) => {
         router.use(userRoutes.routes());
         router.use(userRoutes.allowedMethods());
     }
+
+    // Bookings routes (always enabled)
+    router.use(bookingsRoutes.routes());
+    router.use(bookingsRoutes.allowedMethods());
+
+    // Staff booking routes (always enabled)
+    router.use(staffBookingRoutes.routes());
+    router.use(staffBookingRoutes.allowedMethods());
 
     if (featureFlags.isEnabled('hotels')) {
         const hotelRoutes = createHotelRoutes();

@@ -8,6 +8,7 @@ import HeroBanner from "@/components/HomeThree/HeroBanner";
 import HowItWorks from "@/components/HomeThree/HowItWorks";
 import MostPopularPlaces from "@/components/HomeThree/MostPopularPlaces";
 import Welcome from "@/components/HomeThree/Welcome";
+import RecentActivity from "@/components/Home/RecentActivity";
 import Footer from "@/components/Layout/Footer";
 
 export default function Home() {
@@ -16,6 +17,8 @@ export default function Home() {
       <Navbar />
  
       <HeroBanner />
+
+      <RecentActivity />
 
       <Welcome />
 

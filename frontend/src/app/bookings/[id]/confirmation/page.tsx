@@ -43,10 +43,9 @@ const BookingConfirmationPage: React.FC = () => {
     setError(null);
 
     try {
-      // Fetch from the list endpoint to get guestDetails
-      const response = (await apiClient.get(`/users/me/bookings`)) as any;
-      const bookings = response.bookings || [];
-      const b = bookings.find((booking: any) => booking.id === bookingId);
+      // Fetch from the confirmation endpoint with ACL
+      const response = (await apiClient.get(`/bookings/${bookingId}/confirmation`)) as any;
+      const b = response.booking;
       
       if (!b) {
         setError('Booking not found');
@@ -92,7 +91,7 @@ const BookingConfirmationPage: React.FC = () => {
         guestName: b.metadata?.guestName || b.guestName || '',
         guestEmail: b.metadata?.guestEmail || b.guestEmail || '',
         guestPhone: b.metadata?.guestPhone || b.guestPhone || '',
-        guestCount: b.guests || b.metadata?.guests || 1,
+        guestCount: (typeof b.guests === 'number' ? b.guests : b.metadata?.guests) || 1,
         guests: b.guestDetails && Array.isArray(b.guestDetails) ? b.guestDetails : [],
         customerId: b.customerId,
         agentId: b.agentId,
@@ -306,13 +305,21 @@ const BookingConfirmationPage: React.FC = () => {
           <section className={styles.section}>
             <h3 className={styles.title}>Haram Gate Access</h3>
             <div className={styles.gateColumn}>
-              {booking.closestGate ? (
+              {/* Check if both gates are the same */}
+              {booking.closestGate && booking.kaabaGate && 
+               booking.closestGate.gateNumber === booking.kaabaGate.gateNumber ? (
+                // Display only one gate if they're the same
                 <div className={`${styles.gateBox} ${styles.closestGate}`}>
                   <div className={styles.gateBoxContent}>
                     <div className={styles.gateInfo}>
-                      <h4 className={styles.gateTitle}>Closest Haram Gate</h4>
+                      <h4 className={styles.gateTitle}>Haram Gate Access</h4>
                       <p className={styles.gateName}>
                         Gate {booking.closestGate.gateNumber} - {booking.closestGate.name}
+                        {booking.closestGate.hasDirectKaabaAccess && (
+                          <span style={{ marginLeft: '8px', fontSize: '0.85em', backgroundColor: '#28a745', color: 'white', padding: '2px 6px', borderRadius: '3px' }}>
+                            Direct Kaaba Access
+                          </span>
+                        )}
                       </p>
                       <div className={styles.gateDetails}>
                         <span>{booking.closestGate.distance}m</span>
@@ -324,7 +331,7 @@ const BookingConfirmationPage: React.FC = () => {
                       <div className={styles.gateQrCode}>
                         <img 
                           src={closestGateQrUrl} 
-                          alt="Scan for directions to closest gate" 
+                          alt="Scan for directions to gate" 
                           className={styles.gateQrImage}
                         />
                       </div>
@@ -332,42 +339,82 @@ const BookingConfirmationPage: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className={`${styles.gateBox} ${styles.closestGate}`}>
-                  <h4 className={styles.gateTitle}>Closest Haram Gate</h4>
-                  <p className={styles.notAvailable}>Not available</p>
-                </div>
-              )}
-
-              {booking.kaabaGate ? (
-                <div className={`${styles.gateBox} ${styles.kaabaGate}`}>
-                  <div className={styles.gateBoxContent}>
-                    <div className={styles.gateInfo}>
-                      <h4 className={styles.gateTitle}>Kaaba Gate Access</h4>
-                      <p className={styles.gateName}>
-                        Gate {booking.kaabaGate.gateNumber} - {booking.kaabaGate.name}
-                      </p>
-                      <div className={styles.gateDetails}>
-                        <span>{booking.kaabaGate.distance}m</span>
-                        <span>•</span>
-                        <span>{booking.kaabaGate.walkingTime} min walk</span>
+                // Display both gates if they're different
+                <>
+                  {booking.closestGate ? (
+                    <div className={`${styles.gateBox} ${styles.closestGate}`}>
+                      <div className={styles.gateBoxContent}>
+                        <div className={styles.gateInfo}>
+                          <h4 className={styles.gateTitle}>Closest Haram Gate</h4>
+                          <p className={styles.gateName}>
+                            Gate {booking.closestGate.gateNumber} - {booking.closestGate.name}
+                            {booking.closestGate.hasDirectKaabaAccess && (
+                              <span style={{ marginLeft: '8px', fontSize: '0.85em', backgroundColor: '#28a745', color: 'white', padding: '2px 6px', borderRadius: '3px' }}>
+                                Direct Kaaba Access
+                              </span>
+                            )}
+                          </p>
+                          <div className={styles.gateDetails}>
+                            <span>{booking.closestGate.distance}m</span>
+                            <span>•</span>
+                            <span>{booking.closestGate.walkingTime} min walk</span>
+                          </div>
+                        </div>
+                        {closestGateQrUrl && (
+                          <div className={styles.gateQrCode}>
+                            <img 
+                              src={closestGateQrUrl} 
+                              alt="Scan for directions to closest gate" 
+                              className={styles.gateQrImage}
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
-                    {kaabaGateQrUrl && (
-                      <div className={styles.gateQrCode}>
-                        <img 
-                          src={kaabaGateQrUrl} 
-                          alt="Scan for directions to Kaaba gate" 
-                          className={styles.gateQrImage}
-                        />
+                  ) : (
+                    <div className={`${styles.gateBox} ${styles.closestGate}`}>
+                      <h4 className={styles.gateTitle}>Closest Haram Gate</h4>
+                      <p className={styles.notAvailable}>Not available</p>
+                    </div>
+                  )}
+
+                  {booking.kaabaGate ? (
+                    <div className={`${styles.gateBox} ${styles.kaabaGate}`}>
+                      <div className={styles.gateBoxContent}>
+                        <div className={styles.gateInfo}>
+                          <h4 className={styles.gateTitle}>Kaaba Gate Access</h4>
+                          <p className={styles.gateName}>
+                            Gate {booking.kaabaGate.gateNumber} - {booking.kaabaGate.name}
+                            {booking.kaabaGate.hasDirectKaabaAccess && (
+                              <span style={{ marginLeft: '8px', fontSize: '0.85em', backgroundColor: '#28a745', color: 'white', padding: '2px 6px', borderRadius: '3px' }}>
+                                Direct Kaaba Access
+                              </span>
+                            )}
+                          </p>
+                          <div className={styles.gateDetails}>
+                            <span>{booking.kaabaGate.distance}m</span>
+                            <span>•</span>
+                            <span>{booking.kaabaGate.walkingTime} min walk</span>
+                          </div>
+                        </div>
+                        {kaabaGateQrUrl && (
+                          <div className={styles.gateQrCode}>
+                            <img 
+                              src={kaabaGateQrUrl} 
+                              alt="Scan for directions to Kaaba gate" 
+                              className={styles.gateQrImage}
+                            />
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className={`${styles.gateBox} ${styles.kaabaGate}`}>
-                  <h4 className={styles.gateTitle}>Kaaba Gate Access</h4>
-                  <p className={styles.notAvailable}>Not available</p>
-                </div>
+                    </div>
+                  ) : (
+                    <div className={`${styles.gateBox} ${styles.kaabaGate}`}>
+                      <h4 className={styles.gateTitle}>Kaaba Gate Access</h4>
+                      <p className={styles.notAvailable}>Not available</p>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </section>

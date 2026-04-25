@@ -36,6 +36,48 @@
   font-size: 0.9rem;
 }
 
+.booking-info {
+  padding: 12px;
+  background-color: #f0f7ff;
+  border-radius: 6px;
+  border-left: 3px solid #0d6efd;
+}
+
+.booking-details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.booking-detail-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.booking-detail-item .label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #6c757d;
+  text-transform: uppercase;
+}
+
+.booking-detail-item .value {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #212529;
+}
+
+.booking-detail-item .badge {
+  width: fit-content;
+  font-size: 0.75rem;
+}
+
+.booking-info .btn {
+  margin-top: 12px;
+  width: 100%;
+}
+
 /* Main Content Container for Split View */
 .conversation-main {
   display: flex;
@@ -70,6 +112,40 @@
   overflow: hidden;
 }
 
+.conversation-context-bar {
+  padding: 12px 20px;
+  background-color: #f0f7ff;
+  border-bottom: 1px solid #b6d4ff;
+  flex-shrink: 0;
+}
+
+.context-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+}
+
+.context-section {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.context-label {
+  font-weight: 600;
+  color: #0d6efd;
+}
+
+.context-value {
+  color: #212529;
+}
+
+.context-divider {
+  color: #b6d4ff;
+}
+
 .conversation-messages {
   flex: 1;
   overflow-y: auto;
@@ -77,6 +153,18 @@
   display: flex;
   flex-direction: column;
   background-color: #fff;
+}
+
+/* Sticky Message Composer */
+.conversation-messages-panel .message-composer {
+  position: sticky;
+  bottom: 0;
+  background-color: white;
+  border-top: 1px solid #e9ecef;
+  padding: 16px 20px;
+  margin: 0;
+  flex-shrink: 0;
+  z-index: 10;
 }
 
 .messages-list {
@@ -132,6 +220,18 @@
   justify-content: space-between;
   align-items: center;
   gap: 12px;
+}
+
+.message-sender-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.message-sender-name {
+  font-size: 0.95rem;
+  color: #212529;
+  white-space: nowrap;
 }
 
 .message-header .badge {

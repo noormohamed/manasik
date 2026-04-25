@@ -13,6 +13,7 @@
   "include": ["src", "src/types", "src/typing"],
   "exclude": [
     "node_modules",
+    "src/__tests__/**",
     "src/services/elastic.ts",
     "src/services/llama3.ts",
     "src/services/freshworks/**",
