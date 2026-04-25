@@ -26,6 +26,7 @@ export interface HotelRow extends RowDataPacket {
   check_in_time: string;
   check_out_time: string;
   cancellation_policy?: string;
+  custom_policies?: string;
   average_rating: number;
   total_reviews: number;
   created_at: Date;
@@ -38,6 +39,21 @@ export class HotelRepository extends BaseRepository<Hotel> {
   constructor() {
     super('hotels');
     this.filterService = new HotelFilterService();
+  }
+
+  /**
+   * Find hotel by ID with proper field parsing
+   */
+  async findById(id: string): Promise<Hotel | null> {
+    const query = `SELECT * FROM ${this.tableName} WHERE id = ?`;
+    const results = await this.query<HotelRow>(query, [id]);
+    
+    if (results.length === 0) {
+      return null;
+    }
+
+    const row = results[0];
+    return this.mapRowToHotel(row);
   }
 
   /**
@@ -199,6 +215,7 @@ export class HotelRepository extends BaseRepository<Hotel> {
         checkInTime: row.check_in_time,
         checkOutTime: row.check_out_time,
         cancellationPolicy: row.cancellation_policy,
+        customPolicies: row.custom_policies ? (typeof row.custom_policies === 'string' ? JSON.parse(row.custom_policies) : row.custom_policies) : [],
         averageRating: row.average_rating,
         totalReviews: row.total_reviews,
         images: images.map(img => img.image_url),
@@ -537,7 +554,7 @@ export class HotelRepository extends BaseRepository<Hotel> {
    * Map database row to Hotel model
    */
   private mapRowToHotel(row: HotelRow): Hotel {
-    return Hotel.create({
+    const hotel = Hotel.create({
       id: row.id,
       companyId: row.company_id,
       agentId: row.agent_id,
@@ -553,6 +570,23 @@ export class HotelRepository extends BaseRepository<Hotel> {
         longitude: row.longitude,
       },
     });
+
+    // Add additional fields
+    hotel.starRating = row.star_rating;
+    hotel.totalRooms = row.total_rooms;
+    hotel.checkInTime = row.check_in_time;
+    hotel.checkOutTime = row.check_out_time;
+    hotel.cancellationPolicy = row.cancellation_policy;
+    // Handle both string and object types for custom_policies (MySQL JSON column returns object)
+    hotel.customPolicies = typeof row.custom_policies === 'string' 
+      ? JSON.parse(row.custom_policies) 
+      : (row.custom_policies || []);
+    hotel.averageRating = row.average_rating;
+    hotel.totalReviews = row.total_reviews;
+    hotel.createdAt = row.created_at;
+    hotel.updatedAt = row.updated_at;
+
+    return hotel;
   }
 
   /**

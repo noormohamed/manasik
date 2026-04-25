@@ -7,6 +7,8 @@ import { useAuth } from '@/hooks/useAuth';
 import Image from 'next/image';
 import Link from 'next/link';
 import AuthorSidebar from './AuthorSidebar';
+import HotelRulesEditor from './HotelRulesEditor';
+import { CustomPolicy } from '@/types/hotel-policies';
 
 interface Room {
   id: string;
@@ -45,6 +47,7 @@ interface Hotel {
   checkInTime: string;
   checkOutTime: string;
   cancellationPolicy: string | null;
+  customPolicies: CustomPolicy[];
   averageRating: number;
   totalReviews: number;
   images: string[];
@@ -88,6 +91,7 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
   // Edit hotel modal state
   const [showEditHotelModal, setShowEditHotelModal] = useState(false);
   const [editingHotel, setEditingHotel] = useState<Hotel | null>(null);
+  const [editingRules, setEditingRules] = useState<CustomPolicy[]>([]);
 
   useEffect(() => {
     fetchHotelDetails();
@@ -263,6 +267,7 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
   const handleEditHotel = () => {
     if (!hotel) return;
     setEditingHotel({ ...hotel });
+    setEditingRules(hotel.customPolicies || []);
     setSaveError(null);
     setSaveSuccess(false);
     setShowEditHotelModal(true);
@@ -303,11 +308,15 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
         checkInTime: editingHotel.checkInTime,
         checkOutTime: editingHotel.checkOutTime,
         cancellationPolicy: editingHotel.cancellationPolicy,
+        customPolicies: editingRules,
         status: editingHotel.status,
       });
 
       // Update local state
-      setHotel(editingHotel);
+      setHotel({
+        ...editingHotel,
+        customPolicies: editingRules,
+      });
       setSaveSuccess(true);
       
       // Close modal after short delay
@@ -1099,7 +1108,15 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
                   </div>
 
                   <div className="col-12 mt-4">
-                    <h6 className="border-bottom pb-2">Policies</h6>
+                    <HotelRulesEditor
+                      rules={editingRules}
+                      onRulesChange={setEditingRules}
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="col-12 mt-4">
+                    <h6 className="border-bottom pb-2">Additional Information</h6>
                   </div>
 
                   <div className="col-12">
