@@ -515,13 +515,6 @@ const StayDetailsContent: React.FC<StayDetailsContentProps> = ({ hotelId }) => {
                 {/* Proximity to Haram Gates & Attractions */}
                 <ProximityInfo hotelId={hotel.id} />
 
-                {/* Location */}
-                <Location 
-                  latitude={hotel.latitude} 
-                  longitude={hotel.longitude}
-                  address={`${hotel.address}, ${hotel.city}, ${hotel.country}`}
-                />
-
                 {/* Things to Know */}
                 {(hotel.checkInTime || hotel.checkOutTime || hotel.cancellationPolicy || (hotel.customPolicies && hotel.customPolicies.some(r => r.enabled))) && (
                   <div className="mb-4">
@@ -598,6 +591,13 @@ const StayDetailsContent: React.FC<StayDetailsContentProps> = ({ hotelId }) => {
                     )}
                   </div>
                 )}
+
+                {/* Location */}
+                <Location
+                  latitude={hotel.latitude}
+                  longitude={hotel.longitude}
+                  address={`${hotel.address}, ${hotel.city}, ${hotel.country}`}
+                />
               </div>
             </div>
 
