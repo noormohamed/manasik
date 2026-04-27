@@ -6,6 +6,17 @@ import { HotelRepository } from '../repositories/hotel.repository';
 import { RoomRepository } from '../repositories/room.repository';
 import { HotelFilterService } from '../services/hotel-filter.service';
 import { HotelSearchService, SortOption, ViewType } from '../services/hotel-search.service';
+import {
+  loadWeights,
+  saveWeights,
+  validateWeights,
+  computeScoring,
+  parseScoringData,
+  defaultScoringData,
+  deriveFromHotelRow,
+  walkingTimeToScore,
+  ScoringWeights,
+} from '../services/scoring.service';
 import { getPool } from '../../../database/connection';
 import * as haramGatesService from '../../../services/haram-gates.service';
 
@@ -134,6 +145,69 @@ export const createHotelRoutes = () => {
       console.error('Error searching hotels:', error);
       ctx.status = 500;
       ctx.body = { error: 'Failed to search hotels' };
+    }
+  });
+
+  /**
+   * GET /api/hotels/scoring-weights
+   * Return the current global category scoring weights
+   */
+  router.get('/scoring-weights', async (ctx: Context) => {
+    try {
+      const weights = await loadWeights();
+      ctx.body = { weights };
+    } catch (error) {
+      console.error('Error loading scoring weights:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to load scoring weights' };
+    }
+  });
+
+  /**
+   * PUT /api/hotels/scoring-weights
+   * Update the global category scoring weights (admin only)
+   * Body: { location, pilgrimSuitability, hotelQuality, experienceFriction, userReviews }
+   * All values are percentages and must sum to 100.
+   */
+  router.put('/scoring-weights', authMiddleware, async (ctx: Context) => {
+    try {
+      const userId = (ctx as any).user?.userId;
+      const role   = (ctx as any).user?.role;
+
+      if (!userId) {
+        ctx.status = 401;
+        ctx.body = { error: 'Unauthorized' };
+        return;
+      }
+      if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+        ctx.status = 403;
+        ctx.body = { error: 'Admin access required' };
+        return;
+      }
+
+      // @ts-ignore
+      const { location, pilgrimSuitability, hotelQuality, experienceFriction, userReviews } = ctx.request.body;
+      const weights: ScoringWeights = {
+        location:           parseFloat(location),
+        pilgrimSuitability: parseFloat(pilgrimSuitability),
+        hotelQuality:       parseFloat(hotelQuality),
+        experienceFriction: parseFloat(experienceFriction),
+        userReviews:        parseFloat(userReviews),
+      };
+
+      const validationError = validateWeights(weights);
+      if (validationError) {
+        ctx.status = 400;
+        ctx.body = { error: validationError };
+        return;
+      }
+
+      await saveWeights(weights, userId);
+      ctx.body = { message: 'Scoring weights updated successfully', weights };
+    } catch (error) {
+      console.error('Error updating scoring weights:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to update scoring weights' };
     }
   });
 
@@ -829,6 +903,40 @@ export const createHotelRoutes = () => {
         [id]
       );
 
+      // Compute scoring breakdown.
+      // Prefer manager-entered scoring_data; fall back to auto-derivation from
+      // existing hotel fields (walking time, star rating, elderly/family flags).
+      const rawScoringData = hotelRow.scoring_data;
+      const averageRating  = parseFloat(hotelRow.average_rating || 0);
+
+      let scoringData     = parseScoringData(rawScoringData);
+      let scoringDerived  = false;
+
+      if (!scoringData) {
+        const derived = deriveFromHotelRow(hotelRow);
+        scoringData   = derived.data;
+        scoringDerived = true;
+      }
+
+      const weights        = await loadWeights();
+      const scoringResult  = computeScoring(scoringData, weights, averageRating);
+      const scoringBreakdown = { ...scoringResult, derived: scoringDerived };
+
+      // Cache the derived manasik_score back to the DB when the column is still null,
+      // so search/sort by manasik_score works for all hotels immediately.
+      if (hotelRow.manasik_score === null || hotelRow.manasik_score === undefined) {
+        try {
+          const pool2 = getPool();
+          await pool2.execute(
+            'UPDATE hotels SET manasik_score = ? WHERE id = ?',
+            [scoringBreakdown.overall, id],
+          );
+        } catch (cacheErr) {
+          // Non-fatal — score will still be returned in the response
+          console.warn('Failed to cache manasik_score:', cacheErr);
+        }
+      }
+
       ctx.body = {
         hotel: {
           id: hotelRow.id,
@@ -842,7 +950,7 @@ export const createHotelRoutes = () => {
           latitude: hotelRow.latitude,
           longitude: hotelRow.longitude,
           starRating: hotelRow.star_rating,
-          averageRating: parseFloat(hotelRow.average_rating || 0),
+          averageRating,
           totalReviews: hotelRow.total_reviews,
           totalRooms: hotelRow.total_rooms,
           checkInTime: hotelRow.check_in_time,
@@ -852,13 +960,17 @@ export const createHotelRoutes = () => {
             ? JSON.parse(hotelRow.custom_policies) 
             : (hotelRow.custom_policies || []),
           status: hotelRow.status,
-          // New conversion-critical fields
-          manasikScore: hotelRow.manasik_score ? parseFloat(hotelRow.manasik_score) : null,
+          // Conversion-critical fields
+          manasikScore: scoringBreakdown.overall,
           walkDescription: hotelRow.walk_description,
           liftSituation: hotelRow.lift_situation,
           distanceExplanation: hotelRow.distance_explanation,
           videoUrl: hotelRow.video_url,
           videoThumbnail: hotelRow.video_thumbnail,
+          // Structured scoring data
+          // scoringData is null when derived (manager hasn't entered inputs yet)
+          scoringData: scoringDerived ? null : scoringData,
+          scoringBreakdown,
           // Best for tags
           bestForTags: bestForTags.map((tag: any) => ({
             name: tag.tag_name,
@@ -899,7 +1011,7 @@ export const createHotelRoutes = () => {
     try {
       const userId = (ctx as any).user?.userId;
       const { id } = ctx.params;
-      const { 
+      const {
         name, 
         description, 
         address, 
@@ -914,7 +1026,8 @@ export const createHotelRoutes = () => {
         checkOutTime,
         cancellationPolicy,
         customPolicies,
-        status 
+        status,
+        scoringData,
       } = (ctx.request as any).body;
 
       if (!userId) {
@@ -950,6 +1063,27 @@ export const createHotelRoutes = () => {
       if (cancellationPolicy !== undefined) updateData.cancellation_policy = cancellationPolicy;
       if (customPolicies !== undefined) updateData.custom_policies = JSON.stringify(customPolicies);
       if (status !== undefined) updateData.status = status;
+
+      // Handle scoring data: persist raw inputs and recompute manasik_score
+      if (scoringData !== undefined) {
+        updateData.scoring_data = JSON.stringify(scoringData);
+        try {
+          // Fetch the current average rating to include User Reviews in score
+          const pool = getPool();
+          const [ratingRows] = await pool.query<any>(
+            'SELECT average_rating FROM hotels WHERE id = ?', [id]
+          );
+          const avgRating = ratingRows && ratingRows.length > 0
+            ? parseFloat(ratingRows[0].average_rating || 0)
+            : 0;
+          const weights = await loadWeights();
+          const breakdown = computeScoring(scoringData, weights, avgRating);
+          updateData.manasik_score = breakdown.overall;
+        } catch (scoringErr) {
+          console.error('Failed to recompute manasik_score:', scoringErr);
+        }
+      }
+
       updateData.updated_at = new Date();
 
       const updated = await hotelRepository.updateHotel(id, updateData);

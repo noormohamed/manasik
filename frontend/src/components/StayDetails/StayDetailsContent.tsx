@@ -10,6 +10,8 @@ import Amenities from "./Amenities";
 import ReviewsList from "./ReviewsList";
 import Location from "./Location";
 import ProximityInfo from "./ProximityInfo";
+import ManasikScoreBreakdown from "./ManasikScoreBreakdown";
+import { ScoringBreakdown } from "@/types/scoring";
 
 interface Hotel {
   id: string;
@@ -31,6 +33,7 @@ interface Hotel {
   cancellationPolicy: string;
   customPolicies?: Array<{ id: string; title: string; description: string; enabled: boolean }>;
   status: string;
+  scoringBreakdown?: ScoringBreakdown | null;
   images: Array<{ id: string; url: string; displayOrder: number }>;
   amenities: Record<string, boolean>;
   rooms: Array<{
@@ -219,20 +222,23 @@ const StayDetailsContent: React.FC<StayDetailsContentProps> = ({ hotelId }) => {
           {/* Hotel Information - Above Images */}
           <div className="stay-details-information mb-4">
             <h2>{hotel.name}</h2>
-            <div className="d-flex align-items-center mb-3">
-              <div className="me-3">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <i
-                    key={i}
-                    className={i < hotel.starRating ? "ri-star-fill" : "ri-star-line"}
-                    style={{ color: '#ffc107' }}
-                  ></i>
-                ))}
+            {hotel.scoringBreakdown && (
+              <div className="d-flex align-items-center gap-2 mb-3">
+                <span className="text-muted" style={{ fontSize: 14 }}>Manasik Score</span>
+                <span
+                  style={{
+                    background: hotel.scoringBreakdown.overall >= 8 ? '#10b981' : '#f59e0b',
+                    color: '#fff',
+                    fontWeight: 700,
+                    fontSize: 14,
+                    borderRadius: 6,
+                    padding: '2px 10px',
+                  }}
+                >
+                  {hotel.scoringBreakdown.overall.toFixed(1)}
+                </span>
               </div>
-              <span className="text-muted">
-                {Number(hotel.averageRating || 0).toFixed(1)} ({hotel.totalReviews} reviews)
-              </span>
-            </div>
+            )}
             <div className="d-flex align-items-center mb-3">
               <i className="ri-map-pin-line me-2"></i>
               <span>{hotel.address}, {hotel.city}, {hotel.country}</span>
@@ -516,9 +522,16 @@ const StayDetailsContent: React.FC<StayDetailsContentProps> = ({ hotelId }) => {
                 <ProximityInfo hotelId={hotel.id} />
 
                 {/* Things to Know */}
-                {(hotel.checkInTime || hotel.checkOutTime || hotel.cancellationPolicy || (hotel.customPolicies && hotel.customPolicies.some(r => r.enabled))) && (
+                {(hotel.scoringBreakdown || hotel.checkInTime || hotel.checkOutTime || hotel.cancellationPolicy || (hotel.customPolicies && hotel.customPolicies.some(r => r.enabled))) && (
                   <div className="mb-4">
                     <h3 className="mb-4">Things to Know</h3>
+
+                    {/* Manasik Score Breakdown */}
+                    {hotel.scoringBreakdown && (
+                      <div className="mb-3">
+                        <ManasikScoreBreakdown breakdown={hotel.scoringBreakdown} />
+                      </div>
+                    )}
 
                     {/* Check-in / Check-out */}
                     {(hotel.checkInTime || hotel.checkOutTime) && (

@@ -66,20 +66,10 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, adults, chi
       >
         <div className="stay-single-sidebar-item">
           <div className="per-person">
-            <div className="d-flex align-items-center justify-content-between mb-4">
+            <div className="mb-4">
               <h4>
                 ${perNightPrice.toFixed(2)} <span>/ Per Night</span>
               </h4>
-
-              <div className="d-flex align-items-center">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <i 
-                    key={i}
-                    className={i < hotel.starRating ? "ri-star-fill" : "ri-star-line"}
-                    style={{ color: '#FFC107', fontSize: '18px', marginLeft: '3px' }}
-                  ></i>
-                ))}
-              </div>
             </div>
 
             <div className="booking-date">
@@ -231,18 +221,6 @@ const Sidebar: React.FC<SidebarProps> = ({ hotel, checkIn, checkOut, adults, chi
 
             <div className="mb-3">
               <h4>{hotel.name}</h4>
-              <div className="d-flex align-items-center">
-                {Array.from({ length: 5 }, (_, i) => (
-                  <i 
-                    key={i}
-                    className={i < hotel.starRating ? "ri-star-fill" : "ri-star-line"}
-                    style={{ color: '#FFC107', fontSize: '16px' }}
-                  ></i>
-                ))}
-                <span className="ms-2 text-muted">
-                  {Number(hotel.averageRating || 0).toFixed(1)} ({hotel.totalReviews} reviews)
-                </span>
-              </div>
             </div>
 
             <div className="alert alert-success">

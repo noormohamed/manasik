@@ -33,7 +33,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
         b.metadata,
         b.created_at as createdAt,
         b.updated_at as updatedAt,
-        b.hotel_id as hotelId,
+        JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId,
         h.name as hotelName,
         h.description as hotelDescription,
         h.address as hotelAddress,
@@ -49,7 +49,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
         h.cancellation_policy as cancellationPolicy,
         h.manasik_score as manasikScore
       FROM bookings b
-      LEFT JOIN hotels h ON b.hotel_id = h.id
+      LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
       WHERE b.id = ? AND b.customer_id = ?`,
       [bookingId, userId]
     );
@@ -250,7 +250,7 @@ userRoutes.post('/me/bookings/:bookingId/cancel', authMiddleware, async (ctx: Co
     const [bookings] = await pool.query<any>(
       `SELECT b.*, h.cancellation_policy 
        FROM bookings b
-       LEFT JOIN hotels h ON b.hotel_id = h.id
+       LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
        WHERE b.id = ? AND b.customer_id = ?`,
       [bookingId, userId]
     );
@@ -337,10 +337,13 @@ userRoutes.post('/me/bookings/:bookingId/cancel', authMiddleware, async (ctx: Co
 userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
   try {
     const userId = (ctx.state as any).userId;
-    const { date } = ctx.query;
     const pool = getPool();
 
+    const { date, limit: limitParam } = ctx.query;
+    const limitNum = limitParam ? parseInt(limitParam as string, 10) : 100;
+
     // Build query with optional date filter
+    // Hotel info is stored in metadata JSON — join via JSON extraction
     let query = `SELECT 
       b.id,
       b.service_type as serviceType,
@@ -356,7 +359,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       b.metadata,
       b.created_at as createdAt,
       b.updated_at as updatedAt,
-      b.hotel_id as hotelId,
+      JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId,
       h.name as hotelName,
       h.address as hotelAddress,
       h.city as hotelCity,
@@ -365,7 +368,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       h.check_out_time as checkOutTime,
       h.star_rating as starRating
     FROM bookings b
-    LEFT JOIN hotels h ON b.hotel_id = h.id
+    LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
     WHERE b.customer_id = ?`;
 
     const params: any[] = [userId];
@@ -389,7 +392,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       params.push(date, date, date, date);
     }
 
-    query += ` ORDER BY b.created_at DESC LIMIT 100`;
+    query += ` ORDER BY b.created_at DESC LIMIT ${limitNum}`;
 
     // Fetch bookings where user is the customer (not hotel bookings they manage)
     const [bookings] = await pool.query<any>(query, params);
