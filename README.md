@@ -115,31 +115,86 @@ MySQL 8.0 runs on the **backend server** at `localhost:3306`.
 | User | `booking_user` |
 | Tables | 52 |
 
-### Running migrations
+### Running migrations with Knex
 
-For a **fresh server** or to bring an existing database fully up to date, run the production migration script:
+Database migrations are managed with **Knex.js**, which tracks applied migrations in a
+`knex_migrations` table and only ever runs what is pending.
 
 ```bash
-# On the backend server (46.101.13.38)
-mysql -u root -proot booking_platform < /var/www/manasik/service/database/production-migration.sql
+cd service
+
+# See what has and hasn't been applied
+npm run migrate:status
+
+# Apply all pending migrations (safe to run multiple times)
+npm run migrate:latest
+
+# Roll back the most recent batch
+npm run migrate:rollback
+
+# Create a new migration file (replace <name> with a descriptive slug)
+npm run migrate:make -- <name>
+# e.g. npm run migrate:make -- add_stripe_customer_id_to_users
 ```
 
-The script is **idempotent** — safe to re-run. It uses `CREATE TABLE IF NOT EXISTS` and stored-procedure guards for `ALTER TABLE` statements, so it will only apply changes that are missing.
+Migration files live in `service/src/database/knex-migrations/` and are TypeScript.
+They are named with a timestamp prefix so they always run in the correct order.
 
-**What `production-migration.sql` covers:**
-- All missing columns on `hotels`, `bookings`, and `room_types` from migrations 010–019
-- 13 new tables: `conversations`, `messages`, `message_read_receipts`,
-  `conversation_participants`, `conversation_assignments`, `message_audit_log`,
-  `guests`, `payment_links`, `hotel_best_for_tags`, `hotel_gate_assignments`,
-  `scoring_weights`, `email_audit_log`, `hotel_filters`
-- Updated `bookings.booking_source` enum to include `STAFF_CREATED` and `BROKER`
-- Default seed rows for `admin_alerts` and `scoring_weights`
+**Current migrations:**
+- `20260428000000_baseline.ts` — Complete schema as of v0.2.1 (all 52 tables + columns)
 
-### Individual migration files
+### Production deployment with migrations
 
-All incremental migrations live in `service/database/migrations/` and are numbered
-`001` through `019`. They were applied in sequence during the original database setup.
-Use `production-migration.sql` instead of re-running them individually.
+Add `npm run migrate:latest` before `pm2 restart` in every backend deploy:
+
+```bash
+cd /var/www/manasik
+git fetch origin main && git reset --hard origin/main
+cd service
+npm ci
+npm run build
+npm run migrate:latest   # ← apply any pending schema changes
+pm2 restart backend
+```
+
+The migration runs while the old code is still serving traffic (additive changes only).
+Only the PM2 restart causes a brief interruption (~2 seconds).
+
+### Writing a new migration
+
+```bash
+npm run migrate:make -- add_stripe_customer_id
+```
+
+This creates `service/src/database/knex-migrations/<timestamp>_add_stripe_customer_id.ts`:
+
+```typescript
+import type { Knex } from 'knex';
+
+export async function up(knex: Knex): Promise<void> {
+  await knex.schema.alterTable('users', (t) => {
+    t.string('stripe_customer_id', 255).nullable();
+  });
+}
+
+export async function down(knex: Knex): Promise<void> {
+  await knex.schema.alterTable('users', (t) => {
+    t.dropColumn('stripe_customer_id');
+  });
+}
+```
+
+**Rules:**
+- Always write a `down()` that exactly reverses `up()`
+- Never edit an already-applied migration — create a new one instead
+- Keep migrations additive where possible (add columns, don't rename or drop until
+  all servers are running code that no longer references the old column)
+
+### Legacy SQL files
+
+`service/database/migrations/` contains the original numbered SQL files (`001`–`019`).
+These are kept for historical reference only. **Do not run them** — everything they
+contained is covered by the Knex baseline migration.
 
 ## Environment Variables
 
