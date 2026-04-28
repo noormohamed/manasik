@@ -17,6 +17,7 @@ bookingsRoutes.get('/:bookingId/confirmation', authMiddleware, async (ctx: Conte
     const pool = getPool();
 
     // Fetch the booking with hotel details
+    // hotel_id is stored in metadata JSON, not as a direct column
     const [bookings] = await pool.query<any>(
       `SELECT 
         b.id,
@@ -35,7 +36,7 @@ bookingsRoutes.get('/:bookingId/confirmation', authMiddleware, async (ctx: Conte
         b.updated_at as updatedAt,
         b.customer_id as customerId,
         b.agent_id as agentId,
-        b.hotel_id as hotelId,
+        JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId,
         h.name as hotelName,
         h.address as hotelAddress,
         h.city as hotelCity,
@@ -45,7 +46,7 @@ bookingsRoutes.get('/:bookingId/confirmation', authMiddleware, async (ctx: Conte
         h.check_out_time as checkOutTime,
         h.star_rating as starRating
       FROM bookings b
-      LEFT JOIN hotels h ON b.hotel_id = h.id
+      LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
       WHERE b.id = ?`,
       [bookingId]
     );

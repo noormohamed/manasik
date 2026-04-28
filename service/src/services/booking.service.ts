@@ -8,6 +8,11 @@ import { getPool } from '../database/connection';
 import { paymentLinkService } from './payment-link.service';
 import { emailService } from './email/email.service';
 
+export interface RoomAllocation {
+  roomTypeId: string;
+  quantity: number;
+}
+
 export interface CreateBookingOnBehalfParams {
   hotelId: string;
   staffUserId: string;
@@ -17,7 +22,7 @@ export interface CreateBookingOnBehalfParams {
   guestPhone?: string;
   checkInDate: string;
   checkOutDate: string;
-  roomTypeId: string;
+  rooms: RoomAllocation[];
   numberOfGuests: number;
   sendPaymentLink: boolean;
 }
@@ -29,6 +34,7 @@ export interface ValidationResult {
 
 export interface BookingCreationResult {
   bookingId: string;
+  numberOfRooms: number;
   paymentLinkId?: string;
   paymentLinkUrl?: string;
 }
@@ -46,10 +52,10 @@ export class BookingService {
       throw new Error(JSON.stringify(validation.errors));
     }
 
-    // Check for duplicate bookings
+    // Check for duplicate bookings (best-effort, uses first room type)
     const isDuplicate = await this.checkDuplicateBooking({
       guestEmail: params.guestEmail,
-      roomTypeId: params.roomTypeId,
+      roomTypeId: params.rooms[0]?.roomTypeId || '',
       checkInDate: params.checkInDate,
       checkOutDate: params.checkOutDate,
     });
@@ -58,78 +64,110 @@ export class BookingService {
     const guestId = uuidv4();
 
     try {
-      // Get room type details for pricing
-      const [roomTypes] = await pool.query<any>(
-        `SELECT base_price, capacity FROM room_types WHERE id = ? AND hotel_id = ?`,
-        [params.roomTypeId, params.hotelId]
-      );
+      // Fetch details for every requested room type in one pass
+      const roomDetails: Array<{
+        roomTypeId: string;
+        name: string;
+        base_price: number;
+        capacity: number;
+        available_rooms: number;
+        quantity: number;
+      }> = [];
 
-      if (!roomTypes || roomTypes.length === 0) {
-        throw new Error('Room type not found');
+      for (const allocation of params.rooms) {
+        const [rows] = await pool.query<any>(
+          `SELECT id, name, base_price, capacity, available_rooms
+           FROM room_types WHERE id = ? AND hotel_id = ?`,
+          [allocation.roomTypeId, params.hotelId]
+        );
+        if (!rows || rows.length === 0) {
+          throw new Error(`Room type '${allocation.roomTypeId}' not found for this hotel`);
+        }
+        const rt = rows[0];
+        if (rt.available_rooms < allocation.quantity) {
+          throw new Error(
+            `Not enough '${rt.name}' rooms available. ` +
+            `Requested ${allocation.quantity}, only ${rt.available_rooms} available.`
+          );
+        }
+        roomDetails.push({ ...rt, roomTypeId: allocation.roomTypeId, quantity: allocation.quantity });
       }
 
-      const roomType = roomTypes[0];
-
-      // Calculate nights and price
+      // Calculate nights
       const checkInDate = new Date(params.checkInDate);
       const checkOutDate = new Date(params.checkOutDate);
       const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
 
-      const priceCalc = this.calculatePrice({
-        basePrice: roomType.base_price,
-        nights,
-        taxRate: 0.15, // 15% tax
-      });
+      // Price = sum of (pricePerRoom × quantity × nights) across all room types
+      const subtotal = Math.round(
+        roomDetails.reduce((sum, rd) => sum + rd.base_price * rd.quantity * nights, 0) * 100
+      ) / 100;
+      const tax = Math.round(subtotal * 0.15 * 100) / 100;
+      const total = Math.round((subtotal + tax) * 100) / 100;
+      const totalRooms = roomDetails.reduce((sum, rd) => sum + rd.quantity, 0);
 
       // Get hotel details
       const [hotels] = await pool.query<any>(
-        `SELECT name, address, city, country FROM hotels WHERE id = ?`,
+        `SELECT name, address, city, country, company_id FROM hotels WHERE id = ?`,
         [params.hotelId]
       );
-
-      if (!hotels || hotels.length === 0) {
-        throw new Error('Hotel not found');
-      }
-
+      if (!hotels || hotels.length === 0) throw new Error('Hotel not found');
       const hotel = hotels[0];
 
-      // Create booking record FIRST (before guest, due to FK constraint)
+      // Build metadata — store full room breakdown for display/reporting
       const metadata = {
-        roomType: params.roomTypeId,
-        checkInDate: params.checkInDate,
-        checkOutDate: params.checkOutDate,
-        nights,
-        guests: params.numberOfGuests,
+        hotelId: params.hotelId,
         hotelName: hotel.name,
         hotelAddress: hotel.address,
         hotelCity: hotel.city,
         hotelCountry: hotel.country,
+        checkInDate: params.checkInDate,
+        checkOutDate: params.checkOutDate,
+        nights,
+        guests: params.numberOfGuests,
+        rooms: roomDetails.map(rd => ({
+          roomTypeId: rd.roomTypeId,
+          roomName: rd.name,
+          quantity: rd.quantity,
+          capacityPerRoom: rd.capacity,
+          pricePerNight: rd.base_price,
+          subtotal: Math.round(rd.base_price * rd.quantity * nights * 100) / 100,
+        })),
+        totalRooms,
         isDuplicate,
         guestName: `${params.firstName} ${params.lastName}`,
         guestEmail: params.guestEmail,
         guestPhone: params.guestPhone,
-        roomName: params.roomTypeId,
       };
 
+      // Insert booking
       await pool.query(
-        `INSERT INTO bookings 
+        `INSERT INTO bookings
          (id, company_id, customer_id, service_type, status, currency, subtotal, tax, total, metadata, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           bookingId,
-          'comp-001', // Default company ID
-          params.staffUserId, // Use staff user ID as customer for now
+          hotel.company_id,
+          params.staffUserId,
           'HOTEL',
           'PENDING',
           'USD',
-          priceCalc.subtotal,
-          priceCalc.tax,
-          priceCalc.total,
+          subtotal,
+          tax,
+          total,
           JSON.stringify(metadata),
         ]
       );
 
-      // Create guest record AFTER booking (due to FK constraint)
+      // Decrement available_rooms for each room type
+      for (const rd of roomDetails) {
+        await pool.query(
+          `UPDATE room_types SET available_rooms = available_rooms - ? WHERE id = ?`,
+          [rd.quantity, rd.roomTypeId]
+        );
+      }
+
+      // Insert lead guest record
       await pool.query(
         `INSERT INTO guests (id, booking_id, first_name, last_name, email, phone, is_lead_passenger)
          VALUES (?, ?, ?, ?, ?, ?, 1)`,
@@ -139,43 +177,40 @@ export class BookingService {
       let paymentLinkId: string | undefined;
       let paymentLinkUrl: string | undefined;
 
-      // Generate payment link if requested
       if (params.sendPaymentLink) {
         const paymentLink = await paymentLinkService.generatePaymentLink({
           bookingId,
           guestEmail: params.guestEmail,
-          amount: priceCalc.total,
+          amount: total,
           currency: 'USD',
         });
-
         paymentLinkId = paymentLink.paymentLinkId;
         paymentLinkUrl = paymentLink.url;
-
-        // Update booking with payment link ID
         await pool.query(
           `UPDATE bookings SET payment_link_id = ? WHERE id = ?`,
           [paymentLinkId, bookingId]
         );
       }
 
-      // Send confirmation email
+      // Send confirmation email (best-effort)
       await this.sendBookingConfirmationEmail({
         guestEmail: params.guestEmail,
         guestName: `${params.firstName} ${params.lastName}`,
         bookingId,
         hotelName: hotel.name,
         hotelAddress: `${hotel.address}, ${hotel.city}, ${hotel.country}`,
-        roomType: params.roomTypeId,
+        roomSummary: roomDetails.map(rd => `${rd.name} × ${rd.quantity}`).join(', '),
         checkInDate: params.checkInDate,
         checkOutDate: params.checkOutDate,
         nights,
-        total: priceCalc.total,
+        total,
         currency: 'USD',
         paymentLinkUrl,
       });
 
       return {
         bookingId,
+        numberOfRooms: totalRooms,
         paymentLinkId,
         paymentLinkUrl,
       };
@@ -224,19 +259,46 @@ export class BookingService {
       errors.push({ field: 'numberOfGuests', message: 'Number of guests must be at least 1' });
     }
 
-    // Check room capacity
-    const pool = getPool();
-    const [roomTypes] = await pool.query<any>(
-      `SELECT capacity FROM room_types WHERE id = ?`,
-      [params.roomTypeId]
-    );
+    // Validate each room allocation and accumulate total capacity
+    if (!params.rooms || params.rooms.length === 0) {
+      errors.push({ field: 'rooms', message: 'At least one room must be selected' });
+    } else {
+      const pool = getPool();
+      let totalCapacity = 0;
 
-    if (roomTypes && roomTypes.length > 0) {
-      const maxOccupancy = roomTypes[0].capacity;
-      if (params.numberOfGuests > maxOccupancy) {
+      for (const allocation of params.rooms) {
+        if (!allocation.roomTypeId || allocation.quantity < 1) {
+          errors.push({ field: 'rooms', message: 'Each room allocation must have a valid roomTypeId and quantity ≥ 1' });
+          continue;
+        }
+
+        const [rows] = await pool.query<any>(
+          `SELECT capacity, available_rooms, name FROM room_types WHERE id = ?`,
+          [allocation.roomTypeId]
+        );
+
+        if (!rows || rows.length === 0) {
+          errors.push({ field: 'rooms', message: `Room type '${allocation.roomTypeId}' not found` });
+          continue;
+        }
+
+        const rt = rows[0];
+
+        if (rt.available_rooms < allocation.quantity) {
+          errors.push({
+            field: 'rooms',
+            message: `Not enough '${rt.name}' rooms available. ` +
+              `Requested ${allocation.quantity}, only ${rt.available_rooms} available.`,
+          });
+        }
+
+        totalCapacity += rt.capacity * allocation.quantity;
+      }
+
+      if (errors.length === 0 && totalCapacity < params.numberOfGuests) {
         errors.push({
-          field: 'numberOfGuests',
-          message: `Number of guests cannot exceed room capacity of ${maxOccupancy}`,
+          field: 'rooms',
+          message: `Selected rooms accommodate ${totalCapacity} guest(s) but ${params.numberOfGuests} are needed. Please add more rooms.`,
         });
       }
     }
@@ -274,25 +336,6 @@ export class BookingService {
   }
 
   /**
-   * Calculate booking price
-   */
-  private calculatePrice(params: {
-    basePrice: number;
-    nights: number;
-    taxRate: number;
-  }): { subtotal: number; tax: number; total: number } {
-    const subtotal = params.basePrice * params.nights;
-    const tax = subtotal * params.taxRate;
-    const total = subtotal + tax;
-
-    return {
-      subtotal: Math.round(subtotal * 100) / 100,
-      tax: Math.round(tax * 100) / 100,
-      total: Math.round(total * 100) / 100,
-    };
-  }
-
-  /**
    * Validate email format
    */
   private isValidEmail(email: string): boolean {
@@ -309,7 +352,7 @@ export class BookingService {
     bookingId: string;
     hotelName: string;
     hotelAddress: string;
-    roomType: string;
+    roomSummary: string;
     checkInDate: string;
     checkOutDate: string;
     nights: number;
@@ -348,7 +391,7 @@ export class BookingService {
     bookingId: string;
     hotelName: string;
     hotelAddress: string;
-    roomType: string;
+    roomSummary: string;
     checkInDate: string;
     checkOutDate: string;
     nights: number;
@@ -395,7 +438,7 @@ export class BookingService {
         <div class="row"><span>Booking ID</span><span><b>${params.bookingId}</b></span></div>
         <div class="row"><span>Hotel</span><span><b>${params.hotelName}</b></span></div>
         <div class="row"><span>Address</span><span>${params.hotelAddress}</span></div>
-        <div class="row"><span>Room Type</span><span>${params.roomType}</span></div>
+        <div class="row"><span>Rooms</span><span>${params.roomSummary}</span></div>
         <div class="row"><span>Check-in</span><span>${params.checkInDate}</span></div>
         <div class="row"><span>Check-out</span><span>${params.checkOutDate}</span></div>
         <div class="row"><span>Duration</span><span>${params.nights} night(s)</span></div>

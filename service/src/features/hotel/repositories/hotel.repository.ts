@@ -6,6 +6,26 @@ import { BaseRepository } from '../../../database/repository';
 import { Hotel } from '../models/hotel';
 import { RowDataPacket, ResultSetHeader } from 'mysql2/promise';
 import { HotelFilterService, HotelFilterParams } from '../services/hotel-filter.service';
+import {
+  loadWeights,
+  computeScoring,
+  parseScoringData,
+  deriveFromHotelRow,
+  ScoringWeights,
+} from '../services/scoring.service';
+
+/** Compute manasikScore + scoringBreakdown for a raw DB row. */
+function scoringForRow(row: any, weights: ScoringWeights) {
+  const averageRating = parseFloat(row.average_rating || 0);
+  let scoringData = parseScoringData(row.scoring_data);
+  let derived = false;
+  if (!scoringData) {
+    scoringData = deriveFromHotelRow(row).data;
+    derived = true;
+  }
+  const result = computeScoring(scoringData, weights, averageRating);
+  return { manasikScore: result.overall, scoringBreakdown: { ...result, derived } };
+}
 
 export interface HotelRow extends RowDataPacket {
   id: string;
@@ -266,6 +286,9 @@ export class HotelRepository extends BaseRepository<Hotel> {
     const { query, params } = await this.filterService.buildFilteredQuery(filters);
     const results = await this.query<any>(query, params);
 
+    // Load weights once for the whole batch
+    const weights = await loadWeights();
+
     // Fetch images and rooms for each hotel
     const hotelsWithDetails = await Promise.all(results.map(async (row) => {
       // Fetch images
@@ -281,6 +304,8 @@ export class HotelRepository extends BaseRepository<Hotel> {
       const roomFacilities = await this.filterService.getHotelRoomFacilities(row.id);
       const landmarks = await this.filterService.getHotelLandmarks(row.id);
       const surroundings = await this.filterService.getHotelSurroundings(row.id);
+
+      const { manasikScore, scoringBreakdown } = scoringForRow(row, weights);
 
       return {
         id: row.id,
@@ -304,6 +329,8 @@ export class HotelRepository extends BaseRepository<Hotel> {
         averageRating: parseFloat(row.average_rating || 0),
         totalReviews: row.total_reviews,
         minPrice: row.min_price ? parseFloat(row.min_price) : null,
+        manasikScore,
+        scoringBreakdown,
         images: images.map((img: any) => ({ id: img.id, url: img.url, displayOrder: img.display_order })),
         rooms: rooms.map((room: any) => ({
           id: room.id,
@@ -424,6 +451,9 @@ export class HotelRepository extends BaseRepository<Hotel> {
 
     const results = await this.query<any>(query, params);
 
+    // Load weights once for the whole batch
+    const weights = await loadWeights();
+
     // Fetch images and rooms for each hotel
     const hotelsWithDetails = await Promise.all(results.map(async (row) => {
       // Fetch images
@@ -433,6 +463,8 @@ export class HotelRepository extends BaseRepository<Hotel> {
       // Fetch rooms
       const roomsQuery = `SELECT id, name, base_price, currency, capacity FROM room_types WHERE hotel_id = ? AND status = 'ACTIVE' LIMIT 5`;
       const rooms = await this.query<any>(roomsQuery, [row.id]);
+
+      const { manasikScore, scoringBreakdown } = scoringForRow(row, weights);
 
       return {
         id: row.id,
@@ -456,6 +488,8 @@ export class HotelRepository extends BaseRepository<Hotel> {
         averageRating: parseFloat(row.average_rating || 0),
         totalReviews: row.total_reviews,
         minPrice: row.min_price ? parseFloat(row.min_price) : null,
+        manasikScore,
+        scoringBreakdown,
         images: images.map((img: any) => ({ id: img.id, url: img.url, displayOrder: img.display_order })),
         rooms: rooms.map((room: any) => ({
           id: room.id,

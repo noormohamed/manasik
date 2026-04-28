@@ -43,31 +43,29 @@ staffBookingRoutes.post('/create-on-behalf', authMiddleware, async (ctx: Context
       guestPhone,
       checkInDate,
       checkOutDate,
-      roomTypeId,
+      rooms,
       numberOfGuests,
       sendPaymentLink,
     } = (ctx.request as any).body as any;
 
     // Validate required fields
-    if (!hotelId || !guestEmail || !firstName || !lastName || !checkInDate || !checkOutDate || !roomTypeId || numberOfGuests === undefined) {
+    const missingRooms = !rooms || !Array.isArray(rooms) || rooms.length === 0;
+    if (!hotelId || !guestEmail || !firstName || !lastName || !checkInDate || !checkOutDate || missingRooms || numberOfGuests === undefined) {
       ctx.status = 400;
       ctx.body = {
         data: {
           success: false,
           error: 'Missing required fields',
           details: [
-            { field: 'hotelId', message: 'Hotel ID is required' },
-            { field: 'guestEmail', message: 'Guest email is required' },
-            { field: 'firstName', message: 'First name is required' },
-            { field: 'lastName', message: 'Last name is required' },
-            { field: 'checkInDate', message: 'Check-in date is required' },
-            { field: 'checkOutDate', message: 'Check-out date is required' },
-            { field: 'roomTypeId', message: 'Room type ID is required' },
-            { field: 'numberOfGuests', message: 'Number of guests is required' },
-          ].filter(d => {
-            const value = ((ctx.request as any).body as any)[d.field];
-            return value === undefined || value === null || value === '';
-          }),
+            !hotelId && { field: 'hotelId', message: 'Hotel ID is required' },
+            !guestEmail && { field: 'guestEmail', message: 'Guest email is required' },
+            !firstName && { field: 'firstName', message: 'First name is required' },
+            !lastName && { field: 'lastName', message: 'Last name is required' },
+            !checkInDate && { field: 'checkInDate', message: 'Check-in date is required' },
+            !checkOutDate && { field: 'checkOutDate', message: 'Check-out date is required' },
+            missingRooms && { field: 'rooms', message: 'At least one room must be selected' },
+            numberOfGuests === undefined && { field: 'numberOfGuests', message: 'Number of guests is required' },
+          ].filter(Boolean),
         },
       };
       return;
@@ -105,7 +103,7 @@ staffBookingRoutes.post('/create-on-behalf', authMiddleware, async (ctx: Context
       guestPhone,
       checkInDate,
       checkOutDate,
-      roomTypeId,
+      rooms,
       numberOfGuests,
       sendPaymentLink,
     });
@@ -121,8 +119,9 @@ staffBookingRoutes.post('/create-on-behalf', authMiddleware, async (ctx: Context
           guestEmail,
           checkInDate,
           checkOutDate,
-          roomTypeId,
+          rooms,
           numberOfGuests,
+          numberOfRooms: result.numberOfRooms,
           createdAt: new Date().toISOString(),
         },
         paymentLink: result.paymentLinkUrl

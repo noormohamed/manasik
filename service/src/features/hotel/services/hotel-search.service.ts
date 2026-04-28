@@ -4,6 +4,14 @@
  */
 
 import { getPool } from '../../../database/connection';
+import {
+  loadWeights,
+  computeScoring,
+  parseScoringData,
+  deriveFromHotelRow,
+  ScoringWeights,
+  ScoringBreakdown,
+} from './scoring.service';
 
 export type SortOption = 
   | 'recommended'
@@ -72,6 +80,7 @@ export interface HotelSearchResult {
   isElderlyFriendly: boolean;
   hasFamilyRooms: boolean;
   manasikScore?: number;
+  scoringBreakdown?: ScoringBreakdown & { derived: boolean };
   nearestGateId?: string;
   bestForTags: string[];
   // Related data
@@ -302,9 +311,12 @@ export class HotelSearchService {
     const [countResult] = await this.pool.query<any>(countQuery, countParams);
     const total = countResult[0]?.total || 0;
 
+    // Load weights once for scoring all hotels in this batch
+    const weights = await loadWeights();
+
     // Fetch additional data for each hotel
     const hotelsWithDetails = await Promise.all(
-      (hotels as any[]).map(async (row) => this.enrichHotelData(row))
+      (hotels as any[]).map(async (row) => this.enrichHotelData(row, weights))
     );
 
     return { hotels: hotelsWithDetails, total };
@@ -341,9 +353,31 @@ export class HotelSearchService {
   }
 
   /**
-   * Enrich hotel data with images, rooms, and tags
+   * Enrich hotel data with images, rooms, tags and scoring breakdown
    */
-  private async enrichHotelData(row: any): Promise<HotelSearchResult> {
+  private async enrichHotelData(row: any, weights?: ScoringWeights): Promise<HotelSearchResult> {
+    // Compute scoring breakdown
+    const effectiveWeights = weights || await loadWeights();
+    const averageRating = parseFloat(row.average_rating || 0);
+    let scoringData = parseScoringData(row.scoring_data);
+    let scoringDerived = false;
+    if (!scoringData) {
+      scoringData = deriveFromHotelRow(row).data;
+      scoringDerived = true;
+    }
+    const scoringResult = computeScoring(scoringData, effectiveWeights, averageRating);
+    const scoringBreakdown = { ...scoringResult, derived: scoringDerived };
+
+    // Cache manasik_score if null
+    if (row.manasik_score === null || row.manasik_score === undefined) {
+      try {
+        await this.pool.execute(
+          'UPDATE hotels SET manasik_score = ? WHERE id = ?',
+          [scoringResult.overall, row.id],
+        );
+        row.manasik_score = scoringResult.overall;
+      } catch { /* non-fatal */ }
+    }
     // Fetch images
     const [images] = await this.pool.query<any>(
       `SELECT id, image_url as url, display_order FROM hotel_images WHERE hotel_id = ? ORDER BY display_order LIMIT 5`,
@@ -398,7 +432,8 @@ export class HotelSearchService {
       viewType: row.view_type || undefined,
       isElderlyFriendly: row.is_elderly_friendly === 1 || row.is_elderly_friendly === true,
       hasFamilyRooms: row.has_family_rooms === 1 || row.has_family_rooms === true,
-      manasikScore: row.manasik_score ? parseFloat(row.manasik_score) : undefined,
+      manasikScore: scoringBreakdown.overall,
+      scoringBreakdown,
       nearestGateId: row.nearest_gate_id || undefined,
       bestForTags: tags.map((t: any) => t.tag).filter(Boolean),
       // Related data

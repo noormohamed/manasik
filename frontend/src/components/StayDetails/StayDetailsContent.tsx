@@ -10,6 +10,8 @@ import Amenities from "./Amenities";
 import ReviewsList from "./ReviewsList";
 import Location from "./Location";
 import ProximityInfo from "./ProximityInfo";
+import ManasikScoreBreakdown from "./ManasikScoreBreakdown";
+import { ScoringBreakdown } from "@/types/scoring";
 
 interface Hotel {
   id: string;
@@ -31,6 +33,8 @@ interface Hotel {
   cancellationPolicy: string;
   customPolicies?: Array<{ id: string; title: string; description: string; enabled: boolean }>;
   status: string;
+  manasikScore?: number | null;
+  scoringBreakdown?: ScoringBreakdown | null;
   images: Array<{ id: string; url: string; displayOrder: number }>;
   amenities: Record<string, boolean>;
   rooms: Array<{
@@ -218,8 +222,40 @@ const StayDetailsContent: React.FC<StayDetailsContentProps> = ({ hotelId }) => {
         <div className="container">
           {/* Hotel Information - Above Images */}
           <div className="stay-details-information mb-4">
-            <h2>{hotel.name}</h2>
-            <div className="d-flex align-items-center mb-3">
+            <div className="d-flex align-items-start justify-content-between flex-wrap gap-3">
+              <h2 className="mb-0">{hotel.name}</h2>
+              {(hotel.scoringBreakdown?.overall != null || hotel.manasikScore != null) && (() => {
+                const score = hotel.scoringBreakdown?.overall ?? hotel.manasikScore!;
+                return (
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    background: score >= 8 ? '#f0fdf4' : score >= 6 ? '#fffbeb' : '#fef2f2',
+                    border: `2px solid ${score >= 8 ? '#22c55e' : score >= 6 ? '#f59e0b' : '#ef4444'}`,
+                    borderRadius: 12,
+                    padding: '8px 16px',
+                    minWidth: 80,
+                    textAlign: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <span style={{
+                      fontSize: 28,
+                      fontWeight: 800,
+                      lineHeight: 1,
+                      color: score >= 8 ? '#16a34a' : score >= 6 ? '#d97706' : '#dc2626',
+                    }}>
+                      {score.toFixed(1)}
+                    </span>
+                    <span style={{ fontSize: 11, color: '#6b7280', marginTop: 2 }}>/ 10</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#374151', marginTop: 4, whiteSpace: 'nowrap' }}>
+                      Manasik Score
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+            <div className="d-flex align-items-center mb-3 mt-3">
               <div className="me-3">
                 {Array.from({ length: 5 }, (_, i) => (
                   <i
@@ -523,9 +559,16 @@ const StayDetailsContent: React.FC<StayDetailsContentProps> = ({ hotelId }) => {
                 />
 
                 {/* Things to Know */}
-                {(hotel.checkInTime || hotel.checkOutTime || hotel.cancellationPolicy || (hotel.customPolicies && hotel.customPolicies.some(r => r.enabled))) && (
+                {(hotel.scoringBreakdown || hotel.checkInTime || hotel.checkOutTime || hotel.cancellationPolicy || (hotel.customPolicies && hotel.customPolicies.some(r => r.enabled))) && (
                   <div className="mb-4">
                     <h3 className="mb-4">Things to Know</h3>
+
+                    {/* Manasik Score Breakdown */}
+                    {hotel.scoringBreakdown && (
+                      <div className="mb-3">
+                        <ManasikScoreBreakdown breakdown={hotel.scoringBreakdown} />
+                      </div>
+                    )}
 
                     {/* Check-in / Check-out */}
                     {(hotel.checkInTime || hotel.checkOutTime) && (

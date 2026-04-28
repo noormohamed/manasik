@@ -16,7 +16,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
     const { bookingId } = ctx.params;
     const pool = getPool();
 
-    // Fetch the booking with hotel details
+    // Fetch the booking (hotel info is stored in metadata)
     const [bookings] = await pool.query<any>(
       `SELECT 
         b.id,
@@ -33,7 +33,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
         b.metadata,
         b.created_at as createdAt,
         b.updated_at as updatedAt,
-        b.hotel_id as hotelId,
+        JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId,
         h.name as hotelName,
         h.description as hotelDescription,
         h.address as hotelAddress,
@@ -49,7 +49,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
         h.cancellation_policy as cancellationPolicy,
         h.manasik_score as manasikScore
       FROM bookings b
-      LEFT JOIN hotels h ON b.hotel_id = h.id
+      LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
       WHERE b.id = ? AND b.customer_id = ?`,
       [bookingId, userId]
     );
@@ -65,12 +65,13 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
       ? JSON.parse(booking.metadata) 
       : booking.metadata || {};
 
-    // Get hotel images
+    // Get hotel images and gate info from metadata.hotelId
+    const hotelIdFromMetadata = metadata.hotelId;
     let hotelImages: any[] = [];
-    if (booking.hotelId) {
+    if (hotelIdFromMetadata) {
       const [images] = await pool.query<any>(
         `SELECT image_url as url FROM hotel_images WHERE hotel_id = ? ORDER BY display_order LIMIT 5`,
-        [booking.hotelId]
+        [hotelIdFromMetadata]
       );
       hotelImages = images as any[];
     }
@@ -80,7 +81,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
     let kaabaGate = null;
     let walkingTimeToHaram = null;
     
-    if (booking.hotelId) {
+    if (hotelIdFromMetadata) {
       // Get closest gate (smallest distance)
       const [closestGates] = await pool.query<any>(
         `SELECT hg.name_english, hg.name_arabic, hg.gate_number, hgd.distance_meters, hgd.walking_time_minutes
@@ -89,7 +90,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
          WHERE hgd.hotel_id = ?
          ORDER BY hgd.distance_meters ASC
          LIMIT 1`,
-        [booking.hotelId]
+        [hotelIdFromMetadata]
       );
       
       if (closestGates && closestGates.length > 0) {
@@ -111,7 +112,7 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
          WHERE hgd.hotel_id = ? AND hg.has_direct_kaaba_access = TRUE
          ORDER BY hgd.distance_meters ASC
          LIMIT 1`,
-        [booking.hotelId]
+        [hotelIdFromMetadata]
       );
       
       if (kaabaGates && kaabaGates.length > 0) {
@@ -125,13 +126,11 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
       }
     }
 
-    // Build full address
+    // Build full address from metadata
     const hotelFullAddress = [
-      booking.hotelAddress,
-      booking.hotelCity,
-      booking.hotelState,
-      booking.hotelCountry,
-      booking.hotelZipCode
+      metadata.hotelAddress,
+      metadata.hotelCity,
+      metadata.hotelCountry
     ].filter(Boolean).join(', ');
 
     // Determine cancellation info
@@ -179,23 +178,23 @@ userRoutes.get('/me/bookings/:bookingId', authMiddleware, async (ctx: Context) =
         refundReason: booking.refundReason,
         refundedAt: booking.refundedAt,
         paymentStatus: booking.paymentStatus,
-        // Hotel info
+        // Hotel info (from metadata for staff-created bookings)
         hotel: {
-          id: booking.hotelId || metadata.hotelId,
-          name: booking.hotelName || metadata.hotelName,
-          description: booking.hotelDescription,
-          address: booking.hotelAddress || metadata.hotelAddress,
-          city: booking.hotelCity || metadata.hotelCity,
-          state: booking.hotelState,
-          country: booking.hotelCountry || metadata.hotelCountry,
-          zipCode: booking.hotelZipCode,
-          fullAddress: hotelFullAddress || metadata.hotelFullAddress,
-          latitude: booking.hotelLatitude ? parseFloat(booking.hotelLatitude) : null,
-          longitude: booking.hotelLongitude ? parseFloat(booking.hotelLongitude) : null,
-          checkInTime: booking.checkInTime || '14:00',
-          checkOutTime: booking.checkOutTime || '11:00',
-          starRating: booking.starRating,
-          manasikScore: booking.manasikScore ? parseFloat(booking.manasikScore) : null,
+          id: metadata.hotelId,
+          name: metadata.hotelName,
+          description: null,
+          address: metadata.hotelAddress,
+          city: metadata.hotelCity,
+          state: null,
+          country: metadata.hotelCountry,
+          zipCode: null,
+          fullAddress: hotelFullAddress || null,
+          latitude: null,
+          longitude: null,
+          checkInTime: '14:00',
+          checkOutTime: '11:00',
+          starRating: null,
+          manasikScore: null,
           images: hotelImages.map((img: any) => img.url),
         },
         // Proximity info
@@ -248,9 +247,8 @@ userRoutes.post('/me/bookings/:bookingId/cancel', authMiddleware, async (ctx: Co
 
     // Fetch the booking
     const [bookings] = await pool.query<any>(
-      `SELECT b.*, h.cancellation_policy 
+      `SELECT b.*
        FROM bookings b
-       LEFT JOIN hotels h ON b.hotel_id = h.id
        WHERE b.id = ? AND b.customer_id = ?`,
       [bookingId, userId]
     );
@@ -337,11 +335,13 @@ userRoutes.post('/me/bookings/:bookingId/cancel', authMiddleware, async (ctx: Co
 userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
   try {
     const userId = (ctx.state as any).userId;
-    const { date } = ctx.query;
     const pool = getPool();
 
-    // Build query with optional date filter
-    let query = `SELECT 
+    const { date, limit: limitParam } = ctx.query;
+    const limitNum = limitParam ? parseInt(limitParam as string, 10) : 100;
+
+    // Build query with optional date filter (hotel info joined via metadata JSON)
+    let query = `SELECT
       b.id,
       b.service_type as serviceType,
       b.status,
@@ -356,17 +356,18 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       b.metadata,
       b.created_at as createdAt,
       b.updated_at as updatedAt,
-      b.hotel_id as hotelId,
+      JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId,
       h.name as hotelName,
       h.address as hotelAddress,
       h.city as hotelCity,
       h.country as hotelCountry,
       h.check_in_time as checkInTime,
       h.check_out_time as checkOutTime,
-      h.star_rating as starRating
+      h.star_rating as starRating,
+      h.manasik_score as manasikScore
     FROM bookings b
-    LEFT JOIN hotels h ON b.hotel_id = h.id
-    WHERE b.customer_id = ?`;
+    LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
+    WHERE b.customer_id = ?`
 
     const params: any[] = [userId];
 
@@ -389,7 +390,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       params.push(date, date, date, date);
     }
 
-    query += ` ORDER BY b.created_at DESC LIMIT 100`;
+    query += ` ORDER BY b.created_at DESC LIMIT ${limitNum}`;
 
     // Fetch bookings where user is the customer (not hotel bookings they manage)
     const [bookings] = await pool.query<any>(query, params);
@@ -400,13 +401,14 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
         ? JSON.parse(booking.metadata) 
         : booking.metadata || {};
       
-      // Fetch hotel name from hotels table if not in metadata or booking (for old bookings)
-      let hotelName = booking.hotelName || metadata.hotelName;
-      if (!hotelName && (booking.hotelId || metadata.hotelId)) {
+      // Use hotelId from metadata
+      const hotelIdForLookup = metadata.hotelId;
+      let hotelName = metadata.hotelName;
+      if (!hotelName && hotelIdForLookup) {
         try {
           const [hotelRows] = await pool.query<any>(
             'SELECT name FROM hotels WHERE id = ? LIMIT 1',
-            [booking.hotelId || metadata.hotelId]
+            [hotelIdForLookup]
           );
           if (hotelRows && hotelRows.length > 0) {
             hotelName = hotelRows[0].name;
@@ -416,8 +418,8 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
         }
       }
       
-      // Build full address from hotel table data
-      const hotelFullAddress = [booking.hotelAddress, booking.hotelCity, booking.hotelCountry]
+      // Build full address from metadata
+      const hotelFullAddress = [metadata.hotelAddress, metadata.hotelCity, metadata.hotelCountry]
         .filter(Boolean)
         .join(', ') || null;
       
@@ -425,7 +427,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       let closestGate = null;
       let kaabaGate = null;
       
-      if (booking.hotelId) {
+      if (hotelIdForLookup) {
         // Get closest gate (smallest distance)
         const [closestGates] = await pool.query<any>(
           `SELECT hg.name_english, hg.gate_number, hgd.distance_meters, hgd.walking_time_minutes
@@ -434,7 +436,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
            WHERE hgd.hotel_id = ?
            ORDER BY hgd.distance_meters ASC
            LIMIT 1`,
-          [booking.hotelId]
+          [hotelIdForLookup]
         );
         
         if (closestGates && closestGates.length > 0) {
@@ -446,14 +448,14 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
           };
         }
         
-        // Get Kaaba-facing gate (Gate 1 - King Abdul Aziz Gate is the main Kaaba-facing gate)
+        // Get Kaaba-facing gate
         const [kaabaGates] = await pool.query<any>(
           `SELECT hg.name_english, hg.gate_number, hgd.distance_meters, hgd.walking_time_minutes
            FROM hotel_gate_distances hgd
            JOIN haram_gates hg ON hgd.gate_id = hg.id
            WHERE hgd.hotel_id = ? AND hg.gate_number = 1
            LIMIT 1`,
-          [booking.hotelId]
+          [hotelIdForLookup]
         );
         
         if (kaabaGates && kaabaGates.length > 0) {
@@ -504,15 +506,15 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
         refundReason: booking.refundReason || null,
         refundedAt: booking.refundedAt || null,
         paymentStatus: booking.paymentStatus,
-        hotelId: booking.hotelId || metadata.hotelId,
+        hotelId: hotelIdForLookup,
         hotelName: hotelName || 'Unknown Hotel',
-        hotelAddress: booking.hotelAddress || metadata.hotelAddress,
-        hotelCity: booking.hotelCity || metadata.hotelCity,
-        hotelCountry: booking.hotelCountry || metadata.hotelCountry,
-        hotelFullAddress: hotelFullAddress || metadata.hotelFullAddress,
-        checkInTime: booking.checkInTime || '14:00',
-        checkOutTime: booking.checkOutTime || '11:00',
-        starRating: booking.starRating,
+        hotelAddress: metadata.hotelAddress,
+        hotelCity: metadata.hotelCity,
+        hotelCountry: metadata.hotelCountry,
+        hotelFullAddress: hotelFullAddress || null,
+        checkInTime: '14:00',
+        checkOutTime: '11:00',
+        starRating: null,
         closestGate,
         kaabaGate,
         roomType: metadata.roomType,

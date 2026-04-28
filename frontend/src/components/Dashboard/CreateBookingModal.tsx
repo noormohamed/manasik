@@ -24,14 +24,15 @@ interface RoomType {
   name: string;
   description?: string;
   capacity?: number;
-  maxOccupancy?: number;
-  base_price?: number;
   basePrice?: number;
   currency?: string;
-  available_rooms?: number;
+  availableRooms?: number;
   image?: string;
-  amenities?: string[];
-  size?: number;
+}
+
+interface RoomSelection {
+  roomTypeId: string;
+  quantity: number;
 }
 
 interface WizardState {
@@ -41,7 +42,7 @@ interface WizardState {
   checkOutDate: string;
   numberOfGuests: number;
   guests: Guest[];
-  roomTypeId: string;
+  roomSelections: RoomSelection[];
   sendPaymentLink: boolean;
   isLoading: boolean;
   errors: Record<string, string>;
@@ -63,7 +64,7 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
     checkOutDate: "",
     numberOfGuests: 1,
     guests: [{ firstName: "", lastName: "", email: "", phone: "", isLead: true }],
-    roomTypeId: "",
+    roomSelections: [],
     sendPaymentLink: false,
     isLoading: false,
     errors: {},
@@ -72,10 +73,9 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [nights, setNights] = useState(0);
   const [totalPrice, setTotalPrice] = useState(0);
-  const [selectedRoomType, setSelectedRoomType] = useState<RoomType | null>(null);
   const [guestLookupLoading, setGuestLookupLoading] = useState(false);
   const [duplicateBookingWarning, setDuplicateBookingWarning] = useState<string | null>(null);
-  const [userHotels, setUserHotels] = useState<Array<{ id: string; name: string }>>([]);
+  const [userHotels, setUserHotels] = useState<Array<{ id: string; name: string }>>([])
 
   // Sync selectedHotel with hotelId prop
   useEffect(() => {
@@ -96,27 +96,44 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
     }
   }, [wizardState.selectedHotel, isOpen]);
 
-  // Calculate nights and price when dates change
+  // Derive computed values from state (not stored, recalculated on each render)
+  const totalCapacity = wizardState.roomSelections.reduce((sum, sel) => {
+    const room = roomTypes.find((r) => r.id === sel.roomTypeId);
+    return sum + (room?.capacity || 0) * sel.quantity;
+  }, 0);
+  const totalRoomsSelected = wizardState.roomSelections.reduce(
+    (sum, sel) => sum + sel.quantity,
+    0
+  );
+
+  // Recompute nights whenever dates change
   useEffect(() => {
     if (wizardState.checkInDate && wizardState.checkOutDate) {
       const checkIn = new Date(wizardState.checkInDate);
       const checkOut = new Date(wizardState.checkOutDate);
-      const calculatedNights = Math.ceil(
+      const n = Math.ceil(
         (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)
       );
-      setNights(calculatedNights);
-
-      if (selectedRoomType && calculatedNights > 0) {
-        const price = selectedRoomType.base_price || selectedRoomType.basePrice || 0;
-        const subtotal = price * calculatedNights;
-        const tax = subtotal * 0.15;
-        setTotalPrice(subtotal + tax);
-      }
-
-      // Check for duplicate bookings
+      setNights(n > 0 ? n : 0);
       checkDuplicateBooking();
+    } else {
+      setNights(0);
     }
-  }, [wizardState.checkInDate, wizardState.checkOutDate, selectedRoomType]);
+  }, [wizardState.checkInDate, wizardState.checkOutDate]);
+
+  // Recompute total price whenever nights or room selections change
+  useEffect(() => {
+    if (nights > 0 && wizardState.roomSelections.length > 0) {
+      const subtotal = wizardState.roomSelections.reduce((sum, sel) => {
+        const room = roomTypes.find((r) => r.id === sel.roomTypeId);
+        const price = room?.basePrice || 0;
+        return sum + price * nights * sel.quantity;
+      }, 0);
+      setTotalPrice(Math.round(subtotal * 1.15 * 100) / 100);
+    } else {
+      setTotalPrice(0);
+    }
+  }, [nights, wizardState.roomSelections, roomTypes]);
 
   const fetchRoomTypes = async () => {
     try {
@@ -271,8 +288,10 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
   const validateStep3 = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!wizardState.roomTypeId) {
-      newErrors.roomTypeId = "Room type is required";
+    if (totalRoomsSelected === 0) {
+      newErrors.rooms = "Please select at least one room";
+    } else if (totalCapacity < wizardState.numberOfGuests) {
+      newErrors.rooms = `Selected rooms fit ${totalCapacity} guest(s) but ${wizardState.numberOfGuests} are needed. Please add more rooms.`;
     }
 
     setWizardState((prev) => ({ ...prev, errors: newErrors }));
@@ -340,10 +359,27 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
     }
   };
 
-  const handleRoomTypeChange = (roomId: string) => {
-    setWizardState((prev) => ({ ...prev, roomTypeId: roomId, errors: {} }));
-    const room = roomTypes.find((r) => r.id === roomId);
-    setSelectedRoomType(room || null);
+  const updateRoomQuantity = (roomTypeId: string, delta: number) => {
+    const room = roomTypes.find((r) => r.id === roomTypeId);
+    const maxAvailable = room?.availableRooms ?? 0;
+
+    setWizardState((prev) => {
+      const existing = prev.roomSelections.find((s) => s.roomTypeId === roomTypeId);
+      const currentQty = existing?.quantity ?? 0;
+      const newQty = Math.max(0, Math.min(currentQty + delta, maxAvailable));
+
+      let newSelections: RoomSelection[];
+      if (newQty === 0) {
+        newSelections = prev.roomSelections.filter((s) => s.roomTypeId !== roomTypeId);
+      } else if (existing) {
+        newSelections = prev.roomSelections.map((s) =>
+          s.roomTypeId === roomTypeId ? { ...s, quantity: newQty } : s
+        );
+      } else {
+        newSelections = [...prev.roomSelections, { roomTypeId, quantity: newQty }];
+      }
+      return { ...prev, roomSelections: newSelections, errors: {} };
+    });
   };
 
   const handleNextStep = () => {
@@ -391,7 +427,7 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
         guestPhone: leadGuest?.phone,
         checkInDate: wizardState.checkInDate,
         checkOutDate: wizardState.checkOutDate,
-        roomTypeId: wizardState.roomTypeId,
+        rooms: wizardState.roomSelections,
         numberOfGuests: wizardState.numberOfGuests,
         sendPaymentLink: wizardState.sendPaymentLink,
         guests: wizardState.guests,
@@ -424,12 +460,11 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
       checkOutDate: "",
       numberOfGuests: 1,
       guests: [{ firstName: "", lastName: "", email: "", phone: "", isLead: true }],
-      roomTypeId: "",
+      roomSelections: [],
       sendPaymentLink: false,
       isLoading: false,
       errors: {},
     });
-    setSelectedRoomType(null);
   };
 
   const handleClose = () => {
@@ -590,7 +625,6 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
                     handleStep1Change("numberOfGuests", parseInt(e.target.value) || 1)
                   }
                   min="1"
-                  max="10"
                   disabled={wizardState.isLoading}
                   aria-invalid={!!wizardState.errors.numberOfGuests}
                 />
@@ -707,73 +741,133 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
             </fieldset>
           )}
 
-          {/* STEP 3: Room Selection */}
+          {/* STEP 3: Room Builder */}
           {wizardState.step === 3 && (
             <fieldset className={styles.section}>
-              <legend>Select Room</legend>
+              <legend>Select Rooms</legend>
 
-              <div className={styles.roomGrid}>
-                {roomTypes.map((room) => (
-                  <div
-                    key={room.id}
-                    className={`${styles.roomCard} ${
-                      wizardState.roomTypeId === room.id ? styles.selected : ""
-                    }`}
-                    onClick={() => handleRoomTypeChange(room.id)}
-                  >
-                    <div className={styles.roomHeader}>
-                      <h4>{room.name}</h4>
-                      <span className={styles.price}>
-                        ${(room.base_price || room.basePrice || 0)}/night
-                      </span>
-                    </div>
-
-                    {room.description && (
-                      <p className={styles.roomDescription}>{room.description}</p>
-                    )}
-
-                    <div className={styles.roomDetails}>
-                      {room.capacity && (
-                        <div className={styles.detail}>
-                          <span>👥 Capacity:</span> {room.capacity} guests
-                        </div>
-                      )}
-                      {room.size && (
-                        <div className={styles.detail}>
-                          <span>📐 Size:</span> {room.size} m²
-                        </div>
-                      )}
-                    </div>
-
-                    {room.amenities && room.amenities.length > 0 && (
-                      <div className={styles.amenities}>
-                        <strong>Amenities:</strong>
-                        <ul>
-                          {room.amenities.slice(0, 3).map((amenity, idx) => (
-                            <li key={idx}>✓ {amenity}</li>
-                          ))}
-                          {room.amenities.length > 3 && (
-                            <li>+ {room.amenities.length - 3} more</li>
-                          )}
-                        </ul>
-                      </div>
-                    )}
-
-                    <input
-                      type="radio"
-                      name="roomType"
-                      value={room.id}
-                      checked={wizardState.roomTypeId === room.id}
-                      onChange={() => handleRoomTypeChange(room.id)}
-                      className={styles.radioInput}
-                    />
+              {/* Capacity tracker */}
+              <div style={{
+                background: totalCapacity >= wizardState.numberOfGuests ? "#f0fdf4" : "#fff7ed",
+                border: `1px solid ${totalCapacity >= wizardState.numberOfGuests ? "#86efac" : "#fed7aa"}`,
+                borderRadius: 8,
+                padding: "10px 14px",
+                marginBottom: 16,
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+              }}>
+                <span style={{ fontSize: 18 }}>
+                  {totalCapacity >= wizardState.numberOfGuests ? "✅" : "⚠️"}
+                </span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#374151" }}>
+                    {totalRoomsSelected === 0
+                      ? `Select rooms for ${wizardState.numberOfGuests} guest(s)`
+                      : totalCapacity >= wizardState.numberOfGuests
+                      ? `All ${wizardState.numberOfGuests} guest(s) accommodated across ${totalRoomsSelected} room(s)`
+                      : `${totalCapacity}/${wizardState.numberOfGuests} guests accommodated — add more rooms`}
                   </div>
-                ))}
+                  {totalRoomsSelected > 0 && (
+                    <div style={{
+                      marginTop: 4,
+                      height: 6,
+                      background: "#e5e7eb",
+                      borderRadius: 3,
+                      overflow: "hidden",
+                    }}>
+                      <div style={{
+                        width: `${Math.min(100, Math.round((totalCapacity / wizardState.numberOfGuests) * 100))}%`,
+                        height: "100%",
+                        background: totalCapacity >= wizardState.numberOfGuests ? "#22c55e" : "#f97316",
+                        transition: "width 0.2s",
+                      }} />
+                    </div>
+                  )}
+                </div>
               </div>
 
-              {wizardState.errors.roomTypeId && (
+              <div className={styles.roomGrid}>
+                {roomTypes.map((room) => {
+                  const qty = wizardState.roomSelections.find((s) => s.roomTypeId === room.id)?.quantity ?? 0;
+                  const available = room.availableRooms ?? 0;
+                  return (
+                    <div
+                      key={room.id}
+                      className={`${styles.roomCard} ${qty > 0 ? styles.selected : ""}`}
+                    >
+                      <div className={styles.roomHeader}>
+                        <h4>{room.name}</h4>
+                        <span className={styles.price}>${room.basePrice ?? 0}/night</span>
+                      </div>
+
+                      {room.description && (
+                        <p className={styles.roomDescription}>{room.description}</p>
+                      )}
+
+                      <div className={styles.roomDetails}>
+                        <div className={styles.detail}>
+                          <span>👥 Fits:</span> {room.capacity ?? "?"} guest(s) per room
+                        </div>
+                        <div className={styles.detail}>
+                          <span>🛏 Available:</span> {available} room(s)
+                        </div>
+                      </div>
+
+                      {/* Quantity stepper */}
+                      <div style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        marginTop: 12,
+                        justifyContent: "flex-end",
+                      }}>
+                        {qty > 0 && (
+                          <span style={{ fontSize: 12, color: "#6b7280" }}>
+                            {(room.capacity ?? 0) * qty} guests fit
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => updateRoomQuantity(room.id, -1)}
+                          disabled={qty === 0 || wizardState.isLoading}
+                          style={{
+                            width: 28, height: 28, borderRadius: "50%",
+                            border: "1px solid #d1d5db", background: qty === 0 ? "#f9fafb" : "#fff",
+                            cursor: qty === 0 ? "not-allowed" : "pointer",
+                            fontSize: 16, lineHeight: 1, color: "#374151",
+                          }}
+                          aria-label={`Remove one ${room.name}`}
+                        >
+                          −
+                        </button>
+                        <span style={{ minWidth: 20, textAlign: "center", fontWeight: 700 }}>
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => updateRoomQuantity(room.id, 1)}
+                          disabled={qty >= available || wizardState.isLoading}
+                          style={{
+                            width: 28, height: 28, borderRadius: "50%",
+                            border: "1px solid #2563eb",
+                            background: qty >= available ? "#f9fafb" : "#2563eb",
+                            cursor: qty >= available ? "not-allowed" : "pointer",
+                            fontSize: 16, lineHeight: 1, color: qty >= available ? "#9ca3af" : "#fff",
+                          }}
+                          aria-label={`Add one ${room.name}`}
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {wizardState.errors.rooms && (
                 <span className={styles.error} role="alert" aria-live="assertive">
-                  {wizardState.errors.roomTypeId}
+                  {wizardState.errors.rooms}
                 </span>
               )}
             </fieldset>
@@ -820,24 +914,56 @@ const CreateBookingModal: React.FC<CreateBookingModalProps> = ({
                   </div>
 
                   <div className={styles.summarySection}>
-                    <h4>Room</h4>
+                    <h4>Room Breakdown</h4>
+                    {wizardState.roomSelections.map((sel) => {
+                      const room = roomTypes.find((r) => r.id === sel.roomTypeId);
+                      const lineSubtotal = (room?.basePrice ?? 0) * nights * sel.quantity;
+                      return (
+                        <div key={sel.roomTypeId} className={styles.summaryRow}>
+                          <span>
+                            {room?.name ?? sel.roomTypeId} × {sel.quantity}
+                            <span style={{ color: "#6b7280", fontSize: 12, marginLeft: 6 }}>
+                              ({(room?.capacity ?? 0) * sel.quantity} guests)
+                            </span>
+                          </span>
+                          <strong>${(room?.basePrice ?? 0) * sel.quantity}/night</strong>
+                        </div>
+                      );
+                    })}
                     <div className={styles.summaryRow}>
-                      <span>Room Type:</span>
-                      <strong>{selectedRoomType?.name}</strong>
+                      <span>Total rooms:</span>
+                      <strong>{totalRoomsSelected}</strong>
                     </div>
                     <div className={styles.summaryRow}>
-                      <span>Price per night:</span>
-                      <strong>
-                        ${(selectedRoomType?.base_price || selectedRoomType?.basePrice || 0)}
-                      </strong>
+                      <span>Total capacity:</span>
+                      <strong>{totalCapacity} guests</strong>
                     </div>
                   </div>
 
                   <div className={styles.summarySection} style={{ borderTop: "2px solid #ddd" }}>
-                    <div className={styles.summaryRow} style={{ fontSize: "18px" }}>
-                      <span>Total:</span>
-                      <strong style={{ color: "#2563eb" }}>${totalPrice.toFixed(2)}</strong>
-                    </div>
+                    {(() => {
+                      const subtotal = wizardState.roomSelections.reduce((sum, sel) => {
+                        const room = roomTypes.find((r) => r.id === sel.roomTypeId);
+                        return sum + (room?.basePrice ?? 0) * nights * sel.quantity;
+                      }, 0);
+                      const tax = Math.round(subtotal * 0.15 * 100) / 100;
+                      return (
+                        <>
+                          <div className={styles.summaryRow} style={{ color: "#6b7280", fontSize: 14 }}>
+                            <span>Subtotal ({nights} night{nights !== 1 ? "s" : ""}):</span>
+                            <span>${subtotal.toFixed(2)}</span>
+                          </div>
+                          <div className={styles.summaryRow} style={{ color: "#6b7280", fontSize: 14 }}>
+                            <span>Tax (15%):</span>
+                            <span>${tax.toFixed(2)}</span>
+                          </div>
+                          <div className={styles.summaryRow} style={{ fontSize: 18 }}>
+                            <span>Total:</span>
+                            <strong style={{ color: "#2563eb" }}>${totalPrice.toFixed(2)}</strong>
+                          </div>
+                        </>
+                      );
+                    })()}
                   </div>
                 </div>
               </fieldset>

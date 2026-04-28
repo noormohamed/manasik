@@ -8,7 +8,9 @@ import Image from 'next/image';
 import Link from 'next/link';
 import AuthorSidebar from './AuthorSidebar';
 import HotelRulesEditor from './HotelRulesEditor';
+import HotelScoringEditor from './HotelScoringEditor';
 import { CustomPolicy } from '@/types/hotel-policies';
+import { ScoringData, defaultScoringData, walkingTimeToScore } from '@/types/scoring';
 
 interface Room {
   id: string;
@@ -51,6 +53,8 @@ interface Hotel {
   averageRating: number;
   totalReviews: number;
   images: string[];
+  scoringData?: ScoringData | null;
+  walkingTimeToHaram?: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,6 +96,7 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
   const [showEditHotelModal, setShowEditHotelModal] = useState(false);
   const [editingHotel, setEditingHotel] = useState<Hotel | null>(null);
   const [editingRules, setEditingRules] = useState<CustomPolicy[]>([]);
+  const [editingScoringData, setEditingScoringData] = useState<ScoringData | null>(null);
 
   useEffect(() => {
     fetchHotelDetails();
@@ -268,6 +273,16 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
     if (!hotel) return;
     setEditingHotel({ ...hotel });
     setEditingRules(hotel.customPolicies || []);
+    // Pre-populate scoring data; derive walkingTimeToHaram score from existing field if no scoring_data yet
+    if (hotel.scoringData) {
+      setEditingScoringData(hotel.scoringData);
+    } else {
+      const defaults = defaultScoringData();
+      if (hotel.walkingTimeToHaram) {
+        defaults.location.walkingTimeToHaram = walkingTimeToScore(hotel.walkingTimeToHaram);
+      }
+      setEditingScoringData(defaults);
+    }
     setSaveError(null);
     setSaveSuccess(false);
     setShowEditHotelModal(true);
@@ -312,6 +327,7 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
         cancellationPolicy: editingHotel.cancellationPolicy,
         customPolicies: editingRules,
         status: editingHotel.status,
+        scoringData: editingScoringData,
       });
 
       console.log('Hotel saved successfully. Response:', response);
@@ -1123,6 +1139,16 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
                     <HotelRulesEditor
                       rules={editingRules}
                       onRulesChange={setEditingRules}
+                      disabled={saving}
+                    />
+                  </div>
+
+                  <div className="col-12 mt-4">
+                    <h6 className="border-bottom pb-2">Manasik Score</h6>
+                    <HotelScoringEditor
+                      scoringData={editingScoringData}
+                      averageRating={editingHotel?.averageRating ?? 0}
+                      onChange={setEditingScoringData}
                       disabled={saving}
                     />
                   </div>

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import Image from "next/image";
 
+import { ScoringBreakdown, scoreColour } from '@/types/scoring';
+
 export interface HotelCardData {
   id: string;
   name: string;
@@ -21,6 +23,7 @@ export interface HotelCardData {
   isElderlyFriendly: boolean;
   hasFamilyRooms: boolean;
   manasikScore?: number;
+  scoringBreakdown?: ScoringBreakdown | null;
   bestForTags: string[];
   images: Array<{ id: string; url: string }>;
   rooms: Array<{ id: string; name: string; basePrice: number; currency: string }>;
@@ -340,6 +343,45 @@ const HotelCard = ({ hotel, nights }: HotelCardProps) => {
               ⭐ {hotel.manasikScore.toFixed(1)} Manasik
             </span>
           )}
+          {/* Compact 5-category indicator */}
+          {hotel.scoringBreakdown && (() => {
+            const cats = [
+              { key: 'location' as const,           short: 'Loc' },
+              { key: 'pilgrimSuitability' as const, short: 'Plg' },
+              { key: 'hotelQuality' as const,       short: 'Qty' },
+              { key: 'experienceFriction' as const, short: 'Exp' },
+              { key: 'userReviews' as const,        short: 'Rev' },
+            ];
+            return (
+              <span
+                style={{
+                  display: 'flex',
+                  gap: 3,
+                  padding: '3px 6px',
+                  background: 'rgba(0,0,0,0.65)',
+                  borderRadius: 4,
+                  backdropFilter: 'blur(4px)',
+                }}
+              >
+                {cats.map(({ key }) => {
+                  const score = hotel.scoringBreakdown!.categories[key].score;
+                  return (
+                    <span
+                      key={key}
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        background: scoreColour(score),
+                        display: 'inline-block',
+                      }}
+                      title={`${key}: ${score.toFixed(1)}`}
+                    />
+                  );
+                })}
+              </span>
+            );
+          })()}
           {viewTypeInfo && viewTypeInfo.label && (
             <span className="badge view">
               {viewTypeInfo.icon} {viewTypeInfo.label}

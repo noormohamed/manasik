@@ -184,11 +184,24 @@ CREATE TABLE IF NOT EXISTS bookings (
   company_id VARCHAR(36) NOT NULL,
   customer_id VARCHAR(36) NOT NULL,
   service_type ENUM('HOTEL', 'TAXI', 'EXPERIENCE', 'CAR', 'FOOD') NOT NULL,
+  booking_source ENUM('DIRECT', 'STAFF_CREATED', 'AGENT', 'BROKER') DEFAULT 'DIRECT',
   status ENUM('PENDING', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'REFUNDED') DEFAULT 'PENDING',
+  payment_status ENUM('PENDING', 'PAID', 'PARTIAL_REFUND', 'FULLY_REFUNDED', 'FAILED') DEFAULT 'PENDING',
   currency VARCHAR(3) DEFAULT 'USD',
   subtotal DECIMAL(12, 2) NOT NULL,
   tax DECIMAL(12, 2) DEFAULT 0,
   total DECIMAL(12, 2) NOT NULL,
+  refund_amount DECIMAL(12, 2) NULL DEFAULT 0,
+  refund_reason VARCHAR(255) NULL,
+  refunded_at TIMESTAMP NULL,
+  agent_id VARCHAR(36) NULL,
+  staff_created_by VARCHAR(36) NULL,
+  payment_link_id VARCHAR(255) NULL,
+  payment_link_url TEXT NULL,
+  payment_link_expires_at TIMESTAMP NULL,
+  hold_expires_at TIMESTAMP NULL,
+  broker_notes TEXT NULL,
+  guest_details JSON NULL,
   metadata JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -197,8 +210,12 @@ CREATE TABLE IF NOT EXISTS bookings (
   INDEX idx_company_id (company_id),
   INDEX idx_customer_id (customer_id),
   INDEX idx_status (status),
+  INDEX idx_payment_status (payment_status),
+  INDEX idx_booking_source (booking_source),
+  INDEX idx_agent_id (agent_id),
   INDEX idx_service_type (service_type),
-  INDEX idx_created_at (created_at)
+  INDEX idx_created_at (created_at),
+  INDEX idx_hold_expires (hold_expires_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Reviews table
