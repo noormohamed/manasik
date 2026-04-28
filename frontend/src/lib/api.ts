@@ -2,8 +2,7 @@
  * API Client - Centralized fetch wrapper
  */
 
-// Hardcoded for now - env variable not being picked up in Docker dev mode
-const API_URL = 'http://localhost:3001/api';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 export interface ApiResponse<T> {
   data?: T;
