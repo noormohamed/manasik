@@ -878,7 +878,7 @@ export const createHotelRoutes = () => {
 
       // Get "Best for" tags
       const [bestForTags] = await pool.query<any>(
-        'SELECT tag_name, tag_icon FROM hotel_best_for_tags WHERE hotel_id = ?',
+        'SELECT tag FROM hotel_best_for_tags WHERE hotel_id = ?',
         [id]
       );
 
@@ -972,10 +972,7 @@ export const createHotelRoutes = () => {
           scoringData: scoringDerived ? null : scoringData,
           scoringBreakdown,
           // Best for tags
-          bestForTags: bestForTags.map((tag: any) => ({
-            name: tag.tag_name,
-            icon: tag.tag_icon,
-          })),
+          bestForTags: bestForTags.map((tag: any) => tag.tag).filter(Boolean),
           // Closest Haram gate (quick access)
           closestHaramGate: closestGate.length > 0 ? {
             distanceMeters: closestGate[0].distance_meters,
