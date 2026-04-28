@@ -14,6 +14,7 @@ import checkoutRouter, { initializeCheckoutRoutes } from './routes/checkout.rout
 dotenv.config();
 
 const app = new Koa();
+app.proxy = true; // Trust X-Forwarded-Proto from nginx
 
 // CORS middleware - MUST be first (fully permissive)
 app.use(cors({
