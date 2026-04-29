@@ -10,7 +10,7 @@
     "forceConsistentCasingInFileNames": true,
     "noImplicitAny": false
   },
-  "include": ["src", "src/types", "src/typing", "knexfile.ts"],
+  "include": ["src", "src/types", "src/typing"],
   "exclude": [
     "node_modules",
     "src/__tests__/**",
