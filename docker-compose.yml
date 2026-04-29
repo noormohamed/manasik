@@ -105,7 +105,7 @@ services:
     container_name: booking_frontend
     restart: always
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:3001
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
       NODE_ENV: development
     ports:
       - "3000:3000"
