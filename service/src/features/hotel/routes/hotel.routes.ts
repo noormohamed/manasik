@@ -1511,7 +1511,18 @@ export const createHotelRoutes = () => {
       const userEmail = (ctx as any).user?.email;
       const { id: hotelId } = ctx.params;
       // @ts-ignore
-      const { roomTypeId, checkIn, checkOut, guestCount, guestName, guestEmail, guestPhone, guestDetails } = ctx.request.body;
+      const { roomTypeId, checkIn, checkOut, guestCount, guestPhone, guestDetails } = ctx.request.body;
+      // @ts-ignore
+      const body = ctx.request.body as any;
+
+      // Derive guestName/guestEmail from top-level fields or from the lead passenger in guestDetails
+      const leadGuest = Array.isArray(guestDetails)
+        ? (guestDetails.find((g: any) => g.isLeadPassenger) || guestDetails[0])
+        : null;
+      const guestName: string = body.guestName
+        || (leadGuest ? `${leadGuest.firstName} ${leadGuest.lastName}`.trim() : '');
+      const guestEmail: string = body.guestEmail
+        || (leadGuest ? leadGuest.email : '');
 
       // Validate required fields
       if (!roomTypeId || !checkIn || !checkOut || !guestCount || !guestName || !guestEmail) {
@@ -1601,6 +1612,7 @@ export const createHotelRoutes = () => {
       const companyId = (hotel as any).company_id || (hotel as any).companyId || 'default-company';
 
       // Prepare guest details for storage
+      // Handle field name aliases: passport/passportNumber, dob/dateOfBirth
       const processedGuestDetails = guestDetails && Array.isArray(guestDetails) 
         ? guestDetails.map((guest: any) => ({
             firstName: guest.firstName || '',
@@ -1608,8 +1620,8 @@ export const createHotelRoutes = () => {
             email: guest.email || '',
             phone: guest.phone || '',
             nationality: guest.nationality || '',
-            passportNumber: guest.passportNumber || '',
-            dateOfBirth: guest.dateOfBirth || '',
+            passportNumber: guest.passportNumber || guest.passport || '',
+            dateOfBirth: guest.dateOfBirth || guest.dob || '',
             isLeadPassenger: guest.isLeadPassenger || false,
           }))
         : [];
