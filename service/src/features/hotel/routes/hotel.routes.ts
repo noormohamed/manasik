@@ -335,10 +335,11 @@ export const createHotelRoutes = () => {
       const hotelId = require('uuid').v4();
 
       // Create hotel - using database column names
+      // Note: Both company_id and agent_id can be null for individual users
       const created = await hotelRepository.createHotel({
         id: hotelId,
-        company_id: companyId || null,
-        agent_id: userId,
+        company_id: companyId || null, // Can be null for individual users
+        agent_id: null, // Can be null for individual users (not part of agent system)
         name,
         description: description || '',
         status: 'ACTIVE',
@@ -359,6 +360,7 @@ export const createHotelRoutes = () => {
       } as any);
 
       if (!created) {
+        console.error('Hotel creation failed - repository returned false');
         ctx.status = 500;
         ctx.body = { error: 'Failed to create hotel' };
         return;
