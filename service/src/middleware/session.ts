@@ -33,7 +33,7 @@ export async function sessionMiddleware(ctx: Context, next: Next) {
       ctx.cookies.set(GUEST_USER_COOKIE_NAME, guestUserId, {
         maxAge: SESSION_COOKIE_MAX_AGE,
         httpOnly: true,
-        secure: ctx.secure, // Respects X-Forwarded-Proto via app.proxy = true
+        secure: false, // Allow HTTP for now, will be HTTPS in production
         sameSite: 'lax',
       });
     }
@@ -99,7 +99,7 @@ export function clearGuestUserCookie(ctx: Context): void {
   ctx.cookies.set(GUEST_USER_COOKIE_NAME, '', {
     maxAge: 0,
     httpOnly: true,
-    secure: ctx.secure,
+    secure: false, // Allow HTTP for now
     sameSite: 'lax',
   });
 }
