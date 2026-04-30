@@ -1,0 +1,277 @@
+/* Hotel Image Carousel Styles */
+
+.container {
+  width: 100%;
+  background-color: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.loadingPlaceholder,
+.placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 400px;
+  background-color: #f9f9f9;
+  color: #666;
+}
+
+.spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f0f0f0;
+  border-top: 4px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.placeholderIcon {
+  width: 64px;
+  height: 64px;
+  color: #ccc;
+  margin-bottom: 20px;
+}
+
+.carouselContainer {
+  position: relative;
+}
+
+.mainImageContainer {
+  position: relative;
+  width: 100%;
+  padding-bottom: 66.67%;
+  overflow: hidden;
+  background-color: #f0f0f0;
+}
+
+.mainImage {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.navButton {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 48px;
+  height: 48px;
+  border: none;
+  background-color: rgba(0, 0, 0, 0.5);
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+  z-index: 10;
+}
+
+.navButton:hover {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.navButton svg {
+  width: 24px;
+  height: 24px;
+}
+
+.prevButton {
+  left: 10px;
+}
+
+.nextButton {
+  right: 10px;
+}
+
+.primaryBadge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: #ffc107;
+  color: #333;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  z-index: 10;
+}
+
+.imageCounter {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  z-index: 10;
+}
+
+.thumbnailContainer {
+  padding: 12px;
+  background-color: #f9f9f9;
+  border-top: 1px solid #e0e0e0;
+  overflow-x: auto;
+}
+
+.thumbnailScroll {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.thumbnailScroll::-webkit-scrollbar {
+  height: 4px;
+}
+
+.thumbnailScroll::-webkit-scrollbar-track {
+  background: #e0e0e0;
+  border-radius: 2px;
+}
+
+.thumbnailScroll::-webkit-scrollbar-thumb {
+  background: #999;
+  border-radius: 2px;
+}
+
+.thumbnailScroll::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
+
+.thumbnail {
+  flex-shrink: 0;
+  width: 80px;
+  height: 80px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background-color: white;
+  transition: all 0.3s ease;
+}
+
+.thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.thumbnail:hover {
+  border-color: #007bff;
+}
+
+.activeThumbnail {
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.2);
+}
+
+.dotsContainer {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  background-color: #f9f9f9;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border: none;
+  border-radius: 50%;
+  background-color: #ccc;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  padding: 0;
+}
+
+.dot:hover {
+  background-color: #999;
+}
+
+.activeDot {
+  background-color: #007bff;
+  width: 24px;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .mainImageContainer {
+    padding-bottom: 75%;
+  }
+
+  .navButton {
+    width: 40px;
+    height: 40px;
+  }
+
+  .navButton svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .thumbnail {
+    width: 60px;
+    height: 60px;
+  }
+}
+
+@media (max-width: 480px) {
+  .mainImageContainer {
+    padding-bottom: 100%;
+  }
+
+  .navButton {
+    width: 36px;
+    height: 36px;
+  }
+
+  .navButton svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .primaryBadge {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .imageCounter {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+
+  .thumbnail {
+    width: 50px;
+    height: 50px;
+  }
+
+  .thumbnailContainer {
+    padding: 8px;
+  }
+
+  .dotsContainer {
+    padding: 8px;
+    gap: 6px;
+  }
+}

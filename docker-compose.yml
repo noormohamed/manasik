@@ -13,7 +13,7 @@ services:
     ports:
       - "3306:3306"
     volumes:
-      - mysql_data:/var/lib/mysql
+      - mysql_data_persistent:/var/lib/mysql
       - ./service/database/init.sql:/docker-entrypoint-initdb.d/01-init.sql
       - ./service/database/seed.sql:/docker-entrypoint-initdb.d/02-seed.sql
       - ./service/database/migrations/001-add-hotel-filters.sql:/docker-entrypoint-initdb.d/03-hotel-filters.sql
@@ -25,7 +25,8 @@ services:
       - ./service/database/migrations/006-create-alert-history-table.sql:/docker-entrypoint-initdb.d/09-alert-history.sql
       - ./service/database/migrations/007-create-admin-preferences-table.sql:/docker-entrypoint-initdb.d/10-admin-preferences.sql
       - ./service/database/migrations/008-create-haram-gates-table.sql:/docker-entrypoint-initdb.d/11-haram-gates.sql
-      - ./service/database/migrations/014-create-messaging-tables.sql:/docker-entrypoint-initdb.d/12-messaging-tables.sql
+      - ./service/database/migrations/009-manasik-score-automation.sql:/docker-entrypoint-initdb.d/12-manasik-score-automation.sql
+      - ./service/database/migrations/014-create-messaging-tables.sql:/docker-entrypoint-initdb.d/13-messaging-tables.sql
     networks:
       - booking_network
     healthcheck:
@@ -142,7 +143,8 @@ services:
       - booking_network
 
 volumes:
-  mysql_data:
+  mysql_data_persistent:
+    external: true
 
 networks:
   booking_network:

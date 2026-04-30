@@ -1,0 +1,84 @@
+/* Hotel Listing Images Styles */
+
+.imageContainer {
+  position: relative;
+  width: 100%;
+  padding-bottom: 66.67%;
+  overflow: hidden;
+  background-color: #f0f0f0;
+  border-radius: 4px;
+}
+
+.image {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.imageContainer:hover .image {
+  transform: scale(1.05);
+}
+
+.loadingPlaceholder,
+.placeholder {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f9f9f9;
+}
+
+.spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f0f0f0;
+  border-top: 3px solid #007bff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.placeholderIcon {
+  width: 48px;
+  height: 48px;
+  color: #ccc;
+}
+
+@media (max-width: 768px) {
+  .imageContainer {
+    padding-bottom: 75%;
+  }
+}
+
+@media (max-width: 480px) {
+  .imageContainer {
+    padding-bottom: 100%;
+  }
+
+  .spinner {
+    width: 24px;
+    height: 24px;
+    border-width: 2px;
+  }
+
+  .placeholderIcon {
+    width: 40px;
+    height: 40px;
+  }
+}

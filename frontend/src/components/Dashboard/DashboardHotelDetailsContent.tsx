@@ -6,9 +6,9 @@ import { apiClient } from '@/lib/api';
 import { useAuth } from '@/hooks/useAuth';
 import Image from 'next/image';
 import Link from 'next/link';
-import AuthorSidebar from './AuthorSidebar';
 import HotelRulesEditor from './HotelRulesEditor';
 import HotelScoringEditor from './HotelScoringEditor';
+import BookingStatistics from './BookingStatistics';
 import { CustomPolicy } from '@/types/hotel-policies';
 import { ScoringData, defaultScoringData, walkingTimeToScore } from '@/types/scoring';
 
@@ -118,7 +118,15 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
         return;
       }
 
-      setHotel(foundHotel);
+      // Ensure averageRating is a number
+      const hotelWithParsedRating = {
+        ...foundHotel,
+        averageRating: typeof foundHotel.averageRating === 'string' 
+          ? parseFloat(foundHotel.averageRating) 
+          : (foundHotel.averageRating || 0),
+      };
+
+      setHotel(hotelWithParsedRating);
 
       // Fetch rooms
       const roomsResponse = await apiClient.get<{
@@ -391,7 +399,7 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
     <div className="author-area pt-5 pb-5">
       <div className="container">
         <div className="row">
-          <div className="col-xl-8 col-xxl-9">
+          <div className="col-12">
             {/* Back Button */}
             <div className="mb-4">
               <Link href="/dashboard/listings" className="btn btn-outline-primary btn-sm">
@@ -637,18 +645,11 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
             {activeTab === 'bookings' && (
               <div className="card">
                 <div className="card-body">
-                  <h4 className="mb-3">Recent Bookings</h4>
-                  <div className="alert alert-info">
-                    <i className="ri-information-line me-2"></i>
-                    Booking management coming soon.
-                  </div>
+                  <h4 className="mb-4">Booking Statistics</h4>
+                  <BookingStatistics hotelId={hotelId} />
                 </div>
               </div>
             )}
-          </div>
-
-          <div className="col-xl-4 col-xxl-3">
-            <AuthorSidebar />
           </div>
         </div>
       </div>

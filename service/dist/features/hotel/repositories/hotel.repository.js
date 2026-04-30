@@ -16,6 +16,52 @@ exports.HotelRepository = void 0;
 const repository_1 = require("../../../database/repository");
 const hotel_1 = require("../models/hotel");
 const hotel_filter_service_1 = require("../services/hotel-filter.service");
+const scoring_service_1 = require("../services/scoring.service");
+const score_calculation_audit_service_1 = require("../services/score-calculation-audit.service");
+/** Compute manasikScore + scoringBreakdown for a raw DB row. */
+function scoringForRow(row, weights) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const averageRating = parseFloat(row.average_rating || 0);
+        let scoringData = (0, scoring_service_1.parseScoringData)(row.scoring_data);
+        let derived = false;
+        if (!scoringData) {
+            scoringData = (0, scoring_service_1.deriveFromHotelRow)(row).data;
+            derived = true;
+            // If deriving from hotel row, use calculated location metrics if gate proximity is available
+            if (row.distance_to_haram_meters || row.gate_proximity_meters) {
+                const gateProximityMeters = row.distance_to_haram_meters || row.gate_proximity_meters;
+                const terrainData = row.location_metrics_calculation_basis
+                    ? JSON.parse(row.location_metrics_calculation_basis)
+                    : undefined;
+                const calculatedLocationMetrics = (0, scoring_service_1.calculateLocationMetrics)(gateProximityMeters, terrainData);
+                scoringData.location = calculatedLocationMetrics;
+                // Log the location metrics calculation
+                try {
+                    yield (0, score_calculation_audit_service_1.logScoreCalculation)(row.id, 'location', calculatedLocationMetrics, { gateProximityMeters, terrainData }, `Calculated from ${gateProximityMeters}m gate distance at 1.4 m/s average pace`);
+                }
+                catch (error) {
+                    console.error('Error logging location metrics calculation:', error);
+                }
+            }
+            // Calculate experience friction from reviews if available
+            try {
+                const experienceFriction = yield (0, scoring_service_1.calculateExperienceFrictionFromReviews)(row.id);
+                if (experienceFriction) {
+                    scoringData.experienceFriction = experienceFriction;
+                    // Get calculation basis for logging
+                    const calculationBasis = yield (0, scoring_service_1.getExperienceFrictionCalculationBasis)(row.id);
+                    // Log the experience friction calculation
+                    yield (0, score_calculation_audit_service_1.logScoreCalculation)(row.id, 'experience_friction', experienceFriction, calculationBasis, `Based on ${row.total_reviews} reviews: ${(calculationBasis === null || calculationBasis === void 0 ? void 0 : calculationBasis.lift_delays_percentage) || 0}% lift delays, ${(calculationBasis === null || calculationBasis === void 0 ? void 0 : calculationBasis.crowding_percentage) || 0}% crowding`);
+                }
+            }
+            catch (error) {
+                console.error('Error calculating experience friction from reviews:', error);
+            }
+        }
+        const result = (0, scoring_service_1.computeScoring)(scoringData, weights, averageRating);
+        return { manasikScore: result.overall, scoringBreakdown: Object.assign(Object.assign({}, result), { derived }) };
+    });
+}
 class HotelRepository extends repository_1.BaseRepository {
     constructor() {
         super('hotels');
@@ -244,6 +290,8 @@ class HotelRepository extends repository_1.BaseRepository {
         return __awaiter(this, void 0, void 0, function* () {
             const { query, params } = yield this.filterService.buildFilteredQuery(filters);
             const results = yield this.query(query, params);
+            // Load weights once for the whole batch
+            const weights = yield (0, scoring_service_1.loadWeights)();
             // Fetch images and rooms for each hotel
             const hotelsWithDetails = yield Promise.all(results.map((row) => __awaiter(this, void 0, void 0, function* () {
                 // Fetch images
@@ -257,6 +305,7 @@ class HotelRepository extends repository_1.BaseRepository {
                 const roomFacilities = yield this.filterService.getHotelRoomFacilities(row.id);
                 const landmarks = yield this.filterService.getHotelLandmarks(row.id);
                 const surroundings = yield this.filterService.getHotelSurroundings(row.id);
+                const { manasikScore, scoringBreakdown } = yield scoringForRow(row, weights);
                 return {
                     id: row.id,
                     companyId: row.company_id,
@@ -279,6 +328,8 @@ class HotelRepository extends repository_1.BaseRepository {
                     averageRating: parseFloat(row.average_rating || 0),
                     totalReviews: row.total_reviews,
                     minPrice: row.min_price ? parseFloat(row.min_price) : null,
+                    manasikScore,
+                    scoringBreakdown,
                     images: images.map((img) => ({ id: img.id, url: img.url, displayOrder: img.display_order })),
                     rooms: rooms.map((room) => ({
                         id: room.id,
@@ -369,6 +420,8 @@ class HotelRepository extends repository_1.BaseRepository {
             query += ` ORDER BY h.average_rating DESC, h.name ASC LIMIT ? OFFSET ?`;
             params.push(limit.toString(), offset.toString());
             const results = yield this.query(query, params);
+            // Load weights once for the whole batch
+            const weights = yield (0, scoring_service_1.loadWeights)();
             // Fetch images and rooms for each hotel
             const hotelsWithDetails = yield Promise.all(results.map((row) => __awaiter(this, void 0, void 0, function* () {
                 // Fetch images
@@ -377,6 +430,7 @@ class HotelRepository extends repository_1.BaseRepository {
                 // Fetch rooms
                 const roomsQuery = `SELECT id, name, base_price, currency, capacity FROM room_types WHERE hotel_id = ? AND status = 'ACTIVE' LIMIT 5`;
                 const rooms = yield this.query(roomsQuery, [row.id]);
+                const { manasikScore, scoringBreakdown } = yield scoringForRow(row, weights);
                 return {
                     id: row.id,
                     companyId: row.company_id,
@@ -399,6 +453,8 @@ class HotelRepository extends repository_1.BaseRepository {
                     averageRating: parseFloat(row.average_rating || 0),
                     totalReviews: row.total_reviews,
                     minPrice: row.min_price ? parseFloat(row.min_price) : null,
+                    manasikScore,
+                    scoringBreakdown,
                     images: images.map((img) => ({ id: img.id, url: img.url, displayOrder: img.display_order })),
                     rooms: rooms.map((room) => ({
                         id: room.id,

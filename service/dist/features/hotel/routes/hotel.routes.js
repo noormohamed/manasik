@@ -53,6 +53,7 @@ const hotel_repository_1 = require("../repositories/hotel.repository");
 const room_repository_1 = require("../repositories/room.repository");
 const hotel_filter_service_1 = require("../services/hotel-filter.service");
 const hotel_search_service_1 = require("../services/hotel-search.service");
+const scoring_service_1 = require("../services/scoring.service");
 const connection_1 = require("../../../database/connection");
 const haramGatesService = __importStar(require("../../../services/haram-gates.service"));
 const createHotelRoutes = () => {
@@ -158,6 +159,66 @@ const createHotelRoutes = () => {
         }
     }));
     /**
+     * GET /api/hotels/scoring-weights
+     * Return the current global category scoring weights
+     */
+    router.get('/scoring-weights', (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        try {
+            const weights = yield (0, scoring_service_1.loadWeights)();
+            ctx.body = { weights };
+        }
+        catch (error) {
+            console.error('Error loading scoring weights:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to load scoring weights' };
+        }
+    }));
+    /**
+     * PUT /api/hotels/scoring-weights
+     * Update the global category scoring weights (admin only)
+     * Body: { location, pilgrimSuitability, hotelQuality, experienceFriction, userReviews }
+     * All values are percentages and must sum to 100.
+     */
+    router.put('/scoring-weights', auth_middleware_1.authMiddleware, (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a, _b;
+        try {
+            const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
+            const role = (_b = ctx.user) === null || _b === void 0 ? void 0 : _b.role;
+            if (!userId) {
+                ctx.status = 401;
+                ctx.body = { error: 'Unauthorized' };
+                return;
+            }
+            if (role !== 'ADMIN' && role !== 'SUPER_ADMIN') {
+                ctx.status = 403;
+                ctx.body = { error: 'Admin access required' };
+                return;
+            }
+            // @ts-ignore
+            const { location, pilgrimSuitability, hotelQuality, experienceFriction, userReviews } = ctx.request.body;
+            const weights = {
+                location: parseFloat(location),
+                pilgrimSuitability: parseFloat(pilgrimSuitability),
+                hotelQuality: parseFloat(hotelQuality),
+                experienceFriction: parseFloat(experienceFriction),
+                userReviews: parseFloat(userReviews),
+            };
+            const validationError = (0, scoring_service_1.validateWeights)(weights);
+            if (validationError) {
+                ctx.status = 400;
+                ctx.body = { error: validationError };
+                return;
+            }
+            yield (0, scoring_service_1.saveWeights)(weights, userId);
+            ctx.body = { message: 'Scoring weights updated successfully', weights };
+        }
+        catch (error) {
+            console.error('Error updating scoring weights:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to update scoring weights' };
+        }
+    }));
+    /**
      * GET /api/hotels/filter-options
      * Get available filter options for the search UI
      */
@@ -252,10 +313,11 @@ const createHotelRoutes = () => {
             const hotelRepository = new hotel_repository_1.HotelRepository();
             const hotelId = require('uuid').v4();
             // Create hotel - using database column names
+            // Note: Both company_id and agent_id can be null for individual users
             const created = yield hotelRepository.createHotel({
                 id: hotelId,
-                company_id: companyId || null,
-                agent_id: userId,
+                company_id: companyId || null, // Can be null for individual users
+                agent_id: null, // Can be null for individual users (not part of agent system)
                 name,
                 description: description || '',
                 status: 'ACTIVE',
@@ -275,6 +337,7 @@ const createHotelRoutes = () => {
                 updated_at: new Date(),
             });
             if (!created) {
+                console.error('Hotel creation failed - repository returned false');
                 ctx.status = 500;
                 ctx.body = { error: 'Failed to create hotel' };
                 return;
@@ -707,7 +770,7 @@ const createHotelRoutes = () => {
             // Get room types with images
             const rooms = yield roomRepository.findByHotelId(id);
             // Get "Best for" tags
-            const [bestForTags] = yield pool.query('SELECT tag_name, tag_icon FROM hotel_best_for_tags WHERE hotel_id = ?', [id]);
+            const [bestForTags] = yield pool.query('SELECT tag FROM hotel_best_for_tags WHERE hotel_id = ?', [id]);
             // Get closest Haram gate for quick display
             const [closestGate] = yield pool.query(`
         SELECT 
@@ -724,6 +787,33 @@ const createHotelRoutes = () => {
       `, [id]);
             // Get hotel facilities
             const [facilities] = yield pool.query('SELECT facility_name FROM hotel_facilities WHERE hotel_id = ?', [id]);
+            // Compute scoring breakdown.
+            // Prefer manager-entered scoring_data; fall back to auto-derivation from
+            // existing hotel fields (walking time, star rating, elderly/family flags).
+            const rawScoringData = hotelRow.scoring_data;
+            const averageRating = parseFloat(hotelRow.average_rating || 0);
+            let scoringData = (0, scoring_service_1.parseScoringData)(rawScoringData);
+            let scoringDerived = false;
+            if (!scoringData) {
+                const derived = (0, scoring_service_1.deriveFromHotelRow)(hotelRow);
+                scoringData = derived.data;
+                scoringDerived = true;
+            }
+            const weights = yield (0, scoring_service_1.loadWeights)();
+            const scoringResult = (0, scoring_service_1.computeScoring)(scoringData, weights, averageRating);
+            const scoringBreakdown = Object.assign(Object.assign({}, scoringResult), { derived: scoringDerived });
+            // Cache the derived manasik_score back to the DB when the column is still null,
+            // so search/sort by manasik_score works for all hotels immediately.
+            if (hotelRow.manasik_score === null || hotelRow.manasik_score === undefined) {
+                try {
+                    const pool2 = (0, connection_1.getPool)();
+                    yield pool2.execute('UPDATE hotels SET manasik_score = ? WHERE id = ?', [scoringBreakdown.overall, id]);
+                }
+                catch (cacheErr) {
+                    // Non-fatal — score will still be returned in the response
+                    console.warn('Failed to cache manasik_score:', cacheErr);
+                }
+            }
             ctx.body = {
                 hotel: {
                     id: hotelRow.id,
@@ -737,7 +827,7 @@ const createHotelRoutes = () => {
                     latitude: hotelRow.latitude,
                     longitude: hotelRow.longitude,
                     starRating: hotelRow.star_rating,
-                    averageRating: parseFloat(hotelRow.average_rating || 0),
+                    averageRating,
                     totalReviews: hotelRow.total_reviews,
                     totalRooms: hotelRow.total_rooms,
                     checkInTime: hotelRow.check_in_time,
@@ -747,18 +837,19 @@ const createHotelRoutes = () => {
                         ? JSON.parse(hotelRow.custom_policies)
                         : (hotelRow.custom_policies || []),
                     status: hotelRow.status,
-                    // New conversion-critical fields
-                    manasikScore: hotelRow.manasik_score ? parseFloat(hotelRow.manasik_score) : null,
+                    // Conversion-critical fields
+                    manasikScore: scoringBreakdown.overall,
                     walkDescription: hotelRow.walk_description,
                     liftSituation: hotelRow.lift_situation,
                     distanceExplanation: hotelRow.distance_explanation,
                     videoUrl: hotelRow.video_url,
                     videoThumbnail: hotelRow.video_thumbnail,
+                    // Structured scoring data
+                    // scoringData is null when derived (manager hasn't entered inputs yet)
+                    scoringData: scoringDerived ? null : scoringData,
+                    scoringBreakdown,
                     // Best for tags
-                    bestForTags: bestForTags.map((tag) => ({
-                        name: tag.tag_name,
-                        icon: tag.tag_icon,
-                    })),
+                    bestForTags: bestForTags.map((tag) => tag.tag).filter(Boolean),
                     // Closest Haram gate (quick access)
                     closestHaramGate: closestGate.length > 0 ? {
                         distanceMeters: closestGate[0].distance_meters,
@@ -795,7 +886,7 @@ const createHotelRoutes = () => {
         try {
             const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
             const { id } = ctx.params;
-            const { name, description, address, city, state, country, zipCode, latitude, longitude, starRating, checkInTime, checkOutTime, cancellationPolicy, customPolicies, status } = ctx.request.body;
+            const { name, description, address, city, state, country, zipCode, latitude, longitude, starRating, checkInTime, checkOutTime, cancellationPolicy, customPolicies, status, scoringData, } = ctx.request.body;
             if (!userId) {
                 ctx.status = 401;
                 ctx.body = { error: 'Unauthorized' };
@@ -841,6 +932,24 @@ const createHotelRoutes = () => {
                 updateData.custom_policies = JSON.stringify(customPolicies);
             if (status !== undefined)
                 updateData.status = status;
+            // Handle scoring data: persist raw inputs and recompute manasik_score
+            if (scoringData !== undefined) {
+                updateData.scoring_data = JSON.stringify(scoringData);
+                try {
+                    // Fetch the current average rating to include User Reviews in score
+                    const pool = (0, connection_1.getPool)();
+                    const [ratingRows] = yield pool.query('SELECT average_rating FROM hotels WHERE id = ?', [id]);
+                    const avgRating = ratingRows && ratingRows.length > 0
+                        ? parseFloat(ratingRows[0].average_rating || 0)
+                        : 0;
+                    const weights = yield (0, scoring_service_1.loadWeights)();
+                    const breakdown = (0, scoring_service_1.computeScoring)(scoringData, weights, avgRating);
+                    updateData.manasik_score = breakdown.overall;
+                }
+                catch (scoringErr) {
+                    console.error('Failed to recompute manasik_score:', scoringErr);
+                }
+            }
             updateData.updated_at = new Date();
             const updated = yield hotelRepository.updateHotel(id, updateData);
             if (!updated) {
@@ -1211,7 +1320,17 @@ const createHotelRoutes = () => {
             const userEmail = (_b = ctx.user) === null || _b === void 0 ? void 0 : _b.email;
             const { id: hotelId } = ctx.params;
             // @ts-ignore
-            const { roomTypeId, checkIn, checkOut, guestCount, guestName, guestEmail, guestPhone, guestDetails } = ctx.request.body;
+            const { roomTypeId, checkIn, checkOut, guestCount, guestPhone, guestDetails } = ctx.request.body;
+            // @ts-ignore
+            const body = ctx.request.body;
+            // Derive guestName/guestEmail from top-level fields or from the lead passenger in guestDetails
+            const leadGuest = Array.isArray(guestDetails)
+                ? (guestDetails.find((g) => g.isLeadPassenger) || guestDetails[0])
+                : null;
+            const guestName = body.guestName
+                || (leadGuest ? `${leadGuest.firstName} ${leadGuest.lastName}`.trim() : '');
+            const guestEmail = body.guestEmail
+                || (leadGuest ? leadGuest.email : '');
             // Validate required fields
             if (!roomTypeId || !checkIn || !checkOut || !guestCount || !guestName || !guestEmail) {
                 ctx.status = 400;
@@ -1287,6 +1406,7 @@ const createHotelRoutes = () => {
             // Get company_id from hotel (findById returns raw DB row with snake_case)
             const companyId = hotel.company_id || hotel.companyId || 'default-company';
             // Prepare guest details for storage
+            // Handle field name aliases: passport/passportNumber, dob/dateOfBirth
             const processedGuestDetails = guestDetails && Array.isArray(guestDetails)
                 ? guestDetails.map((guest) => ({
                     firstName: guest.firstName || '',
@@ -1294,8 +1414,8 @@ const createHotelRoutes = () => {
                     email: guest.email || '',
                     phone: guest.phone || '',
                     nationality: guest.nationality || '',
-                    passportNumber: guest.passportNumber || '',
-                    dateOfBirth: guest.dateOfBirth || '',
+                    passportNumber: guest.passportNumber || guest.passport || '',
+                    dateOfBirth: guest.dateOfBirth || guest.dob || '',
                     isLeadPassenger: guest.isLeadPassenger || false,
                 }))
                 : [];
@@ -1612,6 +1732,112 @@ const createHotelRoutes = () => {
                 ctx.status = 500;
                 ctx.body = { error: 'Failed to fetch proximity information' };
             }
+        }
+    }));
+    /**
+     * GET /api/hotels/:id/booking-statistics
+     * Get booking statistics for a specific hotel (last 3 months)
+     * Returns:
+     * - bookingsLast3Months: count of bookings in the last 3 months
+     * - highestValuedBooking: booking with highest total cost
+     * - longestBooking: booking with most days
+     */
+    router.get('/:id/booking-statistics', auth_middleware_1.authMiddleware, (ctx) => __awaiter(void 0, void 0, void 0, function* () {
+        var _a;
+        try {
+            const { id } = ctx.params;
+            const userId = (_a = ctx.user) === null || _a === void 0 ? void 0 : _a.userId;
+            if (!userId) {
+                ctx.status = 401;
+                ctx.body = { error: 'Unauthorized' };
+                return;
+            }
+            const pool = (0, connection_1.getPool)();
+            // Verify user manages this hotel
+            const [hotelCheck] = yield pool.query('SELECT id, agent_id FROM hotels WHERE id = ?', [id]);
+            if (!hotelCheck || hotelCheck.length === 0) {
+                ctx.status = 404;
+                ctx.body = { error: 'Hotel not found' };
+                return;
+            }
+            const hotel = hotelCheck[0];
+            if (hotel.agent_id !== userId) {
+                ctx.status = 403;
+                ctx.body = { error: 'You do not have permission to view this hotel' };
+                return;
+            }
+            // Calculate date 3 months ago
+            const threeMonthsAgo = new Date();
+            threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+            const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0];
+            // Get bookings for this hotel in the last 3 months
+            const [bookings] = yield pool.query(`SELECT 
+          b.id,
+          b.total,
+          b.currency,
+          b.status,
+          b.metadata,
+          b.created_at
+        FROM bookings b
+        WHERE b.service_type = 'HOTEL'
+          AND JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = ?
+          AND b.created_at >= ?
+          AND b.status IN ('CONFIRMED', 'COMPLETED')
+        ORDER BY b.created_at DESC`, [id, threeMonthsAgoStr]);
+            const bookingsLast3Months = bookings.length;
+            // Find highest valued booking
+            let highestValuedBooking = null;
+            if (bookings.length > 0) {
+                const highest = bookings.reduce((max, booking) => {
+                    const bookingTotal = parseFloat(booking.total);
+                    const maxTotal = parseFloat(max.total);
+                    return bookingTotal > maxTotal ? booking : max;
+                });
+                const metadata = typeof highest.metadata === 'string'
+                    ? JSON.parse(highest.metadata)
+                    : highest.metadata;
+                highestValuedBooking = {
+                    totalCost: parseFloat(highest.total),
+                    currency: highest.currency,
+                    guestName: metadata.guestName || 'Guest',
+                    checkInDate: metadata.checkInDate,
+                    checkOutDate: metadata.checkOutDate,
+                };
+            }
+            // Find longest booking
+            let longestBooking = null;
+            if (bookings.length > 0) {
+                const longest = bookings.reduce((max, booking) => {
+                    const metadata = typeof booking.metadata === 'string'
+                        ? JSON.parse(booking.metadata)
+                        : booking.metadata;
+                    const maxMetadata = typeof max.metadata === 'string'
+                        ? JSON.parse(max.metadata)
+                        : max.metadata;
+                    const bookingDays = metadata.nights || 0;
+                    const maxDays = maxMetadata.nights || 0;
+                    return bookingDays > maxDays ? booking : max;
+                });
+                const metadata = typeof longest.metadata === 'string'
+                    ? JSON.parse(longest.metadata)
+                    : longest.metadata;
+                longestBooking = {
+                    durationDays: metadata.nights || 0,
+                    guestName: metadata.guestName || 'Guest',
+                    checkInDate: metadata.checkInDate,
+                    checkOutDate: metadata.checkOutDate,
+                };
+            }
+            ctx.body = {
+                bookingsLast3Months,
+                highestValuedBooking,
+                longestBooking,
+            };
+        }
+        catch (error) {
+            console.error('Error fetching booking statistics:', error);
+            ctx.status = 500;
+            ctx.body = { error: 'Failed to fetch booking statistics' };
         }
     }));
     return router;

@@ -363,8 +363,7 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       h.country as hotelCountry,
       h.check_in_time as checkInTime,
       h.check_out_time as checkOutTime,
-      h.star_rating as starRating,
-      h.manasik_score as manasikScore
+      h.star_rating as starRating
     FROM bookings b
     LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
     WHERE b.customer_id = ?`

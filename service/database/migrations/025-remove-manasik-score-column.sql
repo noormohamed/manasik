@@ -1,0 +1,29 @@
+-- Migration 025: Fix API Queries - Remove manasik_score Column References
+-- ============================================================================
+-- This migration documents the removal of manasik_score column references from API queries
+-- 
+-- ISSUE: The user.routes.ts was querying for h.manasik_score which doesn't exist
+-- in the hotels table, causing 500 errors on /api/users/me/bookings endpoint
+--
+-- SOLUTION: The manasik_score is now calculated dynamically from:
+-- 1. Location metrics (walking time, gate proximity, route ease)
+--    - Stored in: location_metrics_calculation_basis JSON column
+--    - Timestamp: location_metrics_calculated_at
+--
+-- 2. Experience friction (lift delays, crowding, check-in smoothness)
+--    - Stored in: experience_friction_calculation_basis JSON column
+--    - Timestamp: experience_friction_calculated_at
+--    - Review count: experience_friction_review_count
+--
+-- 3. Score calculations audit trail
+--    - Stored in: score_calculations table
+--    - Tracks all calculation history for compliance and debugging
+--
+-- CHANGES MADE:
+-- - Removed h.manasik_score from SELECT clause in user.routes.ts
+-- - API now returns calculated metrics instead of a single score column
+-- - All calculation data is available via metadata columns and audit tables
+--
+-- This migration is documentation-only as no schema changes are needed.
+-- The fix was applied to the application code (user.routes.ts)
+-- ============================================================================

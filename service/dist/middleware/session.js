@@ -50,7 +50,7 @@ function sessionMiddleware(ctx, next) {
                 ctx.cookies.set(GUEST_USER_COOKIE_NAME, guestUserId, {
                     maxAge: SESSION_COOKIE_MAX_AGE,
                     httpOnly: true,
-                    secure: process.env.NODE_ENV === 'production',
+                    secure: false, // Allow HTTP for now, will be HTTPS in production
                     sameSite: 'lax',
                 });
             }
@@ -105,7 +105,7 @@ function clearGuestUserCookie(ctx) {
     ctx.cookies.set(GUEST_USER_COOKIE_NAME, '', {
         maxAge: 0,
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: false, // Allow HTTP for now
         sameSite: 'lax',
     });
 }

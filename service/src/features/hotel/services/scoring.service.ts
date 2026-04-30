@@ -404,3 +404,296 @@ export function deriveFromHotelRow(row: any): { data: ScoringData; derived: true
 
   return { data, derived: true };
 }
+
+// ─── Location Calculation Functions ───────────────────────────────────────────
+
+/**
+ * Calculate walking time score from distance in meters.
+ * Formula: distance / 1.4 / 60, rounded to nearest minute
+ * Returns 1-3 score based on minutes (≤3min=3, ≤5min=3, ≤8min=2, ≤12min=2, >12min=1)
+ *
+ * @param distanceMeters Distance from hotel to Haram gate in meters
+ * @returns Score 1-3 representing walking time difficulty
+ */
+export function calculateWalkingTimeFromDistance(distanceMeters: number): number {
+  // Calculate walking time in minutes using standard pilgrim pace of 1.4 m/s
+  const walkingTimeMinutes = Math.round(distanceMeters / 1.4 / 60);
+  
+  // Convert minutes to 1-3 score using the same thresholds as walkingTimeToScore
+  return walkingTimeToScore(walkingTimeMinutes);
+}
+
+/**
+ * Calculate route ease score from distance and optional terrain data.
+ * Base scoring: <200m=3, 200-500m=2, >500m=1
+ * Adjustments: elevation changes (>20m) -1, stairs required -1, wheelchair accessible +1
+ * Returns 1-3 score clamped to valid range.
+ *
+ * @param distanceMeters Distance from hotel to Haram gate in meters
+ * @param terrainData Optional object with elevation, hasStairs, wheelchairAccessible properties
+ * @returns Score 1-3 representing route ease
+ */
+export function calculateRouteEaseFromDistance(
+  distanceMeters: number,
+  terrainData?: any,
+): number {
+  // Base score from distance
+  let score: number;
+  if (distanceMeters < 200) {
+    score = 3;
+  } else if (distanceMeters <= 500) {
+    score = 2;
+  } else {
+    score = 1;
+  }
+
+  // Apply terrain adjustments if provided
+  if (terrainData) {
+    // Reduce score for significant elevation changes (>20 meters)
+    if (terrainData.elevation && terrainData.elevation > 20) {
+      score -= 1;
+    }
+
+    // Reduce score if stairs are required
+    if (terrainData.hasStairs) {
+      score -= 1;
+    }
+
+    // Increase score if wheelchair accessible (but minimum is 2 = "Average")
+    if (terrainData.wheelchairAccessible) {
+      score = Math.min(3, score + 1);
+      score = Math.max(2, score); // Ensure minimum of 2 for accessible routes
+    }
+  }
+
+  // Clamp to valid 1-3 range
+  return clamp13(score);
+}
+
+/**
+ * Calculate all location metrics from gate proximity distance.
+ * Returns LocationScores object with calculated walking time, gate proximity, and route ease.
+ *
+ * @param gateProximityMeters Distance from hotel to nearest Haram gate in meters
+ * @param terrainData Optional terrain information for route ease calculation
+ * @returns LocationScores object with all three metrics calculated
+ */
+export function calculateLocationMetrics(
+  gateProximityMeters: number,
+  terrainData?: any,
+): LocationScores {
+  return {
+    walkingTimeToHaram: calculateWalkingTimeFromDistance(gateProximityMeters),
+    gateProximity: clamp13(
+      gateProximityMeters < 200 ? 3 : gateProximityMeters <= 500 ? 2 : 1,
+    ),
+    routeEase: calculateRouteEaseFromDistance(gateProximityMeters, terrainData),
+  };
+}
+
+// ─── Experience Friction Calculation Functions ────────────────────────────────
+
+/**
+ * Convert a percentage value to a 1-3 score.
+ * 0-33% = 3 (Good), 34-66% = 2 (Average), 67-100% = 1 (Poor)
+ *
+ * @param percentage Percentage value (0-100)
+ * @returns Score 1-3
+ */
+function percentageToScore(percentage: number): number {
+  if (percentage <= 33) return 3;
+  if (percentage <= 66) return 2;
+  return 1;
+}
+
+/**
+ * Calculate Experience Friction scores from review friction responses.
+ * Queries the review_friction_responses table for the hotel and aggregates responses.
+ * Returns null if fewer than 5 reviews exist.
+ *
+ * Calculation:
+ * - Lift Delays: percentage of "yes" responses / total applicable responses
+ * - Crowding: percentage of "yes" responses / total applicable responses
+ * - Check-in: average of responses (smooth=3, average=2, difficult=1)
+ *
+ * Percentages are converted to 1-3 scores:
+ * - 0-33% = 3 (Good)
+ * - 34-66% = 2 (Average)
+ * - 67-100% = 1 (Poor)
+ *
+ * @param hotelId Hotel ID to calculate friction for
+ * @returns ExperienceFrictionScores object or null if insufficient data
+ */
+export async function calculateExperienceFrictionFromReviews(
+  hotelId: string,
+): Promise<ExperienceFrictionScores | null> {
+  try {
+    const pool = getPool();
+
+    // Query all friction responses for this hotel
+    const [responses] = await pool.query<any>(
+      `SELECT friction_type, response FROM review_friction_responses 
+       WHERE hotel_id = ? 
+       ORDER BY created_at ASC`,
+      [hotelId],
+    );
+
+    if (!responses || responses.length === 0) {
+      return null;
+    }
+
+    // Count unique reviews (by grouping responses)
+    const reviewIds = new Set<string>();
+    const [reviewData] = await pool.query<any>(
+      `SELECT DISTINCT review_id FROM review_friction_responses 
+       WHERE hotel_id = ?`,
+      [hotelId],
+    );
+
+    const totalReviews = reviewData?.length ?? 0;
+
+    // If fewer than 5 reviews, return null (insufficient data)
+    if (totalReviews < 5) {
+      return null;
+    }
+
+    // Aggregate responses by friction type
+    const liftDelaysResponses: string[] = [];
+    const crowdingResponses: string[] = [];
+    const checkinResponses: string[] = [];
+
+    for (const row of responses) {
+      if (row.friction_type === 'lift_delays' && row.response !== 'na') {
+        liftDelaysResponses.push(row.response);
+      } else if (row.friction_type === 'crowding' && row.response !== 'na') {
+        crowdingResponses.push(row.response);
+      } else if (row.friction_type === 'checkin' && row.response !== 'na') {
+        checkinResponses.push(row.response);
+      }
+    }
+
+    // Calculate lift delays percentage
+    let liftDelaysScore = 2; // Default to average if no data
+    if (liftDelaysResponses.length > 0) {
+      const liftDelaysYes = liftDelaysResponses.filter(r => r === 'yes').length;
+      const liftDelaysPercentage = (liftDelaysYes / liftDelaysResponses.length) * 100;
+      liftDelaysScore = percentageToScore(liftDelaysPercentage);
+    }
+
+    // Calculate crowding percentage
+    let crowdingScore = 2; // Default to average if no data
+    if (crowdingResponses.length > 0) {
+      const crowdingYes = crowdingResponses.filter(r => r === 'yes').length;
+      const crowdingPercentage = (crowdingYes / crowdingResponses.length) * 100;
+      crowdingScore = percentageToScore(crowdingPercentage);
+    }
+
+    // Calculate check-in average
+    let checkinScore = 2; // Default to average if no data
+    if (checkinResponses.length > 0) {
+      const checkinValues = checkinResponses.map(r => {
+        if (r === 'smooth') return 3;
+        if (r === 'average') return 2;
+        if (r === 'difficult') return 1;
+        return 2; // Default to average for unknown values
+      });
+      const checkinAverage = checkinValues.reduce((a, b) => a + b, 0) / checkinValues.length;
+      // Convert average (1-3) to percentage (0-100) then to score
+      const checkinPercentage = ((checkinAverage - 1) / 2) * 100;
+      checkinScore = percentageToScore(checkinPercentage);
+    }
+
+    return {
+      liftDelays: liftDelaysScore,
+      crowdingAtPeakTimes: crowdingScore,
+      checkinSmoothness: checkinScore,
+    };
+  } catch (error) {
+    console.error('Error calculating experience friction from reviews:', error);
+    return null;
+  }
+}
+
+/**
+ * Get the calculation basis for Experience Friction scores.
+ * Returns an object with review counts per friction type and calculated percentages.
+ *
+ * @param hotelId Hotel ID to get calculation basis for
+ * @returns Object with friction response counts and percentages, or null if no data
+ */
+export async function getExperienceFrictionCalculationBasis(
+  hotelId: string,
+): Promise<any> {
+  try {
+    const pool = getPool();
+
+    // Query all friction responses for this hotel
+    const [responses] = await pool.query<any>(
+      `SELECT friction_type, response FROM review_friction_responses 
+       WHERE hotel_id = ? 
+       ORDER BY created_at ASC`,
+      [hotelId],
+    );
+
+    if (!responses || responses.length === 0) {
+      return null;
+    }
+
+    // Count unique reviews
+    const [reviewData] = await pool.query<any>(
+      `SELECT DISTINCT review_id FROM review_friction_responses 
+       WHERE hotel_id = ?`,
+      [hotelId],
+    );
+
+    const totalReviews = reviewData?.length ?? 0;
+
+    // Aggregate responses by friction type
+    const liftDelaysResponses: string[] = [];
+    const crowdingResponses: string[] = [];
+    const checkinResponses: string[] = [];
+
+    for (const row of responses) {
+      if (row.friction_type === 'lift_delays' && row.response !== 'na') {
+        liftDelaysResponses.push(row.response);
+      } else if (row.friction_type === 'crowding' && row.response !== 'na') {
+        crowdingResponses.push(row.response);
+      } else if (row.friction_type === 'checkin' && row.response !== 'na') {
+        checkinResponses.push(row.response);
+      }
+    }
+
+    // Calculate percentages
+    const liftDelaysYes = liftDelaysResponses.filter(r => r === 'yes').length;
+    const liftDelaysPercentage = liftDelaysResponses.length > 0
+      ? Math.round((liftDelaysYes / liftDelaysResponses.length) * 100)
+      : 0;
+
+    const crowdingYes = crowdingResponses.filter(r => r === 'yes').length;
+    const crowdingPercentage = crowdingResponses.length > 0
+      ? Math.round((crowdingYes / crowdingResponses.length) * 100)
+      : 0;
+
+    // Count check-in responses by type
+    const checkinSmoothCount = checkinResponses.filter(r => r === 'smooth').length;
+    const checkinAverageCount = checkinResponses.filter(r => r === 'average').length;
+    const checkinDifficultCount = checkinResponses.filter(r => r === 'difficult').length;
+
+    return {
+      total_reviews: totalReviews,
+      lift_delays_count: liftDelaysResponses.length,
+      lift_delays_yes_count: liftDelaysYes,
+      lift_delays_percentage: liftDelaysPercentage,
+      crowding_count: crowdingResponses.length,
+      crowding_yes_count: crowdingYes,
+      crowding_percentage: crowdingPercentage,
+      checkin_smooth_count: checkinSmoothCount,
+      checkin_average_count: checkinAverageCount,
+      checkin_difficult_count: checkinDifficultCount,
+      checkin_total_count: checkinResponses.length,
+    };
+  } catch (error) {
+    console.error('Error getting experience friction calculation basis:', error);
+    return null;
+  }
+}

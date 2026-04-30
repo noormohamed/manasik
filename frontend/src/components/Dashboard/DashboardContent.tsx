@@ -10,7 +10,6 @@ import author2 from "/public/images/author/author-16.jpg";
 import Stays from "./Stays";
 import Experiences from "./Experiences";
 import CarForRent from "./CarForRent";
-import AuthorSidebar from "./AuthorSidebar";
 import Link from "next/link";
 import {usePathname} from "next/navigation";
 

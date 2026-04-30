@@ -17,6 +17,7 @@ const credits_routes_1 = require("./credits.routes");
 const broker_routes_1 = require("./broker.routes");
 const messaging_routes_1 = require("./messaging.routes");
 const staff_booking_routes_1 = require("./staff-booking.routes");
+const hotel_images_routes_1 = require("./hotel-images.routes");
 const createApiRouter = (db) => {
     console.log('[API Router] Creating API router with db:', !!db);
     const router = new koa_router_1.default({ prefix: '/api' });
@@ -57,6 +58,10 @@ const createApiRouter = (db) => {
     // Broker routes (always enabled)
     router.use(broker_routes_1.brokerRoutes.routes());
     router.use(broker_routes_1.brokerRoutes.allowedMethods());
+    // Hotel images routes (always enabled)
+    const hotelImagesRouter = (0, hotel_images_routes_1.createHotelImagesRouter)();
+    router.use(hotelImagesRouter.routes());
+    router.use(hotelImagesRouter.allowedMethods());
     // Messaging routes (always enabled)
     console.log('[API Router] Initializing messaging routes');
     if (db) {

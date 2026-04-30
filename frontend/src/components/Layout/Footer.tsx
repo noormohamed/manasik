@@ -155,17 +155,6 @@ const Footer = () => {
           </div>
         </div>
       </div>
-
-      <div className="copy-right-area">
-        <div className="container">
-          <p>
-            © <span>Sado</span> is Proudly Owned by{" "}
-            <a href="https://hibootstrap.com/" target="_blank">
-              HiBootstrap
-            </a>
-          </p>
-        </div>
-      </div>
     </>
   );
 };

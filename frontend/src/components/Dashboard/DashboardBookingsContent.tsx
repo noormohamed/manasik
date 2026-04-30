@@ -5,7 +5,6 @@ import { useAuth } from "@/hooks/useAuth";
 import { apiClient } from "@/lib/api";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import AuthorSidebar from "./AuthorSidebar";
 import CreateBookingModal from "./CreateBookingModal";
 import crypto from 'crypto';
 
@@ -1871,10 +1870,6 @@ const DashboardBookingsContent: React.FC = () => {
                   </>
                 )}
               </div>
-            </div>
-
-            <div className="col-xl-4 col-xxl-3">
-              <AuthorSidebar />
             </div>
           </div>
         </div>

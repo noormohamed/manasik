@@ -1982,5 +1982,134 @@ export const createHotelRoutes = () => {
     }
   });
 
+  /**
+   * GET /api/hotels/:id/booking-statistics
+   * Get booking statistics for a specific hotel (last 3 months)
+   * Returns:
+   * - bookingsLast3Months: count of bookings in the last 3 months
+   * - highestValuedBooking: booking with highest total cost
+   * - longestBooking: booking with most days
+   */
+  router.get('/:id/booking-statistics', authMiddleware, async (ctx: Context) => {
+    try {
+      const { id } = ctx.params;
+      const userId = (ctx as any).user?.userId;
+
+      if (!userId) {
+        ctx.status = 401;
+        ctx.body = { error: 'Unauthorized' };
+        return;
+      }
+
+      const pool = getPool();
+
+      // Verify user manages this hotel
+      const [hotelCheck] = await pool.query<any>(
+        'SELECT id, agent_id FROM hotels WHERE id = ?',
+        [id]
+      );
+
+      if (!hotelCheck || hotelCheck.length === 0) {
+        ctx.status = 404;
+        ctx.body = { error: 'Hotel not found' };
+        return;
+      }
+
+      const hotel = hotelCheck[0];
+      if (hotel.agent_id !== userId) {
+        ctx.status = 403;
+        ctx.body = { error: 'You do not have permission to view this hotel' };
+        return;
+      }
+
+      // Calculate date 3 months ago
+      const threeMonthsAgo = new Date();
+      threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const threeMonthsAgoStr = threeMonthsAgo.toISOString().split('T')[0];
+
+      // Get bookings for this hotel in the last 3 months
+      const [bookings] = await pool.query<any>(
+        `SELECT 
+          b.id,
+          b.total,
+          b.currency,
+          b.status,
+          b.metadata,
+          b.created_at
+        FROM bookings b
+        WHERE b.service_type = 'HOTEL'
+          AND JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = ?
+          AND b.created_at >= ?
+          AND b.status IN ('CONFIRMED', 'COMPLETED')
+        ORDER BY b.created_at DESC`,
+        [id, threeMonthsAgoStr]
+      );
+
+      const bookingsLast3Months = bookings.length;
+
+      // Find highest valued booking
+      let highestValuedBooking = null;
+      if (bookings.length > 0) {
+        const highest = (bookings as any[]).reduce((max, booking) => {
+          const bookingTotal = parseFloat(booking.total);
+          const maxTotal = parseFloat(max.total);
+          return bookingTotal > maxTotal ? booking : max;
+        });
+
+        const metadata = typeof highest.metadata === 'string'
+          ? JSON.parse(highest.metadata)
+          : highest.metadata;
+
+        highestValuedBooking = {
+          totalCost: parseFloat(highest.total),
+          currency: highest.currency,
+          guestName: metadata.guestName || 'Guest',
+          checkInDate: metadata.checkInDate,
+          checkOutDate: metadata.checkOutDate,
+        };
+      }
+
+      // Find longest booking
+      let longestBooking = null;
+      if (bookings.length > 0) {
+        const longest = (bookings as any[]).reduce((max, booking) => {
+          const metadata = typeof booking.metadata === 'string'
+            ? JSON.parse(booking.metadata)
+            : booking.metadata;
+
+          const maxMetadata = typeof max.metadata === 'string'
+            ? JSON.parse(max.metadata)
+            : max.metadata;
+
+          const bookingDays = metadata.nights || 0;
+          const maxDays = maxMetadata.nights || 0;
+
+          return bookingDays > maxDays ? booking : max;
+        });
+
+        const metadata = typeof longest.metadata === 'string'
+          ? JSON.parse(longest.metadata)
+          : longest.metadata;
+
+        longestBooking = {
+          durationDays: metadata.nights || 0,
+          guestName: metadata.guestName || 'Guest',
+          checkInDate: metadata.checkInDate,
+          checkOutDate: metadata.checkOutDate,
+        };
+      }
+
+      ctx.body = {
+        bookingsLast3Months,
+        highestValuedBooking,
+        longestBooking,
+      };
+    } catch (error) {
+      console.error('Error fetching booking statistics:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to fetch booking statistics' };
+    }
+  });
+
   return router;
 };

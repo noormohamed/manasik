@@ -26,7 +26,7 @@ interface Hotel {
   city: string;
   country: string;
   description: string;
-  rating: number;
+  averageRating: number;
   totalReviews: number;
   image?: string;
 }
@@ -188,13 +188,13 @@ const ConversationContext: React.FC<ConversationContextProps> = ({
                 {hotel.city}, {hotel.country}
               </p>
             </div>
-            {hotel.rating > 0 && (
+            {hotel.averageRating > 0 && (
               <div className="context-item">
                 <label>Rating</label>
                 <p>
                   <span className="rating">
                     <i className="ri-star-fill"></i>
-                    {hotel.rating.toFixed(1)}
+                    {hotel.averageRating.toFixed(1)}
                   </span>
                   <span className="reviews">({hotel.totalReviews} reviews)</span>
                 </p>

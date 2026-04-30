@@ -7,7 +7,6 @@ import { apiClient } from "@/lib/api";
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import AuthorSidebar from "./AuthorSidebar";
 
 const DashboardListingContent: React.FC = () => {
   const { user } = useAuth();
@@ -275,10 +274,6 @@ const DashboardListingContent: React.FC = () => {
                   </div>
                 )}
               </div>
-            </div>
-
-            <div className="col-xl-4 col-xxl-3">
-              <AuthorSidebar />
             </div>
           </div>
         </div>

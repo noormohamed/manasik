@@ -60,6 +60,7 @@ const checkout_routes_1 = __importStar(require("./routes/checkout.routes"));
 dotenv_1.default.config();
 const app = new koa_1.default();
 exports.app = app;
+app.proxy = true; // Trust X-Forwarded-Proto from nginx
 // CORS middleware - MUST be first (fully permissive)
 app.use((0, cors_1.default)({
     origin: (ctx) => ctx.request.header.origin || '*',

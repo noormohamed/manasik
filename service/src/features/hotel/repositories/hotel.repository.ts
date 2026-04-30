@@ -12,17 +12,71 @@ import {
   parseScoringData,
   deriveFromHotelRow,
   ScoringWeights,
+  calculateLocationMetrics,
+  calculateExperienceFrictionFromReviews,
+  getExperienceFrictionCalculationBasis,
 } from '../services/scoring.service';
+import {
+  logScoreCalculation,
+} from '../services/score-calculation-audit.service';
 
 /** Compute manasikScore + scoringBreakdown for a raw DB row. */
-function scoringForRow(row: any, weights: ScoringWeights) {
+async function scoringForRow(row: any, weights: ScoringWeights) {
   const averageRating = parseFloat(row.average_rating || 0);
   let scoringData = parseScoringData(row.scoring_data);
   let derived = false;
+  
   if (!scoringData) {
     scoringData = deriveFromHotelRow(row).data;
     derived = true;
+    
+    // If deriving from hotel row, use calculated location metrics if gate proximity is available
+    if (row.distance_to_haram_meters || row.gate_proximity_meters) {
+      const gateProximityMeters = row.distance_to_haram_meters || row.gate_proximity_meters;
+      const terrainData = row.location_metrics_calculation_basis 
+        ? JSON.parse(row.location_metrics_calculation_basis)
+        : undefined;
+      
+      const calculatedLocationMetrics = calculateLocationMetrics(gateProximityMeters, terrainData);
+      scoringData.location = calculatedLocationMetrics;
+      
+      // Log the location metrics calculation
+      try {
+        await logScoreCalculation(
+          row.id,
+          'location',
+          calculatedLocationMetrics,
+          { gateProximityMeters, terrainData },
+          `Calculated from ${gateProximityMeters}m gate distance at 1.4 m/s average pace`,
+        );
+      } catch (error) {
+        console.error('Error logging location metrics calculation:', error);
+      }
+    }
+    
+    // Calculate experience friction from reviews if available
+    try {
+      const experienceFriction = await calculateExperienceFrictionFromReviews(row.id);
+      if (experienceFriction) {
+        scoringData.experienceFriction = experienceFriction;
+        
+        // Get calculation basis for logging
+        const calculationBasis = await getExperienceFrictionCalculationBasis(row.id);
+        
+        // Log the experience friction calculation
+        await logScoreCalculation(
+          row.id,
+          'experience_friction',
+          experienceFriction,
+          calculationBasis,
+          `Based on ${row.total_reviews} reviews: ${calculationBasis?.lift_delays_percentage || 0}% lift delays, ${calculationBasis?.crowding_percentage || 0}% crowding`,
+        );
+      }
+    } catch (error) {
+      console.error('Error calculating experience friction from reviews:', error);
+    }
   }
+  
   const result = computeScoring(scoringData, weights, averageRating);
   return { manasikScore: result.overall, scoringBreakdown: { ...result, derived } };
 }
@@ -305,7 +359,7 @@ export class HotelRepository extends BaseRepository<Hotel> {
       const landmarks = await this.filterService.getHotelLandmarks(row.id);
       const surroundings = await this.filterService.getHotelSurroundings(row.id);
 
-      const { manasikScore, scoringBreakdown } = scoringForRow(row, weights);
+      const { manasikScore, scoringBreakdown } = await scoringForRow(row, weights);
 
       return {
         id: row.id,
@@ -464,7 +518,7 @@ export class HotelRepository extends BaseRepository<Hotel> {
       const roomsQuery = `SELECT id, name, base_price, currency, capacity FROM room_types WHERE hotel_id = ? AND status = 'ACTIVE' LIMIT 5`;
       const rooms = await this.query<any>(roomsQuery, [row.id]);
 
-      const { manasikScore, scoringBreakdown } = scoringForRow(row, weights);
+      const { manasikScore, scoringBreakdown } = await scoringForRow(row, weights);
 
       return {
         id: row.id,

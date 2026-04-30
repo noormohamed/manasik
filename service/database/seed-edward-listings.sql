@@ -1,17 +1,24 @@
 -- Create listings (hotels) owned by Edward Sanchez
--- Edward's user ID: edward-001
+-- Edward's user ID: 11aacd48-5b1e-48dc-8abe-862716d53e41 (from actual user record)
+-- Company ID: 12c46044-fe37-45c1-a242-4f7950c91e30 (Hotel Group 8)
+
+-- Clean up any existing Edward hotels and their associated data
+DELETE FROM hotel_images WHERE hotel_id IN ('hotel-edward-001', 'hotel-edward-002', 'hotel-edward-003');
+DELETE FROM room_types WHERE hotel_id IN ('hotel-edward-001', 'hotel-edward-002', 'hotel-edward-003');
+DELETE FROM hotel_amenities WHERE hotel_id IN ('hotel-edward-001', 'hotel-edward-002', 'hotel-edward-003');
+DELETE FROM hotels WHERE id IN ('hotel-edward-001', 'hotel-edward-002', 'hotel-edward-003');
+DELETE FROM agents WHERE id = 'agent-edward';
 
 -- First, create an agent record for Edward
 INSERT INTO agents (id, user_id, company_id, service_type, name, email, phone, status, commission_rate)
-VALUES ('agent-edward', 'edward-001', 'comp-001', 'HOTEL', 'Edward Sanchez', 'edward.sanchez@email.com', '+1234567890', 'ACTIVE', 10.00)
-ON DUPLICATE KEY UPDATE name = 'Edward Sanchez';
+VALUES ('agent-edward', '11aacd48-5b1e-48dc-8abe-862716d53e41', '12c46044-fe37-45c1-a242-4f7950c91e30', 'HOTEL', 'Edward Sanchez', 'edward.sanchez@email.com', '+1234567890', 'ACTIVE', 10.00);
 
 -- Insert 3 hotels for Edward Sanchez
 INSERT INTO hotels (id, company_id, agent_id, name, description, status, address, city, state, country, zip_code, latitude, longitude, star_rating, total_rooms, check_in_time, check_out_time, average_rating, total_reviews)
 VALUES 
-  ('hotel-edward-001', 'comp-001', 'agent-edward', 'Sanchez Makkah Suites', 'Luxurious suites with stunning views of the Haram. Perfect for families and groups seeking comfort during their pilgrimage.', 'ACTIVE', '123 Ibrahim Al-Khalil Road', 'Makkah', 'Makkah Province', 'Saudi Arabia', '24231', 21.4225, 39.8262, 5, 50, '14:00', '12:00', 4.8, 125),
-  ('hotel-edward-002', 'comp-001', 'agent-edward', 'Al-Sanchez Boutique Hotel', 'A charming boutique hotel just steps from Masjid al-Haram. Experience authentic Arabian hospitality.', 'ACTIVE', '456 Ajyad Street', 'Makkah', 'Makkah Province', 'Saudi Arabia', '24232', 21.4195, 39.8275, 4, 30, '15:00', '11:00', 4.5, 89),
-  ('hotel-edward-003', 'comp-001', 'agent-edward', 'Edward''s Medina Retreat', 'Peaceful accommodation near Masjid an-Nabawi. Ideal for spiritual reflection and rest.', 'ACTIVE', '789 King Faisal Road', 'Medina', 'Medina Province', 'Saudi Arabia', '42311', 24.4672, 39.6024, 4, 40, '14:00', '11:00', 4.6, 67);
+  ('hotel-edward-001', '12c46044-fe37-45c1-a242-4f7950c91e30', 'agent-edward', 'Sanchez Makkah Suites', 'Luxurious suites with stunning views of the Haram. Perfect for families and groups seeking comfort during their pilgrimage.', 'ACTIVE', '123 Ibrahim Al-Khalil Road', 'Makkah', 'Makkah Province', 'Saudi Arabia', '24231', 21.4225, 39.8262, 5, 50, '14:00', '12:00', 4.8, 125),
+  ('hotel-edward-002', '12c46044-fe37-45c1-a242-4f7950c91e30', 'agent-edward', 'Al-Sanchez Boutique Hotel', 'A charming boutique hotel just steps from Masjid al-Haram. Experience authentic Arabian hospitality.', 'ACTIVE', '456 Ajyad Street', 'Makkah', 'Makkah Province', 'Saudi Arabia', '24232', 21.4195, 39.8275, 4, 30, '15:00', '11:00', 4.5, 89),
+  ('hotel-edward-003', '12c46044-fe37-45c1-a242-4f7950c91e30', 'agent-edward', 'Edward''s Medina Retreat', 'Peaceful accommodation near Masjid an-Nabawi. Ideal for spiritual reflection and rest.', 'ACTIVE', '789 King Faisal Road', 'Medina', 'Medina Province', 'Saudi Arabia', '42311', 24.4672, 39.6024, 4, 40, '14:00', '11:00', 4.6, 67);
 
 -- Insert room types for each hotel
 -- Hotel 1: Sanchez Makkah Suites
@@ -37,15 +44,27 @@ VALUES
   ('room-edward-003-dlx', 'hotel-edward-003', 'Deluxe Room', 'Spacious room with mosque view and upgraded amenities.', 3, 8, 6, 200.00, 'USD', 'ACTIVE'),
   ('room-edward-003-ste', 'hotel-edward-003', 'Retreat Suite', 'Peaceful suite with garden view, perfect for extended stays.', 4, 2, 2, 350.00, 'USD', 'ACTIVE');
 
--- Add hotel images
+-- Generate MD5 hashes for Edward's hotels and store them
+-- UPDATE hotels SET hotel_id_md5 = MD5(id) WHERE id IN ('hotel-edward-001', 'hotel-edward-002', 'hotel-edward-003');
+
+-- Add hotel images using simple schema
+-- Hotel 1: Sanchez Makkah Suites (hotel-edward-001)
 INSERT INTO hotel_images (hotel_id, image_url, display_order)
 VALUES
-  ('hotel-edward-001', 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800', 1),
-  ('hotel-edward-001', 'https://images.unsplash.com/photo-1582719508461-905c673771fd?w=800', 2),
-  ('hotel-edward-002', 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800', 1),
-  ('hotel-edward-002', 'https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800', 2),
-  ('hotel-edward-003', 'https://images.unsplash.com/photo-1564501049412-61c2a3083791?w=800', 1),
-  ('hotel-edward-003', 'https://images.unsplash.com/photo-1631049307264-da0ec9d70304?w=800', 2);
+  ('hotel-edward-001', 'https://mk-images.wasabisys.com/mk-images/sanchez-makkah-1.jpg', 1),
+  ('hotel-edward-001', 'https://mk-images.wasabisys.com/mk-images/sanchez-makkah-2.jpg', 2);
+
+-- Hotel 2: Al-Sanchez Boutique Hotel (hotel-edward-002)
+INSERT INTO hotel_images (hotel_id, image_url, display_order)
+VALUES
+  ('hotel-edward-002', 'https://mk-images.wasabisys.com/mk-images/al-sanchez-boutique-1.jpg', 1),
+  ('hotel-edward-002', 'https://mk-images.wasabisys.com/mk-images/al-sanchez-boutique-2.jpg', 2);
+
+-- Hotel 3: Edward's Medina Retreat (hotel-edward-003)
+INSERT INTO hotel_images (hotel_id, image_url, display_order)
+VALUES
+  ('hotel-edward-003', 'https://mk-images.wasabisys.com/mk-images/medina-retreat-1.jpg', 1),
+  ('hotel-edward-003', 'https://mk-images.wasabisys.com/mk-images/medina-retreat-2.jpg', 2);
 
 -- Add hotel amenities
 INSERT INTO hotel_amenities (hotel_id, amenity_name, is_available)

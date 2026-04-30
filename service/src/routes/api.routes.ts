@@ -12,6 +12,7 @@ import { createCreditsRoutes } from './credits.routes';
 import { brokerRoutes } from './broker.routes';
 import { createMessagingRouter, initializeMessagingRoutes } from './messaging.routes';
 import { staffBookingRoutes } from './staff-booking.routes';
+import { createHotelImagesRouter } from './hotel-images.routes';
 import { Database } from '../database/connection';
 
 export const createApiRouter = (db?: Database) => {
@@ -63,6 +64,11 @@ export const createApiRouter = (db?: Database) => {
     // Broker routes (always enabled)
     router.use(brokerRoutes.routes());
     router.use(brokerRoutes.allowedMethods());
+
+    // Hotel images routes (always enabled)
+    const hotelImagesRouter = createHotelImagesRouter();
+    router.use(hotelImagesRouter.routes());
+    router.use(hotelImagesRouter.allowedMethods());
 
     // Messaging routes (always enabled)
     console.log('[API Router] Initializing messaging routes');

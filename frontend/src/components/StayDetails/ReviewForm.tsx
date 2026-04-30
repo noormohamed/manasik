@@ -1,6 +1,68 @@
-"use client";
+'use client';
 
-const ReviewForm = () => {
+import React, { useState } from 'react';
+
+interface FrictionResponses {
+  liftDelays?: 1 | 2 | 3;
+  crowding?: 1 | 2 | 3;
+  checkin?: 1 | 2 | 3;
+}
+
+const ReviewForm: React.FC = () => {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [review, setReview] = useState('');
+  const [frictionResponses, setFrictionResponses] = useState<FrictionResponses>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+
+  const handleFrictionChange = (
+    field: keyof FrictionResponses,
+    value: number
+  ) => {
+    setFrictionResponses((prev) => ({
+      ...prev,
+      [field]: value as 1 | 2 | 3,
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(false);
+
+    try {
+      // Validate required fields
+      if (!name.trim() || !email.trim() || !review.trim()) {
+        setSubmitError('Please fill in all required fields');
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Here you would submit the review and friction responses
+      // For now, we'll just simulate the submission
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+
+      // Reset form on success
+      setName('');
+      setEmail('');
+      setReview('');
+      setFrictionResponses({});
+      setSubmitSuccess(true);
+
+      // Clear success message after 3 seconds
+      setTimeout(() => setSubmitSuccess(false), 3000);
+    } catch (error) {
+      setSubmitError(
+        error instanceof Error ? error.message : 'Failed to submit review'
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <>
       <div className="stay-comment-replay box-style">
@@ -87,8 +149,24 @@ const ReviewForm = () => {
             </div>
           </div>
         </div>
-        
-        <form>
+
+        {/* Success Message */}
+        {submitSuccess && (
+          <div className="alert alert-success mb-4" role="alert">
+            <i className="ri-check-line me-2"></i>
+            Thank you! Your review has been submitted successfully.
+          </div>
+        )}
+
+        {/* Error Message */}
+        {submitError && (
+          <div className="alert alert-danger mb-4" role="alert">
+            <i className="ri-error-warning-line me-2"></i>
+            {submitError}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit}>
           <div className="row">
             <div className="col-lg-6">
               <div className="form-group mb-4">
@@ -96,6 +174,9 @@ const ReviewForm = () => {
                   type="text"
                   className="form-control"
                   placeholder="Name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
                 />
               </div>
             </div>
@@ -105,6 +186,9 @@ const ReviewForm = () => {
                   type="email"
                   className="form-control"
                   placeholder="Email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
                 />
               </div>
             </div>
@@ -117,7 +201,166 @@ const ReviewForm = () => {
                 placeholder="Write a review"
                 cols={30}
                 rows={10}
+                value={review}
+                onChange={(e) => setReview(e.target.value)}
+                required
               ></textarea>
+            </div>
+          </div>
+
+          {/* Friction Questions Section */}
+          <div className="card mb-4" style={{ backgroundColor: '#f9fafb', border: '1px solid #e5e7eb' }}>
+            <div className="card-body">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+                <div>
+                  <h6 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: '#1f2937' }}>
+                    <i className="ri-question-line me-2"></i>
+                    Experience Friction
+                  </h6>
+                  <p style={{ margin: '4px 0 0', fontSize: '12px', color: '#6b7280' }}>
+                    Rate each experience 1 (Poor) · 2 (Average) · 3 (Good)
+                  </p>
+                </div>
+                <div style={{
+                  background: '#fbbf24',
+                  color: '#78350f',
+                  borderRadius: '8px',
+                  padding: '6px 14px',
+                  textAlign: 'center',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}>
+                  <div style={{ fontSize: '16px', fontWeight: 800, lineHeight: 1 }}>
+                    {frictionResponses.liftDelays && frictionResponses.crowding && frictionResponses.checkin
+                      ? (((frictionResponses.liftDelays + frictionResponses.crowding + frictionResponses.checkin) / 3) * 10 / 3).toFixed(1)
+                      : '—'}
+                  </div>
+                  <div style={{ fontSize: '10px', marginTop: '2px' }}>Preview</div>
+                </div>
+              </div>
+
+              {/* Question 1: Lift Delays */}
+              <div style={{ marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>
+                    Lift Delays
+                  </label>
+                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>
+                    {frictionResponses.liftDelays ? `${frictionResponses.liftDelays} – ${['', 'Poor', 'Average', 'Good'][frictionResponses.liftDelays]}` : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[1, 2, 3].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => handleFrictionChange('liftDelays', value as 1 | 2 | 3)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 0',
+                        borderRadius: '6px',
+                        border: frictionResponses.liftDelays === value
+                          ? '2px solid #f59e0b'
+                          : '2px solid #e5e7eb',
+                        background: frictionResponses.liftDelays === value
+                          ? '#fef3c7'
+                          : '#fff',
+                        color: frictionResponses.liftDelays === value
+                          ? '#f59e0b'
+                          : '#6b7280',
+                        fontWeight: frictionResponses.liftDelays === value ? 700 : 400,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {value} · {['', 'Poor', 'Average', 'Good'][value]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Question 2: Crowding */}
+              <div style={{ marginBottom: '20px', paddingBottom: '20px', borderBottom: '1px solid #e5e7eb' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>
+                    Crowding at Peak Times
+                  </label>
+                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>
+                    {frictionResponses.crowding ? `${frictionResponses.crowding} – ${['', 'Poor', 'Average', 'Good'][frictionResponses.crowding]}` : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[1, 2, 3].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => handleFrictionChange('crowding', value as 1 | 2 | 3)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 0',
+                        borderRadius: '6px',
+                        border: frictionResponses.crowding === value
+                          ? '2px solid #f59e0b'
+                          : '2px solid #e5e7eb',
+                        background: frictionResponses.crowding === value
+                          ? '#fef3c7'
+                          : '#fff',
+                        color: frictionResponses.crowding === value
+                          ? '#f59e0b'
+                          : '#6b7280',
+                        fontWeight: frictionResponses.crowding === value ? 700 : 400,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {value} · {['', 'Poor', 'Average', 'Good'][value]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Question 3: Check-in Experience */}
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151' }}>
+                    Check-in Smoothness
+                  </label>
+                  <span style={{ fontSize: '12px', color: '#6b7280', fontWeight: 600 }}>
+                    {frictionResponses.checkin ? `${frictionResponses.checkin} – ${['', 'Poor', 'Average', 'Good'][frictionResponses.checkin]}` : '—'}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  {[1, 2, 3].map((value) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => handleFrictionChange('checkin', value as 1 | 2 | 3)}
+                      style={{
+                        flex: 1,
+                        padding: '8px 0',
+                        borderRadius: '6px',
+                        border: frictionResponses.checkin === value
+                          ? '2px solid #f59e0b'
+                          : '2px solid #e5e7eb',
+                        background: frictionResponses.checkin === value
+                          ? '#fef3c7'
+                          : '#fff',
+                        color: frictionResponses.checkin === value
+                          ? '#f59e0b'
+                          : '#6b7280',
+                        fontWeight: frictionResponses.checkin === value ? 700 : 400,
+                        fontSize: '13px',
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {value} · {['', 'Poor', 'Average', 'Good'][value]}
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
@@ -125,8 +368,24 @@ const ReviewForm = () => {
             <button
               type="submit"
               className="default-btn active rounded-10 border-0"
+              disabled={isSubmitting}
+              style={{
+                opacity: isSubmitting ? 0.6 : 1,
+                cursor: isSubmitting ? 'not-allowed' : 'pointer',
+              }}
             >
-              Submit Review
+              {isSubmitting ? (
+                <>
+                  <span
+                    className="spinner-border spinner-border-sm me-2"
+                    role="status"
+                    aria-hidden="true"
+                  ></span>
+                  Submitting...
+                </>
+              ) : (
+                'Submit Review'
+              )}
             </button>
           </div>
         </form>
