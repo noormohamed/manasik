@@ -569,7 +569,23 @@ export const createHotelRoutes = () => {
 
       const pool = getPool();
       
-      // Fetch bookings for hotels managed by this user
+      // Resolve agent record for this user (hotels.agent_id stores the agent ID, not user ID)
+      const [agentRows] = await pool.query<any>(
+        `SELECT id FROM agents WHERE user_id = ?`,
+        [userId]
+      );
+
+      if (!agentRows || agentRows.length === 0) {
+        ctx.body = {
+          bookings: [],
+          pagination: { page: pageNum, limit: limitNum, total: 0, totalPages: 0 },
+        };
+        return;
+      }
+
+      const agentIds = agentRows.map((a: any) => a.id);
+
+      // Fetch bookings for hotels managed by this user's agent record(s)
       // Extract hotel_id from metadata JSON and join with hotels table to verify user manages the hotel
       let query = `
         SELECT 
@@ -602,10 +618,10 @@ export const createHotelRoutes = () => {
         LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
         WHERE b.service_type = 'HOTEL'
           AND JSON_EXTRACT(b.metadata, '$.hotelId') IS NOT NULL
-          AND h.agent_id = ?
+          AND h.agent_id IN (${agentIds.map(() => '?').join(',')})
       `;
 
-      const params: any[] = [userId];
+      const params: any[] = [...agentIds];
 
       if (status) {
         query += ' AND b.status = ?';
@@ -643,9 +659,9 @@ export const createHotelRoutes = () => {
         LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
         WHERE b.service_type = 'HOTEL'
           AND JSON_EXTRACT(b.metadata, '$.hotelId') IS NOT NULL
-          AND h.agent_id = ?
+          AND h.agent_id IN (${agentIds.map(() => '?').join(',')})
       `;
-      const countParams: any[] = [userId];
+      const countParams: any[] = [...agentIds];
       if (status) {
         countQuery += ' AND b.status = ?';
         countParams.push(status);
@@ -1267,9 +1283,10 @@ export const createHotelRoutes = () => {
         `UPDATE bookings 
          SET payment_status = ?,
              status = ?,
+             payment_method = CASE WHEN ? = 'PAID' THEN 'MANUAL' ELSE NULL END,
              updated_at = NOW()
          WHERE id = ?`,
-        [paymentStatus, newStatus, bookingId]
+        [paymentStatus, newStatus, paymentStatus, bookingId]
       );
 
       if (result.affectedRows === 0) {
@@ -1292,6 +1309,216 @@ export const createHotelRoutes = () => {
       console.error('Update payment status error:', error);
       ctx.status = 500;
       ctx.body = { error: 'Failed to update payment status' };
+    }
+  });
+
+  /**
+   * PATCH /api/hotels/bookings/:id/status
+   * Update booking status (hotel manager only)
+   * Allows marking bookings as COMPLETED, CANCELLED, etc.
+   */
+  router.patch('/bookings/:id/status', authMiddleware, requireFeature('hotelListing'), async (ctx: Context) => {
+    try {
+      const userId = (ctx as any).user?.userId;
+      const bookingId = ctx.params.id;
+      // @ts-ignore
+      const { status } = ctx.request.body;
+
+      if (!userId) {
+        ctx.status = 401;
+        ctx.body = { error: 'Unauthorized' };
+        return;
+      }
+
+      const allowedStatuses = ['COMPLETED', 'CANCELLED', 'CONFIRMED', 'PENDING'];
+      if (!status || !allowedStatuses.includes(status)) {
+        ctx.status = 400;
+        ctx.body = { error: `Invalid status. Allowed: ${allowedStatuses.join(', ')}` };
+        return;
+      }
+
+      const pool = getPool();
+      const hotelRepository = new HotelRepository();
+
+      const [bookingRows] = await pool.query<any>(
+        'SELECT * FROM bookings WHERE id = ?',
+        [bookingId]
+      );
+
+      if (!bookingRows || bookingRows.length === 0) {
+        ctx.status = 404;
+        ctx.body = { error: 'Booking not found' };
+        return;
+      }
+
+      const booking = bookingRows[0];
+      const metadata = typeof booking.metadata === 'string'
+        ? JSON.parse(booking.metadata)
+        : booking.metadata;
+
+      const hotelId = metadata.hotelId || metadata.hotel_id;
+
+      const isManager = await hotelRepository.isUserManagingHotel(userId, hotelId);
+      if (!isManager) {
+        ctx.status = 403;
+        ctx.body = { error: 'You do not have permission to update this booking' };
+        return;
+      }
+
+      const [result] = await pool.query<any>(
+        'UPDATE bookings SET status = ?, updated_at = NOW() WHERE id = ?',
+        [status, bookingId]
+      );
+
+      if (result.affectedRows === 0) {
+        ctx.status = 500;
+        ctx.body = { error: 'Failed to update booking status' };
+        return;
+      }
+
+      ctx.body = {
+        success: true,
+        message: `Booking status updated to ${status}`,
+        booking: {
+          bookingId,
+          status,
+          updatedAt: new Date().toISOString(),
+        },
+      };
+    } catch (error) {
+      console.error('Update booking status error:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to update booking status' };
+    }
+  });
+
+  /**
+   * GET /api/hotels/:id/rooms/availability
+   * Check real-time room availability for a date range.
+   * Returns only room types that have at least one room available on EVERY day
+   * of the requested range. Each room type includes an `availableRooms` count
+   * that reflects the worst-case (peak) day in the range.
+   *
+   * Query params:
+   *   - checkIn  (required) YYYY-MM-DD
+   *   - checkOut (required) YYYY-MM-DD  (checkout day is NOT counted as occupied)
+   */
+  router.get('/:id/rooms/availability', requireFeature('roomAvailability'), async (ctx: Context) => {
+    try {
+      const { id: hotelId } = ctx.params;
+      const { checkIn, checkOut } = ctx.query;
+
+      // Validate query params
+      if (!checkIn || !checkOut) {
+        ctx.status = 400;
+        ctx.body = { error: 'checkIn and checkOut query parameters are required' };
+        return;
+      }
+
+      const checkInStr = checkIn as string;
+      const checkOutStr = checkOut as string;
+
+      // Basic date validation
+      const checkInDate = new Date(checkInStr);
+      const checkOutDate = new Date(checkOutStr);
+      if (isNaN(checkInDate.getTime()) || isNaN(checkOutDate.getTime())) {
+        ctx.status = 400;
+        ctx.body = { error: 'Invalid date format. Use YYYY-MM-DD.' };
+        return;
+      }
+      if (checkOutDate <= checkInDate) {
+        ctx.status = 400;
+        ctx.body = { error: 'checkOut must be after checkIn' };
+        return;
+      }
+
+      const hotelRepository = new HotelRepository();
+      const hotel = await hotelRepository.findById(hotelId);
+      if (!hotel) {
+        ctx.status = 404;
+        ctx.body = { error: 'Hotel not found' };
+        return;
+      }
+
+      const pool = getPool();
+
+      // 1. Fetch all active room types for this hotel (with first image)
+      const [roomTypeRows] = await pool.query<any>(
+        `SELECT
+           rt.id,
+           rt.name,
+           rt.description,
+           rt.capacity,
+           rt.total_rooms,
+           rt.available_rooms,
+           rt.base_price,
+           rt.currency,
+           rt.status,
+           (SELECT image_url FROM room_images WHERE room_type_id = rt.id ORDER BY display_order LIMIT 1) as image
+         FROM room_types rt
+         WHERE rt.hotel_id = ? AND rt.status = 'ACTIVE'
+         ORDER BY rt.base_price ASC`,
+        [hotelId]
+      );
+
+      // 2. Count overlapping bookings per room type across the requested range.
+      //    A booking overlaps the range when its checkIn < requestedCheckOut AND its checkOut > requestedCheckIn.
+      //    This count is an upper-bound on the peak concurrent bookings for any single day,
+      //    which is the safe/conservative approach to prevent overbooking.
+      const [bookingCounts] = await pool.query<any>(
+        `SELECT
+           JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.roomTypeId')) as room_type_id,
+           COUNT(*) as booking_count
+         FROM bookings b
+         WHERE b.service_type = 'HOTEL'
+           AND JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = ?
+           AND b.status NOT IN ('CANCELLED', 'REFUNDED')
+           AND DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkInDate'))) < ?
+           AND DATE(JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.checkOutDate'))) > ?
+         GROUP BY room_type_id`,
+        [hotelId, checkOutStr, checkInStr]
+      );
+
+      // Build a map of roomTypeId -> overlapping booking count
+      const bookingCountMap: Record<string, number> = {};
+      for (const row of bookingCounts as any[]) {
+        if (row.room_type_id) {
+          bookingCountMap[row.room_type_id] = parseInt(row.booking_count, 10);
+        }
+      }
+
+      // 3. Compute available rooms and filter out room types with zero availability
+      const availableRooms = (roomTypeRows as any[])
+        .map((rt: any) => {
+          const totalRooms = rt.total_rooms ?? rt.available_rooms ?? 0;
+          const overlapping = bookingCountMap[rt.id] || 0;
+          const available = Math.max(0, totalRooms - overlapping);
+          return {
+            id: rt.id,
+            name: rt.name,
+            description: rt.description,
+            capacity: rt.capacity,
+            totalRooms,
+            basePrice: parseFloat(rt.base_price),
+            currency: rt.currency || 'USD',
+            availableRooms: available,
+            status: rt.status,
+            image: rt.image || null,
+          };
+        })
+        .filter((rt) => rt.availableRooms > 0);
+
+      ctx.body = {
+        rooms: availableRooms,
+        dateRange: {
+          checkIn: checkInStr,
+          checkOut: checkOutStr,
+        },
+      };
+    } catch (error) {
+      console.error('Error checking room availability:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Failed to check room availability' };
     }
   });
 

@@ -119,7 +119,7 @@ router.get('/session/:sessionId', async (ctx: any) => {
           const bookingIds = JSON.parse(paymentStatus.metadata.bookingIds);
           for (const bookingId of bookingIds) {
             await db.query(
-              `UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', updated_at = NOW() WHERE id = ?`,
+              `UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', payment_method = 'STRIPE', updated_at = NOW() WHERE id = ?`,
               [bookingId]
             );
           }
@@ -204,7 +204,7 @@ router.post('/verify-payment', async (ctx: any) => {
     // Update booking statuses
     for (const bookingId of bookingIds) {
       await db.query(
-        `UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', updated_at = NOW() WHERE id = ?`,
+        `UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', payment_method = 'STRIPE', updated_at = NOW() WHERE id = ?`,
         [bookingId]
       );
     }

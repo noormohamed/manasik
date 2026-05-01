@@ -201,6 +201,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   payment_link_expires_at TIMESTAMP NULL,
   hold_expires_at TIMESTAMP NULL,
   broker_notes TEXT NULL,
+  payment_method ENUM('STRIPE', 'MANUAL') NULL DEFAULT NULL,
   guest_details JSON NULL,
   metadata JSON,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -215,7 +216,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   INDEX idx_agent_id (agent_id),
   INDEX idx_service_type (service_type),
   INDEX idx_created_at (created_at),
-  INDEX idx_hold_expires (hold_expires_at)
+  INDEX idx_hold_expires (hold_expires_at),
+  INDEX idx_payment_method (payment_method)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Reviews table
@@ -366,4 +368,17 @@ CREATE TABLE IF NOT EXISTS checkout_sessions (
   INDEX idx_isGuest (isGuest),
   INDEX idx_expiresAt (expiresAt),
   INDEX idx_createdAt (createdAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Exchange rates table (cached rates from Frankfurter API)
+CREATE TABLE IF NOT EXISTS exchange_rates (
+  id VARCHAR(36) PRIMARY KEY,
+  from_currency VARCHAR(3) NOT NULL,
+  to_currency VARCHAR(3) NOT NULL,
+  rate DECIMAL(10, 6) NOT NULL,
+  source VARCHAR(50) DEFAULT 'manual',
+  fetched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  expires_at TIMESTAMP NULL,
+  UNIQUE KEY unique_currency_pair (from_currency, to_currency),
+  INDEX idx_currencies (from_currency, to_currency)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -7,35 +7,38 @@ UPDATE users SET first_name = 'William', last_name = 'Smith', email = 'agent-10@
 -- Create an agent record for William Smith (if not exists)
 INSERT INTO agents (id, user_id, company_id, service_type, name, email, phone, status, commission_rate, total_bookings, total_revenue, average_rating, total_reviews)
 VALUES ('agent-10', 'agent-010', 'comp-001', 'HOTEL', 'William Smith', 'agent-10@bookingplatform.com', '+1-800-WILLIAM', 'ACTIVE', 10.0, 0, 0.00, 0.0, 0)
-ON DUPLICATE KEY UPDATE name = 'William Smith', email = 'agent-10@bookingplatform.com';
+ON DUPLICATE KEY UPDATE user_id = 'agent-010', name = 'William Smith', email = 'agent-10@bookingplatform.com';
 
 -- Update the Beach Club hotel (hotel-010) to be managed by William Smith
 UPDATE hotels SET agent_id = 'agent-10' WHERE id = 'hotel-010' AND name = 'Beach Club';
 
+-- Update the Countryside Lodge hotel (hotel-020) to be managed by William Smith
+UPDATE hotels SET agent_id = 'agent-10' WHERE id = 'hotel-020' AND name = 'Countryside Lodge';
+
 -- Create bookings for Beach Club (these are customer bookings that William Smith should see as hotel manager)
--- Booking 1: Edward Sanchez's booking at Beach Club
-INSERT INTO bookings (id, company_id, customer_id, service_type, booking_source, agent_id, status, currency, subtotal, tax, total, payment_status, refund_amount, refund_reason, refunded_at, metadata, created_at, updated_at)
+-- Booking 1: Edward Sanchez's booking at Beach Club (refunded — payment_method NULL)
+INSERT INTO bookings (id, company_id, customer_id, service_type, booking_source, agent_id, status, currency, subtotal, tax, total, payment_status, payment_method, refund_amount, refund_reason, refunded_at, metadata, created_at, updated_at)
 VALUES 
-  ('booking-0010', 'comp-001', 'edward-001', 'HOTEL', 'DIRECT', NULL, 'COMPLETED', 'GBP', 150.00, 30.00, 180.00, 'PAID', 180.00, 'Guest requested refund', '2026-04-24 10:00:00',
+  ('booking-0010', 'comp-001', 'edward-001', 'HOTEL', 'DIRECT', NULL, 'COMPLETED', 'GBP', 150.00, 30.00, 180.00, 'PAID', NULL, 180.00, 'Guest requested refund', '2026-04-24 10:00:00',
    '{"hotelId": "hotel-010", "hotelName": "Beach Club", "roomType": "City View Room", "roomTypeId": "room-beach-club-dlx", "checkInDate": "2026-04-21", "checkOutDate": "2026-04-24", "nights": 3, "guests": 2, "guestName": "Edward Sanchez", "guestEmail": "edward.sanchez@email.com", "guestPhone": "+1234567890"}',
    '2026-04-16 10:00:00', NOW())
-ON DUPLICATE KEY UPDATE status = 'COMPLETED';
+ON DUPLICATE KEY UPDATE status = 'COMPLETED', payment_method = NULL;
 
--- Booking 2: Another customer booking at Beach Club
-INSERT INTO bookings (id, company_id, customer_id, service_type, booking_source, agent_id, status, currency, subtotal, tax, total, payment_status, metadata, created_at, updated_at)
+-- Booking 2: Another customer booking at Beach Club (manually marked as paid)
+INSERT INTO bookings (id, company_id, customer_id, service_type, booking_source, agent_id, status, currency, subtotal, tax, total, payment_status, payment_method, metadata, created_at, updated_at)
 VALUES 
-  ('booking-0030', 'comp-001', 'edward-001', 'HOTEL', 'DIRECT', NULL, 'COMPLETED', 'GBP', 300.00, 60.00, 360.00, 'PAID',
+  ('booking-0030', 'comp-001', 'edward-001', 'HOTEL', 'DIRECT', NULL, 'COMPLETED', 'GBP', 300.00, 60.00, 360.00, 'PAID', 'MANUAL',
    '{"hotelId": "hotel-010", "hotelName": "Beach Club", "roomType": "City View Room", "roomTypeId": "room-beach-club-dlx", "checkInDate": "2026-04-21", "checkOutDate": "2026-04-24", "nights": 3, "guests": 2, "guestName": "Edward Sanchez", "guestEmail": "edward.sanchez@email.com", "guestPhone": "+1234567890"}',
    '2026-04-16 10:00:00', NOW())
-ON DUPLICATE KEY UPDATE status = 'COMPLETED';
+ON DUPLICATE KEY UPDATE status = 'COMPLETED', payment_method = 'MANUAL';
 
--- Booking 3: Another customer booking at Beach Club
-INSERT INTO bookings (id, company_id, customer_id, service_type, booking_source, agent_id, status, currency, subtotal, tax, total, payment_status, metadata, created_at, updated_at)
+-- Booking 3: Another customer booking at Beach Club (manually marked as paid)
+INSERT INTO bookings (id, company_id, customer_id, service_type, booking_source, agent_id, status, currency, subtotal, tax, total, payment_status, payment_method, metadata, created_at, updated_at)
 VALUES 
-  ('booking-0050', 'comp-001', 'edward-001', 'HOTEL', 'DIRECT', NULL, 'COMPLETED', 'GBP', 300.00, 60.00, 360.00, 'PAID',
+  ('booking-0050', 'comp-001', 'edward-001', 'HOTEL', 'DIRECT', NULL, 'COMPLETED', 'GBP', 300.00, 60.00, 360.00, 'PAID', 'MANUAL',
    '{"hotelId": "hotel-010", "hotelName": "Beach Club", "roomType": "City View Room", "roomTypeId": "room-beach-club-dlx", "checkInDate": "2026-04-21", "checkOutDate": "2026-04-24", "nights": 3, "guests": 2, "guestName": "Edward Sanchez", "guestEmail": "edward.sanchez@email.com", "guestPhone": "+1234567890"}',
    '2026-04-16 10:00:00', NOW())
-ON DUPLICATE KEY UPDATE status = 'COMPLETED';
+ON DUPLICATE KEY UPDATE status = 'COMPLETED', payment_method = 'MANUAL';
 
 -- Add guests for booking 1
 INSERT INTO guests (id, booking_id, first_name, last_name, email, phone, nationality, passport_number, date_of_birth, is_lead_passenger, created_at, updated_at)

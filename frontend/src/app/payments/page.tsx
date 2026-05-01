@@ -19,6 +19,15 @@ interface CreditSummary {
   availableGBP: number;
   exchangeRate: number;
   recentTransactions: CreditTransaction[];
+  // Breakdown by payment method
+  pendingStripeCredits: number;
+  pendingManualCredits: number;
+  pendingStripeBookings: number;
+  pendingManualBookings: number;
+  availableStripeCredits: number;
+  availableManualCredits: number;
+  availableStripeBookings: number;
+  availableManualBookings: number;
 }
 
 interface CreditTransaction {
@@ -48,6 +57,14 @@ export default function PaymentsPage() {
     availableGBP: 0,
     exchangeRate: 0.79,
     recentTransactions: [],
+    pendingStripeCredits: 0,
+    pendingManualCredits: 0,
+    pendingStripeBookings: 0,
+    pendingManualBookings: 0,
+    availableStripeCredits: 0,
+    availableManualCredits: 0,
+    availableStripeBookings: 0,
+    availableManualBookings: 0,
   });
   const [loading, setLoading] = useState(true);
 
@@ -79,6 +96,14 @@ export default function PaymentsPage() {
       let availableCredits = 0;
       let pendingBookings = 0;
       let completedBookings = 0;
+      let pendingStripeCredits = 0;
+      let pendingManualCredits = 0;
+      let pendingStripeBookings = 0;
+      let pendingManualBookings = 0;
+      let availableStripeCredits = 0;
+      let availableManualCredits = 0;
+      let availableStripeBookings = 0;
+      let availableManualBookings = 0;
       const transactions: CreditTransaction[] = [];
       const today = new Date();
 
@@ -90,7 +115,15 @@ export default function PaymentsPage() {
             pendingCredits: number, 
             availableCredits: number,
             pendingBookings: number,
-            completedBookings: number 
+            completedBookings: number,
+            pendingStripeCredits?: number,
+            pendingManualCredits?: number,
+            pendingStripeBookings?: number,
+            pendingManualBookings?: number,
+            availableStripeCredits?: number,
+            availableManualCredits?: number,
+            availableStripeBookings?: number,
+            availableManualBookings?: number,
           } 
         };
         
@@ -99,6 +132,14 @@ export default function PaymentsPage() {
           availableCredits = earningsResponse.summary?.availableCredits || 0;
           pendingBookings = earningsResponse.summary?.pendingBookings || 0;
           completedBookings = earningsResponse.summary?.completedBookings || 0;
+          pendingStripeCredits = earningsResponse.summary?.pendingStripeCredits || 0;
+          pendingManualCredits = earningsResponse.summary?.pendingManualCredits || 0;
+          pendingStripeBookings = earningsResponse.summary?.pendingStripeBookings || 0;
+          pendingManualBookings = earningsResponse.summary?.pendingManualBookings || 0;
+          availableStripeCredits = earningsResponse.summary?.availableStripeCredits || 0;
+          availableManualCredits = earningsResponse.summary?.availableManualCredits || 0;
+          availableStripeBookings = earningsResponse.summary?.availableStripeBookings || 0;
+          availableManualBookings = earningsResponse.summary?.availableManualBookings || 0;
           
           earningsResponse.earnings.forEach((earning: any) => {
             transactions.push({
@@ -187,6 +228,14 @@ export default function PaymentsPage() {
         availableGBP: availableCredits / 100,
         exchangeRate,
         recentTransactions: transactions.slice(0, 10),
+        pendingStripeCredits,
+        pendingManualCredits,
+        pendingStripeBookings,
+        pendingManualBookings,
+        availableStripeCredits,
+        availableManualCredits,
+        availableStripeBookings,
+        availableManualBookings,
       });
     } catch (err: any) {
       console.error('Error fetching credit summary:', err);
@@ -507,25 +556,30 @@ export default function PaymentsPage() {
               <h1 className="page-title">{userName}&apos;s Payments</h1>
               <p className="page-subtitle">View and manage your earnings and credits.</p>
             </div>
-            <div className="currency-switcher">
-              <button 
-                className={`currency-btn ${displayCurrency === 'gbp' ? 'active' : ''}`}
-                onClick={() => setDisplayCurrency('gbp')}
-              >
-                £ GBP
-              </button>
-              <button 
-                className={`currency-btn ${displayCurrency === 'usd' ? 'active' : ''}`}
-                onClick={() => setDisplayCurrency('usd')}
-              >
-                $ USD
-              </button>
-              <button 
-                className={`currency-btn ${displayCurrency === 'credits' ? 'active' : ''}`}
-                onClick={() => setDisplayCurrency('credits')}
-              >
-                Credits
-              </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px' }}>
+              <div className="currency-switcher">
+                <button 
+                  className={`currency-btn ${displayCurrency === 'gbp' ? 'active' : ''}`}
+                  onClick={() => setDisplayCurrency('gbp')}
+                >
+                  £ GBP
+                </button>
+                <button 
+                  className={`currency-btn ${displayCurrency === 'usd' ? 'active' : ''}`}
+                  onClick={() => setDisplayCurrency('usd')}
+                >
+                  $ USD
+                </button>
+                <button 
+                  className={`currency-btn ${displayCurrency === 'credits' ? 'active' : ''}`}
+                  onClick={() => setDisplayCurrency('credits')}
+                >
+                  Credits
+                </button>
+              </div>
+              <div style={{ fontSize: '12px', color: '#888', textAlign: 'right' }}>
+                £1.00 = 100 credits · Rate: £1 = ${(1 / summary.exchangeRate).toFixed(2)} USD
+              </div>
             </div>
           </div>
 
@@ -564,6 +618,29 @@ export default function PaymentsPage() {
                     <div className="credit-number pending">{formatAmount(summary.pendingCredits)}</div>
                   </div>
                 </div>
+
+                {(summary.pendingStripeCredits > 0 || summary.pendingManualCredits > 0) && (
+                  <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '12px', marginTop: '4px' }}>
+                    {summary.pendingStripeCredits > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '13px' }}>
+                        <span style={{ color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          💳 Card payments
+                          <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: '8px', fontSize: '11px' }}>{summary.pendingStripeBookings}</span>
+                        </span>
+                        <span style={{ fontWeight: 600, color: '#856404' }}>{formatAmount(summary.pendingStripeCredits)}</span>
+                      </div>
+                    )}
+                    {summary.pendingManualCredits > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '13px' }}>
+                        <span style={{ color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          🏷️ Manually marked
+                          <span style={{ background: '#fff3cd', color: '#856404', padding: '1px 6px', borderRadius: '8px', fontSize: '11px' }}>{summary.pendingManualBookings}</span>
+                        </span>
+                        <span style={{ fontWeight: 600, color: '#856404' }}>{formatAmount(summary.pendingManualCredits)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
 
@@ -583,6 +660,29 @@ export default function PaymentsPage() {
                     <div className="credit-number available">{formatAmount(summary.availableCredits)}</div>
                   </div>
                 </div>
+
+                {(summary.availableStripeCredits > 0 || summary.availableManualCredits > 0) && (
+                  <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '12px', marginTop: '4px' }}>
+                    {summary.availableStripeCredits > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '13px' }}>
+                        <span style={{ color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          💳 Card payments
+                          <span style={{ background: '#e8f5e9', color: '#2e7d32', padding: '1px 6px', borderRadius: '8px', fontSize: '11px' }}>{summary.availableStripeBookings}</span>
+                        </span>
+                        <span style={{ fontWeight: 600, color: '#28a745' }}>{formatAmount(summary.availableStripeCredits)}</span>
+                      </div>
+                    )}
+                    {summary.availableManualCredits > 0 && (
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '13px' }}>
+                        <span style={{ color: '#666', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          🏷️ Manually marked
+                          <span style={{ background: '#fff3cd', color: '#856404', padding: '1px 6px', borderRadius: '8px', fontSize: '11px' }}>{summary.availableManualBookings}</span>
+                        </span>
+                        <span style={{ fontWeight: 600, color: '#28a745' }}>{formatAmount(summary.availableManualCredits)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </div>

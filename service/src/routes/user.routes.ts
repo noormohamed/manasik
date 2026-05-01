@@ -604,6 +604,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         b.currency,
         b.total,
         b.payment_status as paymentStatus,
+        b.payment_method as paymentMethod,
         b.metadata,
         b.created_at as createdAt
       FROM bookings b
@@ -618,8 +619,18 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
     let availableCredits = 0;
     let pendingBookings = 0;
     let completedBookings = 0;
+    // Breakdown by payment method
+    let pendingStripeCredits = 0;
+    let pendingManualCredits = 0;
+    let pendingStripeBookings = 0;
+    let pendingManualBookings = 0;
+    let availableStripeCredits = 0;
+    let availableManualCredits = 0;
+    let availableStripeBookings = 0;
+    let availableManualBookings = 0;
 
     // Process bookings and calculate credits
+    // Count all PAID bookings in earnings totals (both Stripe and manually marked)
     const earnings = (bookings as any[]).map((booking: any) => {
       const metadata = typeof booking.metadata === 'string' 
         ? JSON.parse(booking.metadata) 
@@ -649,17 +660,38 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
       const isCheckedOut = checkOutDate && checkOutDate < today;
       const isConfirmed = booking.status === 'CONFIRMED' || booking.status === 'COMPLETED';
       const isCancelled = booking.status === 'CANCELLED' || booking.status === 'REFUNDED';
+      const isPaid = booking.paymentStatus === 'PAID';
+      const isStripe = booking.paymentMethod === 'STRIPE';
+      const isManual = booking.paymentMethod === 'MANUAL';
       
       let status = 'PENDING';
       if (isCancelled) {
         status = 'CANCELLED';
       } else if (isCheckedOut && isConfirmed) {
         status = 'AVAILABLE';
-        availableCredits += credits;
-        completedBookings++;
-      } else {
-        pendingCredits += credits;
-        pendingBookings++;
+        if (isPaid) {
+          availableCredits += credits;
+          completedBookings++;
+          if (isStripe) {
+            availableStripeCredits += credits;
+            availableStripeBookings++;
+          } else if (isManual) {
+            availableManualCredits += credits;
+            availableManualBookings++;
+          }
+        }
+      } else if (!isCancelled) {
+        if (isPaid) {
+          pendingCredits += credits;
+          pendingBookings++;
+          if (isStripe) {
+            pendingStripeCredits += credits;
+            pendingStripeBookings++;
+          } else if (isManual) {
+            pendingManualCredits += credits;
+            pendingManualBookings++;
+          }
+        }
       }
       
       return {
@@ -688,6 +720,15 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         availableCredits,
         pendingBookings,
         completedBookings,
+        // Breakdown by payment method
+        pendingStripeCredits,
+        pendingManualCredits,
+        pendingStripeBookings,
+        pendingManualBookings,
+        availableStripeCredits,
+        availableManualCredits,
+        availableStripeBookings,
+        availableManualBookings,
       },
     };
   } catch (error) {

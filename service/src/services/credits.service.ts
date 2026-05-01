@@ -354,17 +354,81 @@ export class CreditsService {
 
   /**
    * Get all exchange rates
+   * Fetches live rates from Frankfurter API if cached rates are older than 1 hour
    */
   async getAllExchangeRates(): Promise<ExchangeRate[]> {
+    // Try to fetch live rates and update the database
+    await this.fetchAndCacheLiveRates();
+
     const query = `SELECT * FROM exchange_rates ORDER BY from_currency, to_currency`;
     const results = await this.database.query(query);
     
-    return results.map((row: any) => ({
-      fromCurrency: row.from_currency,
-      toCurrency: row.to_currency,
-      rate: parseFloat(row.rate),
-      fetchedAt: new Date(row.fetched_at),
-    }));
+    if (results.length > 0) {
+      return results.map((row: any) => ({
+        fromCurrency: row.from_currency,
+        toCurrency: row.to_currency,
+        rate: parseFloat(row.rate),
+        fetchedAt: new Date(row.fetched_at),
+      }));
+    }
+
+    // Return fallback rates if database is empty
+    return [
+      { fromCurrency: 'USD', toCurrency: 'GBP', rate: 0.79, fetchedAt: new Date() },
+      { fromCurrency: 'EUR', toCurrency: 'GBP', rate: 0.86, fetchedAt: new Date() },
+      { fromCurrency: 'SAR', toCurrency: 'GBP', rate: 0.21, fetchedAt: new Date() },
+      { fromCurrency: 'GBP', toCurrency: 'USD', rate: 1.27, fetchedAt: new Date() },
+    ];
+  }
+
+  /**
+   * Fetch live exchange rates from Frankfurter API and cache in database
+   * Only fetches if cached rates are older than 1 hour
+   */
+  private async fetchAndCacheLiveRates(): Promise<void> {
+    try {
+      // Check if we have recent rates (less than 1 hour old)
+      const recentCheck = await this.database.query(
+        `SELECT fetched_at FROM exchange_rates WHERE source = 'frankfurter' ORDER BY fetched_at DESC LIMIT 1`
+      );
+      
+      if (recentCheck.length > 0) {
+        const lastFetch = new Date(recentCheck[0].fetched_at);
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        if (lastFetch > oneHourAgo) {
+          return; // Rates are fresh enough
+        }
+      }
+
+      // Fetch live rates from Frankfurter API (base GBP)
+      const response = await fetch('https://api.frankfurter.dev/v1/latest?base=GBP&symbols=USD,EUR,SAR');
+      if (!response.ok) {
+        console.log('Frankfurter API returned non-OK status, using cached rates');
+        return;
+      }
+
+      const data = await response.json();
+      const rates = data.rates;
+
+      if (rates) {
+        // GBP -> other currencies
+        if (rates.USD) {
+          await this.updateExchangeRate('GBP', 'USD', rates.USD, 'frankfurter');
+          await this.updateExchangeRate('USD', 'GBP', 1 / rates.USD, 'frankfurter');
+        }
+        if (rates.EUR) {
+          await this.updateExchangeRate('GBP', 'EUR', rates.EUR, 'frankfurter');
+          await this.updateExchangeRate('EUR', 'GBP', 1 / rates.EUR, 'frankfurter');
+        }
+        if (rates.SAR) {
+          await this.updateExchangeRate('GBP', 'SAR', rates.SAR, 'frankfurter');
+          await this.updateExchangeRate('SAR', 'GBP', 1 / rates.SAR, 'frankfurter');
+        }
+        console.log('Exchange rates updated from Frankfurter API:', rates);
+      }
+    } catch (error) {
+      console.log('Failed to fetch live exchange rates, using cached/fallback rates:', (error as Error).message);
+    }
   }
 
   /**
