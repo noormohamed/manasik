@@ -117,10 +117,10 @@ const DashboardListingContent: React.FC = () => {
 
   return (
     <>
-      <div className="author-area" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-        <div style={{ width: '100%', maxWidth: '1640px', padding: '0 24px' }}>
+      <div className="author-area" style={{ width: '100%' }}>
+        <div style={{ width: '100%' }}>
           <div className="row">
-            <div className="col-xl-8 col-xxl-9">
+            <div className="col-12">
               <div className="author-content-wrap">
                 <div className="box-title">
                   <h2>{userName}&apos;s Hotel Listings</h2>

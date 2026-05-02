@@ -70,6 +70,8 @@ interface Booking {
   agentId?: string;
   agentName?: string;
   agentEmail?: string;
+  brokerFee?: number;
+  brokerNotes?: string;
   visibleDates?: string[];
   createdAt: string;
   updatedAt: string;
@@ -89,10 +91,12 @@ const DashboardBookingsContent: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterHotel, setFilterHotel] = useState<string>('');
-  const [filterDate, setFilterDate] = useState<Date | null>(null);
   const [searchGuest, setSearchGuest] = useState<string>('');
-  const [calendarView, setCalendarView] = useState<'day' | 'month'>('day');
-  const [calendarStartDate, setCalendarStartDate] = useState(new Date());
+  const [sortField, setSortField] = useState<string>('createdAt');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
+  const [activePageNum, setActivePageNum] = useState(1);
+  const [completedPageNum, setCompletedPageNum] = useState(1);
+  const PAGE_SIZE = 10;
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState(false);
@@ -114,7 +118,7 @@ const DashboardBookingsContent: React.FC = () => {
   // Fetch bookings when filters change or user changes
   useEffect(() => {
     fetchBookings();
-  }, [user, filterStatus, filterHotel, filterDate, searchGuest]);
+  }, [user, filterStatus, filterHotel, searchGuest]);
 
   // Fetch user's managed hotels
   const fetchHotels = async () => {
@@ -163,11 +167,6 @@ const DashboardBookingsContent: React.FC = () => {
         params.status = filterStatus;
       }
 
-      // Add date parameter if a date is selected
-      if (filterDate) {
-        params.date = filterDate.toISOString().split('T')[0];
-      }
-
       // Determine which endpoint to use based on current route
       // /dashboard/listings/bookings = hotel manager view (use /hotels/bookings)
       // /dashboard/bookings = customer view (use /users/me/bookings)
@@ -210,19 +209,21 @@ const DashboardBookingsContent: React.FC = () => {
         closestGate: b.closestGate || null,
         kaabaGate: b.kaabaGate || null,
         roomTypeId: b.metadata?.roomTypeId || b.roomTypeId || '',
-        roomName: b.roomType || b.metadata?.roomType || 'Room',
+        roomName: b.roomName || b.roomType || b.metadata?.roomType || 'Room',
         checkIn: b.checkIn || b.checkInDate || b.metadata?.checkInDate || '',
         checkOut: b.checkOut || b.checkOutDate || b.metadata?.checkOutDate || '',
         nights: b.nights || b.metadata?.nights || 1,
-        guestName: b.metadata?.guestName || '',
-        guestEmail: b.metadata?.guestEmail || '',
-        guestPhone: b.metadata?.guestPhone || '',
+        guestName: b.guestName || b.metadata?.guestName || '',
+        guestEmail: b.guestEmail || b.metadata?.guestEmail || '',
+        guestPhone: b.guestPhone || b.metadata?.guestPhone || '',
         guestCount: b.guestCount || b.metadata?.guests || 1,
         guests: Array.isArray(b.guests) ? b.guests : [],
         customerId: b.customerId,
         agentId: b.agentId,
         agentName: b.agentName,
         agentEmail: b.agentEmail,
+        brokerFee: b.brokerFee || 0,
+        brokerNotes: b.brokerNotes || null,
         visibleDates: b.visibleDates || [],
         createdAt: b.createdAt,
         updatedAt: b.updatedAt,
@@ -256,169 +257,10 @@ const DashboardBookingsContent: React.FC = () => {
     }
   };
 
-  // Generate calendar dates
-  const generateCalendarDates = () => {
-    const dates = [];
-    const start = new Date(calendarStartDate);
-    
-    for (let i = 0; i < 30; i++) {
-      const date = new Date(start);
-      date.setDate(start.getDate() + i);
-      dates.push(date);
-    }
-    
-    return dates;
-  };
-
-  const calendarDates = generateCalendarDates();
-
-  // Get bookings for a specific date
-  const getBookingsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return bookings.filter(booking => {
-      const checkIn = new Date(booking.checkIn);
-      const checkOut = new Date(booking.checkOut);
-      const currentDate = new Date(dateStr);
-      
-      return currentDate >= checkIn && currentDate < checkOut;
-    });
-  };
-
-  // Get expanded bookings for calendar display (each booking appears on all its dates)
-  const getExpandedBookingsForDateRange = () => {
-    const expandedBookings: { [dateStr: string]: Booking[] } = {};
-    
-    bookings.forEach(booking => {
-      const checkIn = new Date(booking.checkIn);
-      const checkOut = new Date(booking.checkOut);
-      
-      // Iterate through each day of the booking
-      const currentDate = new Date(checkIn);
-      while (currentDate < checkOut) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        if (!expandedBookings[dateStr]) {
-          expandedBookings[dateStr] = [];
-        }
-        expandedBookings[dateStr].push(booking);
-        currentDate.setDate(currentDate.getDate() + 1);
-      }
-    });
-    
-    return expandedBookings;
-  };
-
-  const expandedBookings = getExpandedBookingsForDateRange();
-
-  // Count check-ins for a specific date
-  const getCheckInsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return bookings.filter(booking => {
-      const checkInDate = new Date(booking.checkIn).toISOString().split('T')[0];
-      return checkInDate === dateStr;
-    }).reduce((sum, booking) => sum + booking.guestCount, 0);
-  };
-
-  // Count check-outs for a specific date
-  const getCheckOutsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return bookings.filter(booking => {
-      const checkOutDate = new Date(booking.checkOut).toISOString().split('T')[0];
-      return checkOutDate === dateStr;
-    }).reduce((sum, booking) => sum + booking.guestCount, 0);
-  };
-
-  // Count pending bookings for a specific date
-  const getPendingBookingsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    return bookings.filter(booking => {
-      const checkIn = new Date(booking.checkIn);
-      const checkOut = new Date(booking.checkOut);
-      const currentDate = new Date(dateStr);
-      
-      // Booking is active on this date if it's between check-in and check-out
-      return currentDate >= checkIn && currentDate < checkOut && booking.status === 'PENDING';
-    }).reduce((sum, booking) => sum + booking.guestCount, 0);
-  };
-
-  // Calculate current month revenue based on calendar view
-  const getCurrentMonthRevenue = () => {
-    const startDate = new Date(calendarStartDate);
-    const endDate = new Date(calendarStartDate);
-    endDate.setDate(endDate.getDate() + 30);
-    
-    return bookings
-      .filter(booking => {
-        const checkIn = new Date(booking.checkIn);
-        return checkIn >= startDate && checkIn < endDate;
-      })
-      .reduce((sum, b) => sum + b.total, 0);
-  };
-
-  // Calculate average monthly revenue from all bookings
-  const getAverageMonthlyRevenue = () => {
-    if (bookings.length === 0) return 0;
-    
-    // Group bookings by month
-    const monthlyRevenue: { [key: string]: number } = {};
-    
-    bookings.forEach(booking => {
-      const checkInDate = new Date(booking.checkIn);
-      const monthKey = `${checkInDate.getFullYear()}-${String(checkInDate.getMonth() + 1).padStart(2, '0')}`;
-      
-      if (!monthlyRevenue[monthKey]) {
-        monthlyRevenue[monthKey] = 0;
-      }
-      monthlyRevenue[monthKey] += booking.total;
-    });
-    
-    const months = Object.keys(monthlyRevenue);
-    if (months.length === 0) return 0;
-    
-    const totalRevenue = Object.values(monthlyRevenue).reduce((sum, rev) => sum + rev, 0);
-    return totalRevenue / months.length;
-  };
-
-  // Navigate calendar
-  const moveCalendar = (direction: 'prev' | 'next') => {
-    const newDate = new Date(calendarStartDate);
-    const daysToMove = calendarView === 'day' ? 7 : 30;
-    
-    if (direction === 'prev') {
-      newDate.setDate(newDate.getDate() - daysToMove);
-    } else {
-      newDate.setDate(newDate.getDate() + daysToMove);
-    }
-    
-    setCalendarStartDate(newDate);
-  };
-
-  const resetCalendar = () => {
-    setCalendarStartDate(new Date());
-  };
-
-  const handleDateClick = (date: Date) => {
-    // Toggle date filter - if same date clicked, clear filter
-    if (filterDate && filterDate.toDateString() === date.toDateString()) {
-      setFilterDate(null);
-    } else {
-      setFilterDate(date);
-    }
-  };
-
   const clearAllFilters = () => {
     setFilterStatus('');
     setFilterHotel('');
-    setFilterDate(null);
     setSearchGuest('');
-  };
-
-  const handleStatusClick = (status: string) => {
-    // Toggle status filter - if same status clicked, clear filter
-    if (filterStatus === status) {
-      setFilterStatus('');
-    } else {
-      setFilterStatus(status);
-    }
   };
 
   const getStatusDisplayText = (status: string) => {
@@ -448,25 +290,6 @@ const DashboardBookingsContent: React.FC = () => {
         return 'bg-secondary';
       default:
         return 'bg-secondary';
-    }
-  };
-
-  const getStatusBorderColor = (status: string) => {
-    switch (status) {
-      case 'COMPLETED':
-        return '#28a745';
-      case 'CONFIRMED':
-        return '#28a745';
-      case 'PENDING':
-        return '#ffc107';
-      case 'CANCELLED':
-        return '#dc3545';
-      case 'COMPLETED':
-        return '#17a2b8';
-      case 'REFUNDED':
-        return '#6c757d';
-      default:
-        return '#6c757d';
     }
   };
 
@@ -501,6 +324,21 @@ const DashboardBookingsContent: React.FC = () => {
   const handleCloseModal = () => {
     setShowDetailsModal(false);
     setSelectedBooking(null);
+  };
+
+  const handleMarkAsCompleted = async () => {
+    if (!selectedBooking) return;
+    if (!confirm('Mark this booking as completed?')) return;
+    try {
+      await apiClient.patch(`/hotels/bookings/${selectedBooking.id}/status`, {
+        status: 'COMPLETED',
+      });
+      setShowDetailsModal(false);
+      setSelectedBooking(null);
+      await fetchBookings();
+    } catch (err: any) {
+      alert(err.error || 'Failed to update booking status');
+    }
   };
 
   const handleOpenRefundModal = () => {
@@ -1153,6 +991,8 @@ const DashboardBookingsContent: React.FC = () => {
     switch (source) {
       case 'AGENT':
         return { class: 'bg-purple', label: 'Agent Booking', icon: 'ri-user-star-line' };
+      case 'BROKER':
+        return { class: 'bg-warning', label: 'Broker Booking', icon: 'ri-briefcase-line' };
       case 'API':
         return { class: 'bg-info', label: 'API Booking', icon: 'ri-code-line' };
       case 'ADMIN':
@@ -1162,12 +1002,98 @@ const DashboardBookingsContent: React.FC = () => {
     }
   };
 
+  // Sort handler for list view
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  // Sort bookings for list view
+  const getSortedBookings = () => {
+    return [...bookings].sort((a, b) => {
+      let aVal: any;
+      let bVal: any;
+
+      switch (sortField) {
+        case 'guestName':
+          aVal = a.guestName.toLowerCase();
+          bVal = b.guestName.toLowerCase();
+          break;
+        case 'hotelName':
+          aVal = a.hotelName.toLowerCase();
+          bVal = b.hotelName.toLowerCase();
+          break;
+        case 'roomName':
+          aVal = a.roomName.toLowerCase();
+          bVal = b.roomName.toLowerCase();
+          break;
+        case 'checkIn':
+          aVal = new Date(a.checkIn).getTime();
+          bVal = new Date(b.checkIn).getTime();
+          break;
+        case 'checkOut':
+          aVal = new Date(a.checkOut).getTime();
+          bVal = new Date(b.checkOut).getTime();
+          break;
+        case 'nights':
+          aVal = a.nights;
+          bVal = b.nights;
+          break;
+        case 'status':
+          aVal = a.status;
+          bVal = b.status;
+          break;
+        case 'total':
+          aVal = a.total;
+          bVal = b.total;
+          break;
+        case 'paymentStatus':
+          aVal = a.paymentStatus || '';
+          bVal = b.paymentStatus || '';
+          break;
+        case 'createdAt':
+        default:
+          aVal = new Date(a.createdAt).getTime();
+          bVal = new Date(b.createdAt).getTime();
+          break;
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+  };
+
+  const getPaymentStatusBadge = (status: string | undefined) => {
+    switch (status) {
+      case 'PAID':
+        return 'bg-success';
+      case 'UNPAID':
+        return 'bg-danger';
+      case 'REFUNDED':
+        return 'bg-secondary';
+      case 'PARTIALLY_REFUNDED':
+        return 'bg-warning text-dark';
+      default:
+        return 'bg-light text-dark';
+    }
+  };
+
+  const renderSortIndicator = (field: string) => {
+    if (sortField !== field) return <span style={{ opacity: 0.3, marginLeft: '4px' }}>▲</span>;
+    return <span style={{ marginLeft: '4px' }}>{sortDirection === 'asc' ? '▲' : '▼'}</span>;
+  };
+
   return (
     <>
-      <div className="author-area" style={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-        <div style={{ width: '100%', maxWidth: '1640px', padding: '0 24px' }}>
+      <div className="author-area" style={{ width: '100%' }}>
+        <div style={{ width: '100%' }}>
           <div className="row">
-            <div className="col-xl-8 col-xxl-9">
+            <div className="col-12">
               <div className="author-content-wrap">
                 <div className="box-title">
                   <h2>{userName}&apos;s {currentRoute === "/dashboard/listings/bookings" ? "Listing Bookings" : "Bookings"}</h2>
@@ -1177,27 +1103,8 @@ const DashboardBookingsContent: React.FC = () => {
                       : "View and manage your bookings."}
                   </p>
                   
-                  {/* Create Booking Button for Hotel Managers */}
-                  <div className="mt-3 mb-3">
-                    <button
-                      className="btn btn-primary"
-                      onClick={() => {
-                        // Get the first hotel ID from all active hotels
-                        const hotelId = allHotels.length > 0 ? allHotels[0].id : '';
-                        if (hotelId) {
-                          setSelectedHotelId(hotelId);
-                          setShowCreateBookingModal(true);
-                        } else {
-                          alert('No hotels found. Please create a hotel first.');
-                        }
-                      }}
-                    >
-                      <i className="ri-add-line me-2"></i>Create Booking
-                    </button>
-                  </div>
-                  
                   {/* Filter Controls */}
-                  <div className="d-flex gap-2 mt-3 mb-4 flex-wrap">
+                  <div className="d-flex gap-2 mt-3 mb-4 flex-wrap align-items-center">
                     <input
                       type="text"
                       className="form-control"
@@ -1229,7 +1136,7 @@ const DashboardBookingsContent: React.FC = () => {
                       <option value="CANCELLED">Cancelled</option>
                       <option value="REFUNDED">Refunded</option>
                     </select>
-                    {(filterStatus || filterHotel || filterDate || searchGuest) && (
+                    {(filterStatus || filterHotel || searchGuest) && (
                       <button 
                         className="btn btn-outline-danger"
                         onClick={clearAllFilters}
@@ -1238,158 +1145,35 @@ const DashboardBookingsContent: React.FC = () => {
                         Clear Filters
                       </button>
                     )}
-                    <button 
-                      className="btn btn-outline-secondary"
-                      onClick={fetchBookings}
-                    >
-                      <i className="ri-refresh-line me-2"></i>
-                      Refresh
-                    </button>
-                  </div>
-
-                  {/* Active Filters Display */}
-                  {(filterDate || searchGuest) && (
-                    <div className="mb-3">
-                      {filterDate && (
-                        <span className="badge bg-info me-2">
-                          Date: {filterDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                          <i 
-                            className="ri-close-line ms-1" 
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => setFilterDate(null)}
-                          ></i>
-                        </span>
-                      )}
-                      {searchGuest && (
-                        <span className="badge bg-info me-2">
-                          Guest: {searchGuest}
-                          <i 
-                            className="ri-close-line ms-1" 
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => setSearchGuest('')}
-                          ></i>
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Calendar View Toggle */}
-                  <div className="d-flex justify-content-between align-items-center mb-3">
-                    <div className="btn-group" role="group">
-                      <button
-                        type="button"
-                        className={`btn btn-sm ${calendarView === 'day' ? 'btn-primary' : 'btn-outline-primary'}`}
-                        onClick={() => setCalendarView('day')}
+                    <div className="ms-auto d-flex gap-2">
+                      <button 
+                        className="btn btn-outline-secondary"
+                        onClick={fetchBookings}
                       >
-                        Day View
+                        <i className="ri-refresh-line me-2"></i>
+                        Refresh
                       </button>
                       <button
-                        type="button"
-                        className={`btn btn-sm ${calendarView === 'month' ? 'btn-primary' : 'btn-outline-primary'}`}
-                        onClick={() => setCalendarView('month')}
+                        className="btn btn-primary"
+                        onClick={() => {
+                          const hotelId = allHotels.length > 0 ? allHotels[0].id : '';
+                          if (hotelId) {
+                            setSelectedHotelId(hotelId);
+                            setShowCreateBookingModal(true);
+                          } else {
+                            alert('No hotels found. Please create a hotel first.');
+                          }
+                        }}
                       >
-                        Month View
-                      </button>
-                    </div>
-                    <div className="d-flex gap-2">
-                      <button className="btn btn-sm btn-outline-secondary" onClick={() => moveCalendar('prev')}>
-                        <i className="ri-arrow-left-line"></i>
-                      </button>
-                      <button className="btn btn-sm btn-outline-secondary" onClick={resetCalendar}>
-                        Today
-                      </button>
-                      <button className="btn btn-sm btn-outline-secondary" onClick={() => moveCalendar('next')}>
-                        <i className="ri-arrow-right-line"></i>
+                        <i className="ri-add-line me-2"></i>Create Booking
                       </button>
                     </div>
                   </div>
 
-                  {/* Horizontal Calendar */}
-                  <div className="mb-4" style={{ overflowX: 'auto', overflowY: 'hidden' }}>
-                    <div className="d-flex gap-2" style={{ minWidth: 'max-content' }}>
-                      {calendarDates.map((date, index) => {
-                        const bookingsOnDate = getBookingsForDate(date);
-                        const checkIns = getCheckInsForDate(date);
-                        const checkOuts = getCheckOutsForDate(date);
-                        const pending = getPendingBookingsForDate(date);
-                        const isToday = date.toDateString() === new Date().toDateString();
-                        const isSelected = filterDate && filterDate.toDateString() === date.toDateString();
-                        const dayName = date.toLocaleDateString('en-US', { weekday: 'short' });
-                        const dayNum = date.getDate();
-                        const monthName = date.toLocaleDateString('en-US', { month: 'short' });
-                        
-                        return (
-                          <div
-                            key={index}
-                            className="card text-center"
-                            onClick={() => handleDateClick(date)}
-                            style={{
-                              minWidth: calendarView === 'day' ? '100px' : '80px',
-                              backgroundColor: isSelected ? '#fff3cd' : (isToday ? '#e3f2fd' : 'white'),
-                              border: isSelected ? '2px solid #ffc107' : (isToday ? '2px solid #2196f3' : '1px solid #dee2e6'),
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                            }}
-                            onMouseEnter={(e) => {
-                              if (!isSelected && !isToday) {
-                                e.currentTarget.style.backgroundColor = '#f8f9fa';
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (!isSelected && !isToday) {
-                                e.currentTarget.style.backgroundColor = 'white';
-                              }
-                            }}
-                          >
-                            <div className="card-body p-2">
-                              {calendarView === 'day' ? (
-                                <>
-                                  <div style={{ fontSize: '0.75rem', color: '#666' }}>{dayName}</div>
-                                  <div style={{ fontSize: '1.25rem', fontWeight: 'bold' }}>{dayNum}</div>
-                                  <div style={{ fontSize: '0.7rem', color: '#666' }}>{monthName}</div>
-                                </>
-                              ) : (
-                                <>
-                                  <div style={{ fontSize: '0.7rem', color: '#666' }}>{monthName}</div>
-                                  <div style={{ fontSize: '1rem', fontWeight: 'bold' }}>{dayNum}</div>
-                                </>
-                              )}
-                              {bookingsOnDate.length > 0 && (
-                                <div 
-                                  className="badge bg-primary mt-1" 
-                                  style={{ fontSize: '0.65rem' }}
-                                >
-                                  {bookingsOnDate.length}
-                                </div>
-                              )}
-                              {(checkIns > 0 || pending > 0 || checkOuts > 0) && (
-                                <div style={{ marginTop: '6px', fontSize: '0.7rem', lineHeight: '1.3', display: 'flex', justifyContent: 'center', gap: '4px' }}>
-                                  {checkIns > 0 && (
-                                    <div style={{ color: '#28a745', fontWeight: '700', minWidth: '16px' }}>
-                                      {checkIns}
-                                    </div>
-                                  )}
-                                  {pending > 0 && (
-                                    <div style={{ color: '#ffc107', fontWeight: '700', minWidth: '16px' }}>
-                                      {pending}
-                                    </div>
-                                  )}
-                                  {checkOuts > 0 && (
-                                    <div style={{ color: '#dc3545', fontWeight: '700', minWidth: '16px' }}>
-                                      {checkOuts}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-
-                </div>
+                  {/* Booking Count */}
+                  <div className="mb-3">
+                    <small className="text-muted">{bookings.length} booking{bookings.length !== 1 ? 's' : ''}</small>
+                  </div>                </div>
 
                 {/* Loading State */}
                 {loading && (
@@ -1419,453 +1203,183 @@ const DashboardBookingsContent: React.FC = () => {
 
                 {!loading && !error && bookings.length > 0 && (
                   <>
-                    {/* Summary Stats */}
-                    <div className="row mb-4">
-                      <div className="col-md-3">
-                        <div className="card text-center">
-                          <div className="card-body">
-                            <h3 className="mb-0">{bookings.length}</h3>
-                            <small className="text-muted">Total Bookings</small>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-3">
-                        <div 
-                          className="card text-center"
-                          onClick={() => handleStatusClick('COMPLETED')}
-                          style={{ 
-                            cursor: 'pointer',
-                            border: filterStatus === 'COMPLETED' ? '2px solid #28a745' : '1px solid #dee2e6',
-                            backgroundColor: filterStatus === 'COMPLETED' ? '#d4edda' : 'white',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (filterStatus !== 'COMPLETED') {
-                              e.currentTarget.style.backgroundColor = '#f8f9fa';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (filterStatus !== 'COMPLETED') {
-                              e.currentTarget.style.backgroundColor = 'white';
-                            }
-                          }}
-                        >
-                          <div className="card-body">
-                            <h3 className="mb-0 text-success">
-                              {bookings.filter(b => b.status === 'COMPLETED').length}
-                            </h3>
-                            <small className="text-muted">Completed</small>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-3">
-                        <div 
-                          className="card text-center"
-                          onClick={() => handleStatusClick('PENDING')}
-                          style={{ 
-                            cursor: 'pointer',
-                            border: filterStatus === 'PENDING' ? '2px solid #ffc107' : '1px solid #dee2e6',
-                            backgroundColor: filterStatus === 'PENDING' ? '#fff3cd' : 'white',
-                            transition: 'all 0.2s'
-                          }}
-                          onMouseEnter={(e) => {
-                            if (filterStatus !== 'PENDING') {
-                              e.currentTarget.style.backgroundColor = '#f8f9fa';
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (filterStatus !== 'PENDING') {
-                              e.currentTarget.style.backgroundColor = 'white';
-                            }
-                          }}
-                        >
-                          <div className="card-body">
-                            <h3 className="mb-0 text-warning">
-                              {bookings.filter(b => b.status === 'PENDING').length}
-                            </h3>
-                            <small className="text-muted">Pending</small>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="col-md-3">
-                        <div className="card text-center">
-                          <div className="card-body">
-                            <h3 className="mb-0 text-primary">
-                              {formatCurrency(
-                                getCurrentMonthRevenue(),
-                                bookings[0]?.currency || 'USD'
-                              )}
-                            </h3>
-                            <small className="text-muted d-block">Current Month</small>
-                            <small className="text-muted" style={{ fontSize: '0.7rem' }}>
-                              Avg: {formatCurrency(
-                                getAverageMonthlyRevenue(),
-                                bookings[0]?.currency || 'USD'
-                              )}
-                            </small>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
+                    {/* List View - Split Tables: Active on top, Completed on bottom */}
+                    {(() => {
+                      const sorted = getSortedBookings();
+                      const activeBookings = sorted.filter(b => b.status !== 'COMPLETED' && b.status !== 'CANCELLED' && b.status !== 'REFUNDED');
+                      const completedBookings = sorted.filter(b => b.status === 'COMPLETED' || b.status === 'CANCELLED' || b.status === 'REFUNDED');
 
-                    {/* Bookings Table - Expanded by Visible Dates */}
-                    <div className="row">
-                      {/* Left Column: Check-ins and Check-outs */}
-                      <div className="col-lg-6">
-                        {(() => {
-                          // Calculate check-ins & check-outs count
-                          const checkInOutCount = bookings.flatMap((booking) => {
-                            let visibleDates = booking.visibleDates;
-                            if (!visibleDates || visibleDates.length === 0) {
-                              visibleDates = [];
-                              const checkIn = new Date(booking.checkIn);
-                              const checkOut = new Date(booking.checkOut);
-                              const currentDate = new Date(checkIn);
-                              while (currentDate < checkOut) {
-                                visibleDates.push(currentDate.toISOString().split('T')[0]);
-                                currentDate.setDate(currentDate.getDate() + 1);
-                              }
-                            }
-                            return (visibleDates || []).map((dateStr, dateIndex) => ({
-                              booking,
-                              date: new Date(dateStr),
-                              dateStr,
-                              isFirstDay: dateIndex === 0,
-                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
-                            }));
-                          }).filter((entry) => {
-                            const today = new Date().toISOString().split('T')[0];
-                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
-                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
-                            const isExpired = entry.booking.status === 'COMPLETED' && checkOutDateStr < today;
-                            return ((entry.isFirstDay && today === checkInDateStr) || (entry.isLastDay && today === checkOutDateStr)) && !isExpired;
-                          }).length;
-                          
-                          return (
-                            <h5 className="mb-3">
-                              <i className="ri-login-box-line me-2"></i>Check-ins & Check-outs
-                              {checkInOutCount > 0 && (
-                                <span className="badge bg-primary ms-2">{checkInOutCount}</span>
-                              )}
-                            </h5>
-                          );
-                        })()}
-                        <div className="list-group">
-                          {bookings.flatMap((booking) => {
-                            let visibleDates = booking.visibleDates;
-                            if (!visibleDates || visibleDates.length === 0) {
-                              visibleDates = [];
-                              const checkIn = new Date(booking.checkIn);
-                              const checkOut = new Date(booking.checkOut);
-                              const currentDate = new Date(checkIn);
-                              while (currentDate < checkOut) {
-                                visibleDates.push(currentDate.toISOString().split('T')[0]);
-                                currentDate.setDate(currentDate.getDate() + 1);
-                              }
-                            }
-                            return (visibleDates || []).map((dateStr, dateIndex) => ({
-                              booking,
-                              date: new Date(dateStr),
-                              dateStr,
-                              isFirstDay: dateIndex === 0,
-                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
-                            }));
-                          }).filter((entry) => {
-                            const today = new Date().toISOString().split('T')[0];
-                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
-                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
-                            // Only show check-ins/check-outs if today is the check-in or check-out date
-                            // Exclude expired bookings (COMPLETED with past check-out date)
-                            const isExpired = entry.booking.status === 'COMPLETED' && checkOutDateStr < today;
-                            return ((entry.isFirstDay && today === checkInDateStr) || (entry.isLastDay && today === checkOutDateStr)) && !isExpired;
-                          }).map((entry) => {
-                            let borderColor = getStatusBorderColor(entry.booking.status);
-                            if (filterDate) {
-                              const selectedDateStr = filterDate.toISOString().split('T')[0];
-                              const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
-                              const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
-                              if (selectedDateStr === checkInDateStr) {
-                                borderColor = '#28a745';
-                              } else if (selectedDateStr === checkOutDateStr) {
-                                borderColor = '#dc3545';
-                              } else if (entry.booking.status === 'PENDING') {
-                                borderColor = '#ffc107';
-                              }
-                            }
-                            return (
-                            <div 
-                              key={`${entry.booking.id}-${entry.dateStr}`} 
-                              className="list-group-item mb-3 p-0 rounded"
-                              style={{
-                                border: '1px solid #dee2e6',
-                                borderLeftWidth: '6px',
-                                borderLeftColor: borderColor,
-                              }}
-                            >
-                              <div className="p-3">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                  <div className="d-flex align-items-center gap-2">
-                                    <small className="text-muted" style={{ fontSize: '0.85rem' }}>
-                                      Booked on {formatDate(entry.booking.createdAt)}
-                                    </small>
-                                    {entry.isFirstDay && (
-                                      <span className="badge bg-info" style={{ fontSize: '0.7rem' }}>
-                                        <i className="ri-login-box-line me-1"></i>Check-in
-                                      </span>
-                                    )}
-                                    {entry.isLastDay && (
-                                      <span className="badge bg-warning" style={{ fontSize: '0.7rem' }}>
-                                        <i className="ri-logout-box-line me-1"></i>Check-out
-                                      </span>
-                                    )}
-                                  </div>
-                                  <div className="d-flex align-items-center gap-2">
-                                    <span className="badge bg-secondary" style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
-                                      REF: {getMD5Reference(entry.booking.id)}
-                                    </span>
-                                    {entry.booking.status !== 'REFUNDED' && (
-                                      <span className={`badge ${getStatusBadgeClass(entry.booking.status)}`} style={{ fontSize: '0.7rem' }}>
-                                        {entry.booking.status}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="mb-2">
-                                  <h5 className="mb-1">{entry.booking.hotelName}</h5>
-                                  <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
-                                    {entry.booking.roomName}
-                                  </p>
-                                </div>
-                                <div className="mb-2">
-                                  <small className="text-muted d-block">
-                                    <i className="ri-calendar-line me-1"></i>
-                                    {formatDate(entry.dateStr)}
-                                  </small>
-                                </div>
-                                <div className="d-flex justify-content-between align-items-end mb-3">
-                                  <div className="d-flex gap-4">
-                                    <div>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-user-line me-1"></i>
-                                        {entry.booking.guestName}
-                                      </small>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-group-line me-1"></i>
-                                        {entry.booking.guestCount} {entry.booking.guestCount === 1 ? 'guest' : 'guests'}
-                                      </small>
-                                    </div>
-                                    <div>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-calendar-check-line me-1"></i>
-                                        {formatDate(entry.booking.checkIn)}
-                                      </small>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-calendar-close-line me-1"></i>
-                                        {formatDate(entry.booking.checkOut)}
-                                      </small>
-                                    </div>
-                                  </div>
-                                  <div className="text-end">
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0d6efd' }}>
-                                      {formatCurrency(getNetPaid(entry.booking), entry.booking.currency)}
-                                    </div>
-                                    {entry.booking.refundAmount && entry.booking.refundAmount > 0 && (
-                                      <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>
-                                        (Refunded: {formatCurrency(entry.booking.refundAmount, entry.booking.currency)})
-                                      </small>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="d-flex gap-2">
-                                  <button 
-                                    className="btn btn-sm btn-outline-secondary"
-                                    onClick={() => handleViewDetails(entry.booking)}
-                                  >
-                                    <i className="ri-file-text-line me-1"></i>
-                                    View Details
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+                      const renderTableHeader = () => (
+                        <thead>
+                          <tr>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'guestName' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('guestName')}>
+                              Guest {renderSortIndicator('guestName')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'hotelName' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('hotelName')}>
+                              Hotel {renderSortIndicator('hotelName')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'roomName' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('roomName')}>
+                              Room {renderSortIndicator('roomName')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'checkIn' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('checkIn')}>
+                              Check-in {renderSortIndicator('checkIn')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'checkOut' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('checkOut')}>
+                              Check-out {renderSortIndicator('checkOut')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'nights' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('nights')}>
+                              Nights {renderSortIndicator('nights')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'status' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('status')}>
+                              Status {renderSortIndicator('status')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'total' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('total')}>
+                              Total {renderSortIndicator('total')}
+                            </th>
+                            <th style={{ cursor: 'pointer', fontWeight: sortField === 'paymentStatus' ? 'bold' : 'normal', whiteSpace: 'nowrap' }} onClick={() => handleSort('paymentStatus')}>
+                              Payment {renderSortIndicator('paymentStatus')}
+                            </th>
+                          </tr>
+                        </thead>
+                      );
 
-                      {/* Right Column: Staying Over */}
-                      <div className="col-lg-6">
-                        {(() => {
-                          // Calculate staying over count
-                          const stayingOverCount = bookings.flatMap((booking) => {
-                            let visibleDates = booking.visibleDates;
-                            if (!visibleDates || visibleDates.length === 0) {
-                              visibleDates = [];
-                              const checkIn = new Date(booking.checkIn);
-                              const checkOut = new Date(booking.checkOut);
-                              const currentDate = new Date(checkIn);
-                              while (currentDate < checkOut) {
-                                visibleDates.push(currentDate.toISOString().split('T')[0]);
-                                currentDate.setDate(currentDate.getDate() + 1);
-                              }
-                            }
-                            return (visibleDates || []).map((dateStr, dateIndex) => ({
-                              booking,
-                              date: new Date(dateStr),
-                              dateStr,
-                              isFirstDay: dateIndex === 0,
-                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
-                            }));
-                          }).filter((entry) => {
-                            const today = new Date().toISOString().split('T')[0];
-                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
-                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
-                            // Only show staying over if:
-                            // - Check-in was before today (not today)
-                            // - Check-out is after today (not today)
-                            // - Booking is not COMPLETED status
-                            return checkInDateStr < today && checkOutDateStr > today && entry.booking.status !== 'COMPLETED';
-                          }).length;
-                          
-                          return (
-                            <h5 className="mb-3">
-                              <i className="ri-hotel-bed-line me-2"></i>Staying Over
-                              {stayingOverCount > 0 && (
-                                <span className="badge bg-primary ms-2">{stayingOverCount}</span>
-                              )}
-                            </h5>
-                          );
-                        })()}
-                        <div className="list-group">
-                          {bookings.flatMap((booking) => {
-                            let visibleDates = booking.visibleDates;
-                            if (!visibleDates || visibleDates.length === 0) {
-                              visibleDates = [];
-                              const checkIn = new Date(booking.checkIn);
-                              const checkOut = new Date(booking.checkOut);
-                              const currentDate = new Date(checkIn);
-                              while (currentDate < checkOut) {
-                                visibleDates.push(currentDate.toISOString().split('T')[0]);
-                                currentDate.setDate(currentDate.getDate() + 1);
-                              }
-                            }
-                            return (visibleDates || []).map((dateStr, dateIndex) => ({
-                              booking,
-                              date: new Date(dateStr),
-                              dateStr,
-                              isFirstDay: dateIndex === 0,
-                              isLastDay: dateIndex === ((visibleDates || []).length - 1),
-                            }));
-                          }).filter((entry) => {
-                            const today = new Date().toISOString().split('T')[0];
-                            const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
-                            const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
-                            // Only show staying over if:
-                            // - Check-in was before today (not today)
-                            // - Check-out is after today (not today)
-                            // - Booking is not COMPLETED status
-                            return checkInDateStr < today && checkOutDateStr > today && entry.booking.status !== 'COMPLETED';
-                          }).map((entry) => {
-                            let borderColor = getStatusBorderColor(entry.booking.status);
-                            if (filterDate) {
-                              const selectedDateStr = filterDate.toISOString().split('T')[0];
-                              const checkInDateStr = new Date(entry.booking.checkIn).toISOString().split('T')[0];
-                              const checkOutDateStr = new Date(entry.booking.checkOut).toISOString().split('T')[0];
-                              if (selectedDateStr === checkInDateStr) {
-                                borderColor = '#28a745';
-                              } else if (selectedDateStr === checkOutDateStr) {
-                                borderColor = '#dc3545';
-                              } else if (entry.booking.status === 'PENDING') {
-                                borderColor = '#ffc107';
-                              }
-                            }
-                            return (
-                            <div 
-                              key={`${entry.booking.id}-${entry.dateStr}`} 
-                              className="list-group-item mb-3 p-0 rounded"
-                              style={{
-                                border: '1px solid #dee2e6',
-                                borderLeftWidth: '6px',
-                                borderLeftColor: borderColor,
-                              }}
-                            >
-                              <div className="p-3">
-                                <div className="d-flex justify-content-between align-items-center mb-2">
-                                  <small className="text-muted" style={{ fontSize: '0.85rem' }}>
-                                    Booked on {formatDate(entry.booking.createdAt)}
-                                  </small>
-                                  <div className="d-flex align-items-center gap-2">
-                                    <span className="badge bg-secondary" style={{ fontSize: '0.75rem', fontFamily: 'monospace' }}>
-                                      REF: {getMD5Reference(entry.booking.id)}
-                                    </span>
-                                    {entry.booking.status !== 'REFUNDED' && (
-                                      <span className={`badge ${getStatusBadgeClass(entry.booking.status)}`} style={{ fontSize: '0.7rem' }}>
-                                        {entry.booking.status}
-                                      </span>
+                      const renderBookingRow = (booking: Booking) => (
+                        <tr
+                          key={booking.id}
+                          style={{ cursor: 'pointer' }}
+                          onClick={() => { setSelectedBooking(booking); setShowDetailsModal(true); }}
+                        >
+                          <td>
+                            <div style={{ fontWeight: 500 }}>{booking.guestName || 'N/A'}</div>
+                            {booking.guestEmail && (
+                              <small className="text-muted">{booking.guestEmail}</small>
+                            )}
+                          </td>
+                          <td>{booking.hotelName}</td>
+                          <td>{booking.roomName}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{formatDate(booking.checkIn)}</td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{formatDate(booking.checkOut)}</td>
+                          <td className="text-center">{booking.nights}</td>
+                          <td>
+                            <span className={`badge ${
+                              booking.status === 'COMPLETED' ? 'bg-success' :
+                              booking.status === 'PENDING' ? 'bg-warning text-dark' :
+                              booking.status === 'CANCELLED' ? 'bg-danger' :
+                              booking.status === 'CONFIRMED' ? 'bg-info' :
+                              booking.status === 'REFUNDED' ? 'bg-danger' :
+                              'bg-secondary'
+                            }`}>
+                              {booking.status}
+                            </span>
+                          </td>
+                          <td style={{ whiteSpace: 'nowrap' }}>{formatCurrency(booking.total, booking.currency)}</td>
+                          <td>
+                            <span className={`badge ${getPaymentStatusBadge(booking.paymentStatus)}`}>
+                              {booking.paymentStatus || 'N/A'}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+
+                      return (
+                        <>
+                          {/* Active Bookings */}
+                          <div className="mb-4">
+                            {(() => {
+                              const totalActivePages = Math.ceil(activeBookings.length / PAGE_SIZE);
+                              const pagedActive = activeBookings.slice((activePageNum - 1) * PAGE_SIZE, activePageNum * PAGE_SIZE);
+                              return (
+                                <>
+                                  <div className="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 className="mb-0" style={{ color: '#333' }}>
+                                      <i className="ri-time-line me-2"></i>
+                                      Active Bookings
+                                      <span className="badge bg-primary ms-2">{activeBookings.length}</span>
+                                    </h6>
+                                    {totalActivePages > 1 && (
+                                      <div className="d-flex align-items-center gap-2">
+                                        <small className="text-muted">Page {activePageNum} of {totalActivePages}</small>
+                                        <button
+                                          className="btn btn-sm btn-outline-secondary"
+                                          disabled={activePageNum <= 1}
+                                          onClick={() => setActivePageNum(activePageNum - 1)}
+                                          style={{ padding: '2px 8px' }}
+                                        >&lt;</button>
+                                        <button
+                                          className="btn btn-sm btn-outline-secondary"
+                                          disabled={activePageNum >= totalActivePages}
+                                          onClick={() => setActivePageNum(activePageNum + 1)}
+                                          style={{ padding: '2px 8px' }}
+                                        >&gt;</button>
+                                      </div>
                                     )}
                                   </div>
-                                </div>
-                                <div className="mb-2">
-                                  <h5 className="mb-1">{entry.booking.hotelName}</h5>
-                                  <p className="text-muted mb-0" style={{ fontSize: '0.9rem' }}>
-                                    {entry.booking.roomName}
-                                  </p>
-                                </div>
-                                <div className="mb-2">
-                                  <small className="text-muted d-block">
-                                    <i className="ri-calendar-line me-1"></i>
-                                    {formatDate(entry.dateStr)}
-                                  </small>
-                                </div>
-                                <div className="d-flex justify-content-between align-items-end mb-3">
-                                  <div className="d-flex gap-4">
-                                    <div>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-user-line me-1"></i>
-                                        {entry.booking.guestName}
-                                      </small>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-group-line me-1"></i>
-                                        {entry.booking.guestCount} {entry.booking.guestCount === 1 ? 'guest' : 'guests'}
-                                      </small>
+                                  {pagedActive.length > 0 ? (
+                                    <div className="table-responsive">
+                                      <table className="table table-hover" style={{ fontSize: '0.9rem' }}>
+                                        {renderTableHeader()}
+                                        <tbody>
+                                          {pagedActive.map(renderBookingRow)}
+                                        </tbody>
+                                      </table>
                                     </div>
-                                    <div>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-calendar-check-line me-1"></i>
-                                        {formatDate(entry.booking.checkIn)}
-                                      </small>
-                                      <small className="text-muted d-block">
-                                        <i className="ri-calendar-close-line me-1"></i>
-                                        {formatDate(entry.booking.checkOut)}
-                                      </small>
+                                  ) : (
+                                    <p className="text-muted" style={{ fontSize: '0.9rem' }}>No active bookings</p>
+                                  )}
+                                </>
+                              );
+                            })()}
+                          </div>
+
+                          {/* Completed / Past Bookings */}
+                          {completedBookings.length > 0 && (
+                            <div>
+                              {(() => {
+                                const totalCompletedPages = Math.ceil(completedBookings.length / PAGE_SIZE);
+                                const pagedCompleted = completedBookings.slice((completedPageNum - 1) * PAGE_SIZE, completedPageNum * PAGE_SIZE);
+                                return (
+                                  <>
+                                    <div className="d-flex justify-content-between align-items-center mb-3">
+                                      <h6 className="mb-0" style={{ color: '#666' }}>
+                                        <i className="ri-check-double-line me-2"></i>
+                                        Completed
+                                        <span className="badge bg-secondary ms-2">{completedBookings.length}</span>
+                                      </h6>
+                                      {totalCompletedPages > 1 && (
+                                        <div className="d-flex align-items-center gap-2">
+                                          <small className="text-muted">Page {completedPageNum} of {totalCompletedPages}</small>
+                                          <button
+                                            className="btn btn-sm btn-outline-secondary"
+                                            disabled={completedPageNum <= 1}
+                                            onClick={() => setCompletedPageNum(completedPageNum - 1)}
+                                            style={{ padding: '2px 8px' }}
+                                          >&lt;</button>
+                                          <button
+                                            className="btn btn-sm btn-outline-secondary"
+                                            disabled={completedPageNum >= totalCompletedPages}
+                                            onClick={() => setCompletedPageNum(completedPageNum + 1)}
+                                            style={{ padding: '2px 8px' }}
+                                          >&gt;</button>
+                                        </div>
+                                      )}
                                     </div>
-                                  </div>
-                                  <div className="text-end">
-                                    <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#0d6efd' }}>
-                                      {formatCurrency(getNetPaid(entry.booking), entry.booking.currency)}
+                                    <div className="table-responsive">
+                                      <table className="table table-hover" style={{ fontSize: '0.9rem', opacity: 0.75 }}>
+                                        {renderTableHeader()}
+                                        <tbody>
+                                          {pagedCompleted.map(renderBookingRow)}
+                                        </tbody>
+                                      </table>
                                     </div>
-                                    {entry.booking.refundAmount && entry.booking.refundAmount > 0 && (
-                                      <small style={{ color: '#6c757d', display: 'block', marginTop: '4px' }}>
-                                        (Refunded: {formatCurrency(entry.booking.refundAmount, entry.booking.currency)})
-                                      </small>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="d-flex gap-2">
-                                  <button 
-                                    className="btn btn-sm btn-outline-secondary"
-                                    onClick={() => handleViewDetails(entry.booking)}
-                                  >
-                                    <i className="ri-file-text-line me-1"></i>
-                                    View Details
-                                  </button>
-                                </div>
-                              </div>
+                                  </>
+                                );
+                              })()}
                             </div>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    </div>
+                          )}
+                        </>
+                      );
+                    })()}
+
 
                   </>
                 )}
@@ -1913,16 +1427,16 @@ const DashboardBookingsContent: React.FC = () => {
                 </div>
 
                 {/* Booking Source */}
-                <div className="mb-4 p-3 rounded" style={{ backgroundColor: selectedBooking.bookingSource === 'AGENT' ? '#f3e5f5' : '#e3f2fd' }}>
+                <div className="mb-4 p-3 rounded" style={{ backgroundColor: selectedBooking.bookingSource === 'AGENT' ? '#f3e5f5' : selectedBooking.bookingSource === 'BROKER' ? '#fff8e1' : '#e3f2fd' }}>
                   <div className="d-flex align-items-center gap-2">
                     <i className={`${getBookingSourceBadge(selectedBooking.bookingSource || 'DIRECT').icon} fs-4`}></i>
                     <div>
                       <span className={`badge ${getBookingSourceBadge(selectedBooking.bookingSource || 'DIRECT').class}`}>
                         {getBookingSourceBadge(selectedBooking.bookingSource || 'DIRECT').label}
                       </span>
-                      {selectedBooking.bookingSource === 'AGENT' && selectedBooking.agentName && (
+                      {(selectedBooking.bookingSource === 'AGENT' || selectedBooking.bookingSource === 'BROKER') && selectedBooking.agentName && (
                         <div className="mt-1">
-                          <small className="text-muted">Agent: </small>
+                          <small className="text-muted">{selectedBooking.bookingSource === 'BROKER' ? 'Broker: ' : 'Agent: '}</small>
                           <strong>{selectedBooking.agentName}</strong>
                           {selectedBooking.agentEmail && (
                             <small className="text-muted d-block">{selectedBooking.agentEmail}</small>
@@ -2085,6 +1599,12 @@ const DashboardBookingsContent: React.FC = () => {
                         <span className="text-muted">Tax</span>
                         <span>{formatCurrency(selectedBooking.tax, selectedBooking.currency)}</span>
                       </div>
+                      {selectedBooking.bookingSource === 'BROKER' && (selectedBooking as any).brokerFee > 0 && (
+                        <div className="d-flex justify-content-between mb-2" style={{ background: '#fef3c7', margin: '0 -12px', padding: '8px 12px', borderRadius: 4 }}>
+                          <span style={{ color: '#92400e' }}>💼 Broker Fee</span>
+                          <strong style={{ color: '#92400e' }}>{formatCurrency((selectedBooking as any).brokerFee, selectedBooking.currency)}</strong>
+                        </div>
+                      )}
                       <hr />
                       <div className="d-flex justify-content-between">
                         <strong>Total</strong>
@@ -2175,6 +1695,16 @@ const DashboardBookingsContent: React.FC = () => {
                   >
                     <i className="ri-check-line me-2"></i>
                     Mark as Paid
+                  </button>
+                )}
+                {(selectedBooking.status === 'PENDING' || selectedBooking.status === 'CONFIRMED') && (
+                  <button 
+                    type="button" 
+                    className="btn btn-primary"
+                    onClick={handleMarkAsCompleted}
+                  >
+                    <i className="ri-check-double-line me-2"></i>
+                    Mark as Completed
                   </button>
                 )}
                 {(selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'COMPLETED' || selectedBooking.status === 'PENDING') && (

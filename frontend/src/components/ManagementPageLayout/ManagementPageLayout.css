@@ -91,12 +91,71 @@
   font-size: 16px;
 }
 
+/* Secondary Sub-Menu */
+.management-submenu-wrapper {
+  background: #f5f5f5;
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 0 0;
+}
+
+.management-submenu-inner {
+  width: 100%;
+  max-width: 1640px;
+  padding: 0 24px;
+}
+
+.management-submenu {
+  list-style: none;
+  margin: 0;
+  display: flex;
+  gap: 4px;
+  background: white;
+  border-radius: 10px;
+  padding: 4px 0;
+  border: 1px solid #e9ecef;
+}
+
+.management-submenu-item {
+  margin: 0;
+  padding: 0;
+}
+
+.management-submenu-link {
+  display: inline-block;
+  padding: 8px 16px;
+  color: #6c757d;
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.management-submenu-link:hover {
+  color: #0d6efd;
+  background: #f0f4ff;
+}
+
+.management-submenu-link.active {
+  color: #0d6efd;
+  background: #e8f0fe;
+  font-weight: 600;
+}
+
+.management-submenu-button {
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  font-family: inherit;
+}
+
 /* Content Wrapper */
 .management-content-wrapper {
   display: flex;
   justify-content: center;
   width: 100%;
-  padding: 20px;
+  padding: 10px 0 0 0;
   background: #f5f5f5;
   min-height: calc(100vh - 200px);
 }
@@ -104,6 +163,7 @@
 .management-content-inner {
   width: 100%;
   max-width: 1640px;
+  padding: 0 24px;
 }
 
 /* Responsive Design */
@@ -133,8 +193,8 @@
     font-size: 13px;
   }
 
-  .management-content-wrapper {
-    padding: 16px;
+  .management-submenu-inner {
+    padding: 0 20px;
   }
 }
 
@@ -175,8 +235,19 @@
     font-size: 14px;
   }
 
-  .management-content-wrapper {
-    padding: 12px;
+  .management-submenu-inner {
+    padding: 0 16px;
+  }
+
+  .management-submenu {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .management-submenu-link {
+    font-size: 12px;
+    padding: 6px 12px;
+    white-space: nowrap;
   }
 }
 
@@ -219,8 +290,12 @@
     display: inline;
   }
 
-  .management-content-wrapper {
-    padding: 8px;
-    min-height: calc(100vh - 180px);
+  .management-submenu-inner {
+    padding: 0 12px;
+  }
+
+  .management-submenu-link {
+    font-size: 11px;
+    padding: 5px 10px;
   }
 }
