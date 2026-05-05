@@ -27,6 +27,7 @@ export interface RevenueMetrics {
   byHotel: HotelRevenue[];
   bySource: SourceRevenue[];
   brokerFees: number;
+  totalManasikFees: number;
 }
 
 export interface DailyRevenue {

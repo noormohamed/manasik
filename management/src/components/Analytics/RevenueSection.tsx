@@ -45,12 +45,18 @@ export default function RevenueSection({ data }: RevenueSectionProps) {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KPICard
-          label="Total Revenue"
-          value={data.total}
-          isCurrency
-          trend={data.trend}
-        />
+        <div className="bg-white border border-gray-200 rounded-lg p-5">
+          <p className="text-sm font-medium text-gray-500 mb-1">Total Bookings</p>
+          <p className="text-2xl font-bold text-gray-900">{formatGBP(data.total)}</p>
+          {data.trend !== 0 && (
+            <p className={`text-xs mt-1 ${data.trend > 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {data.trend > 0 ? '↑' : '↓'} {Math.abs(data.trend).toFixed(1)}% vs prev. period
+            </p>
+          )}
+          <p className="text-xs text-gray-400 mt-2">
+            Manasik Fee: {formatGBP(data.totalManasikFees || 0)}
+          </p>
+        </div>
         <KPICard
           label="Average Booking Value"
           value={data.average}

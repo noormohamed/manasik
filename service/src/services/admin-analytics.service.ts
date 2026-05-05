@@ -18,6 +18,7 @@ export interface AnalyticsResponse {
     byHotel: Array<{ hotelId: string; hotelName: string; revenue: number }>;
     bySource: Array<{ source: string; revenue: number }>;
     brokerFees: number;
+    totalManasikFees: number;
   };
   bookings: {
     total: number;
@@ -84,6 +85,7 @@ export class AnalyticsService {
       topHotelsByRevenueResult,
       revenueBySourceResult,
       brokerFeesResult,
+      manasikFeesResult,
       bookingTotalResult,
       bookingsByStatusResult,
       bookingsBySourceResult,
@@ -161,6 +163,15 @@ export class AnalyticsService {
          FROM bookings
          WHERE status IN ('CONFIRMED', 'COMPLETED')
            AND booking_source = 'BROKER'
+           AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
+        [periodStartStr, periodEndStr]
+      ),
+
+      // 6b. Manasik fees (platform commission)
+      this.database.query(
+        `SELECT COALESCE(SUM(manasik_fee_amount), 0) as totalManasikFees
+         FROM bookings
+         WHERE status IN ('CONFIRMED', 'COMPLETED')
            AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY)`,
         [periodStartStr, periodEndStr]
       ),
@@ -369,6 +380,7 @@ export class AnalyticsService {
     }));
 
     const brokerFees = parseFloat(brokerFeesResult[0]?.totalBrokerFees) || 0;
+    const totalManasikFees = parseFloat(manasikFeesResult[0]?.totalManasikFees) || 0;
 
     // Process bookings
     const bookingTotal = parseInt(bookingTotalResult[0]?.total) || 0;
@@ -464,6 +476,7 @@ export class AnalyticsService {
         byHotel,
         bySource,
         brokerFees,
+        totalManasikFees,
       },
       bookings: {
         total: bookingTotal,
