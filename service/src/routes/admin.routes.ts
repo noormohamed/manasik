@@ -7,6 +7,7 @@ import { Context } from 'koa';
 import { Database } from '../database/connection';
 import { adminAuthService } from '../services/admin-auth.service';
 import { createAdminAuditService } from '../services/admin-audit.service';
+import { AnalyticsEventEmitter } from '../websocket/analytics-events';
 
 const router = new Router({ prefix: '/api/admin' });
 
@@ -793,6 +794,19 @@ router.post('/bookings/:id/cancel', async (ctx: any) => {
 
     const booking = await bookingsService.getBookingDetail(bookingId);
 
+    // Emit analytics event for booking cancellation
+    try {
+      const bookingTotal = booking?.totalAmount ? booking.totalAmount : 0;
+      AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+        bookingId: parseInt(bookingId),
+        previousStatus: 'CONFIRMED',
+        newStatus: 'CANCELLED',
+        revenueImpact: -bookingTotal,
+      });
+    } catch (e) {
+      console.error('Failed to emit booking:statusChanged analytics event for cancel:', e);
+    }
+
     ctx.body = {
       success: true,
       data: booking,
@@ -857,6 +871,21 @@ router.post('/bookings/:id/refund', async (ctx: any) => {
     }
 
     const booking = await bookingsService.getBookingDetail(bookingId);
+
+    // Emit analytics event for booking refund (status change)
+    try {
+      if (booking?.status === 'REFUNDED') {
+        const bookingTotal = booking?.totalAmount ? booking.totalAmount : 0;
+        AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+          bookingId: parseInt(bookingId),
+          previousStatus: 'CONFIRMED',
+          newStatus: 'REFUNDED',
+          revenueImpact: -bookingTotal,
+        });
+      }
+    } catch (e) {
+      console.error('Failed to emit booking:statusChanged analytics event for refund:', e);
+    }
 
     ctx.body = {
       success: true,
@@ -1610,6 +1639,89 @@ router.post('/hotels/:id/status', async (ctx: any) => {
     };
   } catch (error) {
     console.error('Update hotel status error:', error);
+    ctx.status = 500;
+    ctx.body = {
+      success: false,
+      error: 'Internal server error',
+    };
+  }
+});
+
+/**
+ * GET /api/admin/settings/rebate
+ * Get the current platform rebate (commission) percentage
+ */
+router.get('/settings/rebate', async (ctx: any) => {
+  try {
+    const result = await db.query(
+      `SELECT setting_value FROM platform_settings WHERE setting_key = 'rebate_percent' LIMIT 1`,
+      []
+    );
+
+    const rebatePercent = result.length > 0 ? parseFloat(result[0].setting_value) : 15;
+
+    ctx.body = {
+      success: true,
+      data: { rebatePercent },
+    };
+  } catch (error) {
+    console.error('Get rebate setting error:', error);
+    // Return default if table doesn't exist yet
+    ctx.body = {
+      success: true,
+      data: { rebatePercent: 15 },
+    };
+  }
+});
+
+/**
+ * PUT /api/admin/settings/rebate
+ * Update the platform rebate (commission) percentage
+ */
+router.put('/settings/rebate', async (ctx: any) => {
+  try {
+    const { rebatePercent } = ctx.request.body as { rebatePercent: number };
+
+    if (rebatePercent === undefined || rebatePercent < 0 || rebatePercent > 100) {
+      ctx.status = 400;
+      ctx.body = {
+        success: false,
+        error: 'rebatePercent must be between 0 and 100',
+      };
+      return;
+    }
+
+    // Upsert the setting
+    await db.query(
+      `INSERT INTO platform_settings (setting_key, setting_value, updated_at)
+       VALUES ('rebate_percent', ?, NOW())
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()`,
+      [rebatePercent.toString()]
+    );
+
+    // Log the change
+    const authHeader = ctx.get('authorization');
+    const token = adminAuthService.extractToken(authHeader);
+    const payload = token ? adminAuthService.verifyAccessToken(token) : null;
+
+    if (payload && auditService) {
+      await auditService.logAction({
+        admin_user_id: payload.adminUserId,
+        action_type: 'UPDATE',
+        entity_type: 'SETTING',
+        entity_id: 'rebate_percent',
+        reason: `Platform rebate updated to ${rebatePercent}%`,
+        ip_address: ctx.ip,
+        user_agent: ctx.get('user-agent'),
+      });
+    }
+
+    ctx.body = {
+      success: true,
+      data: { rebatePercent },
+    };
+  } catch (error) {
+    console.error('Update rebate setting error:', error);
     ctx.status = 500;
     ctx.body = {
       success: false,

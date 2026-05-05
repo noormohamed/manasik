@@ -148,16 +148,87 @@ export async function getHotelProximityInfo(hotelId: string): Promise<{
   }
 
   const hotel = (hotelRows as any[])[0];
-  const hotelLat = parseFloat(hotel.latitude);
-  const hotelLon = parseFloat(hotel.longitude);
+  const hotelLat = hotel.latitude ? parseFloat(hotel.latitude) : null;
+  const hotelLon = hotel.longitude ? parseFloat(hotel.longitude) : null;
 
-  const gates = await getGatesWithDistances(hotelLat, hotelLon);
-  const attractions = await getAttractionsWithDistances(hotelLat, hotelLon);
+  // Try to use cached distances from hotel_gate_distances table first
+  const [cachedGates] = await pool.query(
+    `SELECT hgd.distance_meters, hgd.walking_time_minutes, hgd.is_recommended,
+            hg.id, hg.gate_number, hg.name_english, hg.name_arabic, hg.latitude, hg.longitude,
+            hg.description, hg.has_direct_kaaba_access, hg.floor_level
+     FROM hotel_gate_distances hgd
+     JOIN haram_gates hg ON hgd.gate_id = hg.id
+     WHERE hgd.hotel_id = ?
+     ORDER BY hgd.distance_meters ASC`,
+    [hotelId]
+  );
+
+  const [cachedAttractions] = await pool.query(
+    `SELECT had.distance_meters, had.walking_time_minutes,
+            na.id, na.name_english, na.name_arabic, na.category, na.latitude, na.longitude, na.description
+     FROM hotel_attraction_distances had
+     JOIN nearby_attractions na ON had.attraction_id = na.id
+     WHERE had.hotel_id = ?
+     ORDER BY had.distance_meters ASC`,
+    [hotelId]
+  );
+
+  let gates: HaramGate[];
+  let attractions: NearbyAttraction[];
+
+  if ((cachedGates as any[]).length > 0) {
+    // Use cached data
+    gates = (cachedGates as any[]).map((row: any, index: number) => ({
+      id: row.id,
+      gateNumber: row.gate_number,
+      nameEnglish: row.name_english,
+      nameArabic: row.name_arabic,
+      latitude: parseFloat(row.latitude),
+      longitude: parseFloat(row.longitude),
+      description: row.description,
+      hasDirectKaabaAccess: row.has_direct_kaaba_access === 1 || row.has_direct_kaaba_access === true,
+      floorLevel: row.floor_level || 'ground',
+      distanceMeters: row.distance_meters,
+      walkingTimeMinutes: row.walking_time_minutes,
+      isRecommended: index === 0,
+      isClosestDirectAccess: false,
+    }));
+
+    // Mark closest direct access gate
+    const closestDirect = gates.find(g => g.hasDirectKaabaAccess);
+    if (closestDirect) closestDirect.isClosestDirectAccess = true;
+  } else if (hotelLat && hotelLon && !isNaN(hotelLat) && !isNaN(hotelLon)) {
+    // Calculate from coordinates
+    gates = await getGatesWithDistances(hotelLat, hotelLon);
+  } else {
+    // No cached data and no coordinates — return gates without distances
+    const allGates = await getAllGates();
+    gates = allGates.map(g => ({ ...g, distanceMeters: undefined, walkingTimeMinutes: undefined, isRecommended: false, isClosestDirectAccess: false }));
+  }
+
+  if ((cachedAttractions as any[]).length > 0) {
+    attractions = (cachedAttractions as any[]).map((row: any) => ({
+      id: row.id,
+      nameEnglish: row.name_english,
+      nameArabic: row.name_arabic,
+      category: row.category,
+      latitude: parseFloat(row.latitude),
+      longitude: parseFloat(row.longitude),
+      description: row.description,
+      distanceMeters: row.distance_meters,
+      walkingTimeMinutes: row.walking_time_minutes,
+    }));
+  } else if (hotelLat && hotelLon && !isNaN(hotelLat) && !isNaN(hotelLon)) {
+    attractions = await getAttractionsWithDistances(hotelLat, hotelLon);
+  } else {
+    const allAttractions = await getAllAttractions();
+    attractions = allAttractions.map(a => ({ ...a, distanceMeters: undefined, walkingTimeMinutes: undefined }));
+  }
 
   return {
     gates,
     attractions,
-    recommendedGate: gates.find(g => g.isRecommended) || null,
+    recommendedGate: gates.find(g => g.isRecommended) || gates[0] || null,
     closestDirectAccessGate: gates.find(g => g.isClosestDirectAccess) || null
   };
 }

@@ -111,7 +111,7 @@ router.get('/session/:sessionId', (ctx) => __awaiter(void 0, void 0, void 0, fun
                 try {
                     const bookingIds = JSON.parse(paymentStatus.metadata.bookingIds);
                     for (const bookingId of bookingIds) {
-                        yield db.query(`UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', updated_at = NOW() WHERE id = ?`, [bookingId]);
+                        yield db.query(`UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', payment_method = 'STRIPE', updated_at = NOW() WHERE id = ?`, [bookingId]);
                     }
                 }
                 catch (e) {
@@ -181,7 +181,7 @@ router.post('/verify-payment', (ctx) => __awaiter(void 0, void 0, void 0, functi
         }
         // Update booking statuses
         for (const bookingId of bookingIds) {
-            yield db.query(`UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', updated_at = NOW() WHERE id = ?`, [bookingId]);
+            yield db.query(`UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', payment_method = 'STRIPE', updated_at = NOW() WHERE id = ?`, [bookingId]);
         }
         ctx.body = {
             success: true,

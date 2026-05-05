@@ -189,7 +189,8 @@ export default function BookingDetailPage() {
   }
 
   const isPendingPayment = detail.status === 'PENDING' && detail.paymentStatus !== 'PAID';
-  const isBrokerBooking = detail.bookingSource === 'AGENT';
+  const isBrokerBooking = detail.bookingSource === 'AGENT' || detail.bookingSource === 'BROKER';
+  const brokerFee = (detail as any).metadata?.brokerFee || (detail as any).brokerFee || 0;
 
   return (
     <div className="space-y-6">
@@ -264,18 +265,31 @@ export default function BookingDetailPage() {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Customer Information */}
+        {/* Guest Information */}
         <div className="bg-white rounded-lg shadow p-6">
-          <h2 className="text-xl font-bold mb-4">Customer Information</h2>
+          <h2 className="text-xl font-bold mb-4">Guest Information</h2>
           <div className="space-y-3">
             <div>
-              <p className="text-gray-600 text-sm">Name</p>
-              <p className="font-semibold">{detail.customerName}</p>
+              <p className="text-gray-600 text-sm">Guest Name</p>
+              <p className="font-semibold">{(detail as any).guestName || detail.customerName}</p>
             </div>
             <div>
-              <p className="text-gray-600 text-sm">Email</p>
-              <p className="font-semibold">{detail.customerEmail}</p>
+              <p className="text-gray-600 text-sm">Guest Email</p>
+              <p className="font-semibold">{(detail as any).guestEmail || detail.customerEmail}</p>
             </div>
+            {(detail as any).guestPhone && (
+              <div>
+                <p className="text-gray-600 text-sm">Guest Phone</p>
+                <p className="font-semibold">{(detail as any).guestPhone}</p>
+              </div>
+            )}
+            {detail.bookingSource === 'BROKER' || detail.bookingSource === 'AGENT' ? (
+              <div className="mt-3 pt-3 border-t">
+                <p className="text-gray-600 text-sm">Booked By (Agent)</p>
+                <p className="font-semibold">{detail.customerName}</p>
+                <p className="text-sm text-gray-500">{detail.customerEmail}</p>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -316,12 +330,12 @@ export default function BookingDetailPage() {
             <div>
               <p className="text-gray-600 text-sm">Booking Source</p>
               <p className={`font-semibold px-3 py-1 rounded-full w-fit ${
-                detail.bookingSource === 'AGENT' ? 'bg-purple-100 text-purple-800' :
+                detail.bookingSource === 'AGENT' || detail.bookingSource === 'BROKER' ? 'bg-purple-100 text-purple-800' :
                 detail.bookingSource === 'ADMIN' ? 'bg-blue-100 text-blue-800' :
                 detail.bookingSource === 'API' ? 'bg-orange-100 text-orange-800' :
                 'bg-gray-100 text-gray-800'
               }`}>
-                {detail.bookingSource === 'AGENT' ? '🧑‍💼 Broker' :
+                {detail.bookingSource === 'AGENT' || detail.bookingSource === 'BROKER' ? '🧑‍💼 Broker' :
                  detail.bookingSource === 'ADMIN' ? '👤 Admin' :
                  detail.bookingSource === 'API' ? '🔌 API' :
                  '🌐 Direct (Customer)'}
@@ -348,10 +362,22 @@ export default function BookingDetailPage() {
               <p className="text-gray-600">Tax</p>
               <p className="font-semibold">{detail.currency} {Number(detail.tax || 0).toFixed(2)}</p>
             </div>
+            {isBrokerBooking && brokerFee > 0 && (
+              <div className="flex justify-between text-purple-700">
+                <p className="font-medium">Broker Fee (included)</p>
+                <p className="font-semibold">{detail.currency} {Number(brokerFee).toFixed(2)}</p>
+              </div>
+            )}
             <div className="border-t pt-3 flex justify-between">
               <p className="font-bold">Total</p>
               <p className="font-bold text-lg">{detail.currency} {Number(detail.totalAmount || 0).toFixed(2)}</p>
             </div>
+            {isBrokerBooking && brokerFee > 0 && (
+              <div className="flex justify-between text-gray-500 text-sm">
+                <p>Hotel Revenue (after broker fee)</p>
+                <p>{detail.currency} {(Number(detail.totalAmount || 0) - Number(brokerFee)).toFixed(2)}</p>
+              </div>
+            )}
           </div>
         </div>
 
@@ -393,8 +419,99 @@ export default function BookingDetailPage() {
         </div>
       </div>
 
-      {/* Broker Notes (if applicable) */}
-      {isBrokerBooking && (detail as any).brokerNotes && (
+      {/* Broker Information (if applicable) */}
+      {isBrokerBooking && (
+        <div className="bg-purple-50 rounded-lg shadow p-6 border border-purple-200">
+          <h2 className="text-xl font-bold mb-4 text-purple-800">Broker Information</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <p className="text-purple-600 text-sm">Agent Name</p>
+              <p className="font-semibold">{detail.agentName || detail.customerName}</p>
+            </div>
+            <div>
+              <p className="text-purple-600 text-sm">Agent Email</p>
+              <p className="font-semibold">{(detail as any).agentEmail || detail.customerEmail}</p>
+            </div>
+            {(detail as any).agentPhone && (
+              <div>
+                <p className="text-purple-600 text-sm">Agent Phone</p>
+                <p className="font-semibold">{(detail as any).agentPhone}</p>
+              </div>
+            )}
+            {(detail as any).agentCommissionRate > 0 && (
+              <div>
+                <p className="text-purple-600 text-sm">Commission Rate</p>
+                <p className="font-semibold">{(detail as any).agentCommissionRate}%</p>
+              </div>
+            )}
+            {brokerFee > 0 && (
+              <div>
+                <p className="text-purple-600 text-sm">Broker Fee</p>
+                <p className="font-semibold text-lg">{detail.currency} {Number(brokerFee).toFixed(2)}</p>
+              </div>
+            )}
+            {(detail as any).agentStatus && (
+              <div>
+                <p className="text-purple-600 text-sm">Agent Status</p>
+                <p className={`font-semibold px-2 py-1 rounded-full w-fit text-xs ${
+                  (detail as any).agentStatus === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+                  (detail as any).agentStatus === 'APPROVED' ? 'bg-blue-100 text-blue-800' :
+                  'bg-gray-100 text-gray-800'
+                }`}>{(detail as any).agentStatus}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Company Details */}
+          {(detail as any).agentCompany && (
+            <div className="mt-4 pt-4 border-t border-purple-200">
+              <h3 className="text-sm font-semibold text-purple-700 mb-3">Company Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <p className="text-purple-600 text-sm">Company Name</p>
+                  <p className="font-semibold">{(detail as any).agentCompany.name}</p>
+                </div>
+                {(detail as any).agentCompany.address && (
+                  <div>
+                    <p className="text-purple-600 text-sm">Address</p>
+                    <p className="font-semibold">
+                      {[(detail as any).agentCompany.address, (detail as any).agentCompany.city, (detail as any).agentCompany.country].filter(Boolean).join(', ')}
+                    </p>
+                  </div>
+                )}
+                {(detail as any).agentCompany.phone && (
+                  <div>
+                    <p className="text-purple-600 text-sm">Company Phone</p>
+                    <p className="font-semibold">{(detail as any).agentCompany.phone}</p>
+                  </div>
+                )}
+                {(detail as any).agentCompany.email && (
+                  <div>
+                    <p className="text-purple-600 text-sm">Company Email</p>
+                    <p className="font-semibold">{(detail as any).agentCompany.email}</p>
+                  </div>
+                )}
+                {(detail as any).agentCompany.website && (
+                  <div>
+                    <p className="text-purple-600 text-sm">Website</p>
+                    <p className="font-semibold">{(detail as any).agentCompany.website}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {(detail as any).brokerNotes && (
+            <div className="mt-4 pt-4 border-t border-purple-200">
+              <p className="text-purple-600 text-sm">Broker Notes</p>
+              <p className="text-purple-700 mt-1">{(detail as any).brokerNotes}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Broker Notes (if applicable - standalone, non-broker bookings with notes) */}
+      {!isBrokerBooking && (detail as any).brokerNotes && (
         <div className="bg-purple-50 rounded-lg shadow p-6 border border-purple-200">
           <h2 className="text-xl font-bold mb-4 text-purple-800">Broker Notes</h2>
           <p className="text-purple-700">{(detail as any).brokerNotes}</p>
@@ -454,12 +571,24 @@ export default function BookingDetailPage() {
                 <div className="section-title text-lg font-bold text-blue-900 border-b pb-2 mb-4">Guest Information</div>
                 <div className="row flex justify-between py-2 border-b border-gray-100">
                   <span className="label text-gray-600">Name</span>
-                  <span className="value font-medium">{detail.customerName}</span>
+                  <span className="value font-medium">{(detail as any).guestName || detail.customerName}</span>
                 </div>
-                <div className="row flex justify-between py-2">
+                <div className="row flex justify-between py-2 border-b border-gray-100">
                   <span className="label text-gray-600">Email</span>
-                  <span className="value font-medium">{detail.customerEmail}</span>
+                  <span className="value font-medium">{(detail as any).guestEmail || detail.customerEmail}</span>
                 </div>
+                {(detail as any).guestPhone && (
+                  <div className="row flex justify-between py-2 border-b border-gray-100">
+                    <span className="label text-gray-600">Phone</span>
+                    <span className="value font-medium">{(detail as any).guestPhone}</span>
+                  </div>
+                )}
+                {(detail.bookingSource === 'BROKER' || detail.bookingSource === 'AGENT') && (
+                  <div className="row flex justify-between py-2">
+                    <span className="label text-gray-600">Booked By</span>
+                    <span className="value font-medium">{detail.agentName || detail.customerName}</span>
+                  </div>
+                )}
               </div>
 
               {/* Accommodation Details */}

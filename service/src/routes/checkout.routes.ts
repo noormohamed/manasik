@@ -8,6 +8,7 @@ import Router from 'koa-router';
 import { v4 as uuidv4 } from 'uuid';
 import { Database } from '../database/connection';
 import { StripeCheckoutService } from '../services/payments/stripe-checkout.service';
+import { AnalyticsEventEmitter } from '../websocket/analytics-events';
 
 const router = new Router({ prefix: '/api/checkout' });
 
@@ -122,6 +123,23 @@ router.get('/session/:sessionId', async (ctx: any) => {
               `UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', payment_method = 'STRIPE', updated_at = NOW() WHERE id = ?`,
               [bookingId]
             );
+
+            // Emit analytics events for payment and status change
+            try {
+              AnalyticsEventEmitter.getInstance().emitPaymentReceived({
+                paymentId: 0,
+                bookingId: bookingId as any,
+                amount: (paymentStatus.amountTotal || 0) / 100,
+              });
+              AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+                bookingId: bookingId as any,
+                previousStatus: 'PENDING',
+                newStatus: 'CONFIRMED',
+                revenueImpact: (paymentStatus.amountTotal || 0) / 100,
+              });
+            } catch (e) {
+              console.error('Failed to emit analytics events for checkout session:', e);
+            }
           }
         } catch (e) {
           console.error('Failed to update booking status:', e);
@@ -207,6 +225,23 @@ router.post('/verify-payment', async (ctx: any) => {
         `UPDATE bookings SET status = 'CONFIRMED', payment_status = 'PAID', payment_method = 'STRIPE', updated_at = NOW() WHERE id = ?`,
         [bookingId]
       );
+
+      // Emit analytics events for payment and status change
+      try {
+        AnalyticsEventEmitter.getInstance().emitPaymentReceived({
+          paymentId: 0,
+          bookingId: bookingId as any,
+          amount: (paymentStatus.amountTotal || 0) / 100,
+        });
+        AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+          bookingId: bookingId as any,
+          previousStatus: 'PENDING',
+          newStatus: 'CONFIRMED',
+          revenueImpact: (paymentStatus.amountTotal || 0) / 100,
+        });
+      } catch (e) {
+        console.error('Failed to emit analytics events for verify-payment:', e);
+      }
     }
 
     ctx.body = {

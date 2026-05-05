@@ -36,6 +36,11 @@ export interface AdminBooking {
   bookingSource?: 'DIRECT' | 'AGENT' | 'API' | 'ADMIN';
   holdExpiresAt?: string;
   agentName?: string;
+  hotelId?: string;
+  hotelName?: string;
+  hotelCity?: string;
+  hotelCountry?: string;
+  starRating?: number;
 }
 
 export interface BookingDetail extends AdminBooking {
@@ -56,8 +61,26 @@ export interface BookingDetail extends AdminBooking {
   hotelCountry?: string;
   hotelFullAddress?: string;
   agentId?: string;
+  agentEmail?: string | null;
+  agentPhone?: string | null;
+  agentCommissionRate?: number | null;
+  agentStatus?: string | null;
+  agentTotalBookings?: number | null;
+  agentTotalRevenue?: number | null;
+  agentCompany?: {
+    name: string;
+    address?: string;
+    city?: string;
+    country?: string;
+    phone?: string;
+    email?: string;
+    website?: string;
+  } | null;
   paymentLinkUrl?: string;
   brokerNotes?: string;
+  guestName?: string | null;
+  guestEmail?: string | null;
+  guestPhone?: string | null;
 }
 
 export class AdminBookingsService {
@@ -70,11 +93,12 @@ export class AdminBookingsService {
     let query = `
       SELECT 
         b.id,
+        UPPER(SUBSTRING(MD5(b.id), 1, 8)) as bookingRef,
         b.customer_id as customerId,
         CONCAT(u.first_name, ' ', u.last_name) as customerName,
         u.email as customerEmail,
         b.service_type as serviceType,
-        COALESCE(c.name, 'N/A') as serviceName,
+        COALESCE(h.name, COALESCE(c.name, 'N/A')) as serviceName,
         b.created_at as bookingDate,
         b.metadata,
         b.status,
@@ -83,10 +107,16 @@ export class AdminBookingsService {
         b.currency,
         b.booking_source as bookingSource,
         b.hold_expires_at as holdExpiresAt,
-        CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName
+        CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName,
+        h.name as hotelName,
+        h.city as hotelCity,
+        h.country as hotelCountry,
+        h.star_rating as starRating,
+        JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId
       FROM bookings b
       JOIN users u ON b.customer_id = u.id
       LEFT JOIN companies c ON b.company_id = c.id
+      LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
       LEFT JOIN agents a ON b.agent_id = a.id
       LEFT JOIN users agent_user ON a.user_id = agent_user.id
     `;
@@ -102,9 +132,9 @@ export class AdminBookingsService {
       } else {
         query += ` AND `;
       }
-      query += `(b.id LIKE ? OR u.email LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR c.name LIKE ?)`;
+      query += `(b.id LIKE ? OR u.email LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR c.name LIKE ? OR h.name LIKE ?)`;
       const searchTerm = `%${filter.search}%`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
     }
 
     // Status filter
@@ -201,10 +231,19 @@ export class AdminBookingsService {
     const bookings = await this.database.query(query, params);
 
     return {
-      bookings: bookings.map((b: any) => ({
-        ...b,
-        metadata: b.metadata ? (typeof b.metadata === 'string' ? JSON.parse(b.metadata) : b.metadata) : null,
-      })),
+      bookings: bookings.map((b: any) => {
+        const metadata = b.metadata ? (typeof b.metadata === 'string' ? JSON.parse(b.metadata) : b.metadata) : null;
+        return {
+          ...b,
+          metadata,
+          checkInDate: metadata?.checkInDate || null,
+          checkOutDate: metadata?.checkOutDate || null,
+          nights: metadata?.nights || null,
+          roomType: metadata?.roomType || null,
+          hotelId: b.hotelId || metadata?.hotelId || null,
+          hotelName: b.hotelName || metadata?.hotelName || null,
+        };
+      }),
       total,
     };
   }
@@ -218,18 +257,32 @@ export class AdminBookingsService {
         b.*,
         CONCAT(u.first_name, ' ', u.last_name) as customerName,
         u.email as customerEmail,
-        c.name as serviceName,
+        COALESCE(h.name, c.name) as serviceName,
         h.name as hotelName,
         h.address as hotelAddress,
         h.city as hotelCity,
         h.country as hotelCountry,
-        CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName
+        CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName,
+        agent_user.email as agentEmail,
+        a.phone as agentPhone,
+        a.commission_rate as agentCommissionRate,
+        a.status as agentStatus,
+        a.total_bookings as agentTotalBookings,
+        a.total_revenue as agentTotalRevenue,
+        agent_company.name as agentCompanyName,
+        agent_company.address as agentCompanyAddress,
+        agent_company.city as agentCompanyCity,
+        agent_company.country as agentCompanyCountry,
+        agent_company.phone as agentCompanyPhone,
+        agent_company.email as agentCompanyEmail,
+        agent_company.website as agentCompanyWebsite
       FROM bookings b
       JOIN users u ON b.customer_id = u.id
-      JOIN companies c ON b.company_id = c.id
-      LEFT JOIN hotels h ON b.hotel_id = h.id
+      LEFT JOIN companies c ON b.company_id = c.id
+      LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
       LEFT JOIN agents a ON b.agent_id = a.id
       LEFT JOIN users agent_user ON a.user_id = agent_user.id
+      LEFT JOIN companies agent_company ON a.company_id = agent_company.id
       WHERE b.id = ?
     `;
 
@@ -290,9 +343,28 @@ export class AdminBookingsService {
       bookingSource,
       agentId: booking.agent_id || null,
       agentName: booking.agentName || null,
+      agentEmail: booking.agentEmail || null,
+      agentPhone: booking.agentPhone || null,
+      agentCommissionRate: booking.agentCommissionRate || null,
+      agentStatus: booking.agentStatus || null,
+      agentTotalBookings: booking.agentTotalBookings || null,
+      agentTotalRevenue: booking.agentTotalRevenue || null,
+      agentCompany: booking.agentCompanyName ? {
+        name: booking.agentCompanyName,
+        address: booking.agentCompanyAddress,
+        city: booking.agentCompanyCity,
+        country: booking.agentCompanyCountry,
+        phone: booking.agentCompanyPhone,
+        email: booking.agentCompanyEmail,
+        website: booking.agentCompanyWebsite,
+      } : null,
       holdExpiresAt: booking.hold_expires_at || null,
       paymentLinkUrl: booking.payment_link_url || null,
       brokerNotes: booking.broker_notes || null,
+      // Guest info from metadata (actual guest, not the booking agent)
+      guestName: metadata.guestName || null,
+      guestEmail: metadata.guestEmail || null,
+      guestPhone: metadata.guestPhone || null,
       pricingBreakdown: {
         subtotal: booking.subtotal,
         tax: booking.tax,

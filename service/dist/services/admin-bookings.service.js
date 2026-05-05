@@ -31,7 +31,7 @@ class AdminBookingsService {
         CONCAT(u.first_name, ' ', u.last_name) as customerName,
         u.email as customerEmail,
         b.service_type as serviceType,
-        COALESCE(c.name, 'N/A') as serviceName,
+        COALESCE(h.name, COALESCE(c.name, 'N/A')) as serviceName,
         b.created_at as bookingDate,
         b.metadata,
         b.status,
@@ -40,10 +40,16 @@ class AdminBookingsService {
         b.currency,
         b.booking_source as bookingSource,
         b.hold_expires_at as holdExpiresAt,
-        CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName
+        CONCAT(agent_user.first_name, ' ', agent_user.last_name) as agentName,
+        h.name as hotelName,
+        h.city as hotelCity,
+        h.country as hotelCountry,
+        h.star_rating as starRating,
+        JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) as hotelId
       FROM bookings b
       JOIN users u ON b.customer_id = u.id
       LEFT JOIN companies c ON b.company_id = c.id
+      LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
       LEFT JOIN agents a ON b.agent_id = a.id
       LEFT JOIN users agent_user ON a.user_id = agent_user.id
     `;
@@ -58,9 +64,9 @@ class AdminBookingsService {
                 else {
                     query += ` AND `;
                 }
-                query += `(b.id LIKE ? OR u.email LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR c.name LIKE ?)`;
+                query += `(b.id LIKE ? OR u.email LIKE ? OR CONCAT(u.first_name, ' ', u.last_name) LIKE ? OR c.name LIKE ? OR h.name LIKE ?)`;
                 const searchTerm = `%${filter.search}%`;
-                params.push(searchTerm, searchTerm, searchTerm, searchTerm);
+                params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
             }
             // Status filter
             if (filter.status) {
@@ -152,7 +158,10 @@ class AdminBookingsService {
             query += ` ORDER BY b.created_at DESC LIMIT ${filter.limit} OFFSET ${filter.offset}`;
             const bookings = yield this.database.query(query, params);
             return {
-                bookings: bookings.map((b) => (Object.assign(Object.assign({}, b), { metadata: b.metadata ? (typeof b.metadata === 'string' ? JSON.parse(b.metadata) : b.metadata) : null }))),
+                bookings: bookings.map((b) => {
+                    const metadata = b.metadata ? (typeof b.metadata === 'string' ? JSON.parse(b.metadata) : b.metadata) : null;
+                    return Object.assign(Object.assign({}, b), { metadata, checkInDate: (metadata === null || metadata === void 0 ? void 0 : metadata.checkInDate) || null, checkOutDate: (metadata === null || metadata === void 0 ? void 0 : metadata.checkOutDate) || null, nights: (metadata === null || metadata === void 0 ? void 0 : metadata.nights) || null, roomType: (metadata === null || metadata === void 0 ? void 0 : metadata.roomType) || null, hotelId: b.hotelId || (metadata === null || metadata === void 0 ? void 0 : metadata.hotelId) || null, hotelName: b.hotelName || (metadata === null || metadata === void 0 ? void 0 : metadata.hotelName) || null });
+                }),
                 total,
             };
         });

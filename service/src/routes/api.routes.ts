@@ -13,6 +13,7 @@ import { brokerRoutes } from './broker.routes';
 import { createMessagingRouter, initializeMessagingRoutes } from './messaging.routes';
 import { staffBookingRoutes } from './staff-booking.routes';
 import { createHotelImagesRouter } from './hotel-images.routes';
+import { brokerBookingRoutes } from './broker-booking.routes';
 import { Database } from '../database/connection';
 
 export const createApiRouter = (db?: Database) => {
@@ -64,6 +65,10 @@ export const createApiRouter = (db?: Database) => {
     // Broker routes (always enabled)
     router.use(brokerRoutes.routes());
     router.use(brokerRoutes.allowedMethods());
+
+    // Broker booking routes (always enabled)
+    router.use(brokerBookingRoutes.routes());
+    router.use(brokerBookingRoutes.allowedMethods());
 
     // Hotel images routes (always enabled)
     const hotelImagesRouter = createHotelImagesRouter();

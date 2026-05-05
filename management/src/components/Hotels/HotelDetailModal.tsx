@@ -241,7 +241,7 @@ export default function HotelDetailModal({
                       </div>
                       <div className="bg-purple-50 rounded-lg p-4">
                         <p className="text-sm text-purple-600">Total Revenue</p>
-                        <p className="text-2xl font-bold text-purple-900">${(hotel.bookingStats?.totalRevenue || 0).toFixed(2)}</p>
+                        <p className="text-2xl font-bold text-purple-900">£{(hotel.bookingStats?.totalRevenue || 0).toFixed(2)}</p>
                       </div>
                       <div className="bg-yellow-50 rounded-lg p-4">
                         <p className="text-sm text-yellow-600">Avg Rating</p>
@@ -281,20 +281,40 @@ export default function HotelDetailModal({
 
                 {activeTab === 'rooms' && (
                   <div className="space-y-4">
-                    {hotel.rooms?.length > 0 ? hotel.rooms.map((room) => (
-                      <div key={room.id} className="border rounded-lg p-4">
-                        <div className="flex justify-between items-start">
-                          <div><h4 className="font-semibold">{room.name}</h4><p className="text-gray-600 text-sm">{room.description}</p></div>
-                          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(room.status)}`}>{room.status}</span>
+                    {hotel.rooms?.length > 0 ? hotel.rooms.map((room: any) => {
+                      // Count bookings for this room type from recent bookings
+                      const roomBookings = (hotel.recentBookings || []).filter((b: any) => 
+                        b.roomType === room.name || b.roomTypeId === room.id
+                      );
+                      const confirmedBookings = roomBookings.filter((b: any) => b.status === 'CONFIRMED' || b.status === 'COMPLETED');
+                      const roomRevenue = confirmedBookings.reduce((sum: number, b: any) => sum + (b.total || 0), 0);
+                      
+                      return (
+                        <div key={room.id} className="border rounded-lg p-4">
+                          <div className="flex justify-between items-start">
+                            <div><h4 className="font-semibold">{room.name}</h4><p className="text-gray-600 text-sm">{room.description}</p></div>
+                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(room.status)}`}>{room.status}</span>
+                          </div>
+                          <div className="mt-3 grid grid-cols-5 gap-4 text-sm">
+                            <div><p className="text-gray-500">Capacity</p><p className="font-medium">{room.capacity} guests</p></div>
+                            <div><p className="text-gray-500">Total</p><p className="font-medium">{room.totalRooms}</p></div>
+                            <div><p className="text-gray-500">Available</p><p className="font-medium">{room.availableRooms}</p></div>
+                            <div><p className="text-gray-500">Price</p><p className="font-medium">£{room.basePrice}/night</p></div>
+                            <div>
+                              <p className="text-gray-500">Bookings</p>
+                              {confirmedBookings.length > 0 ? (
+                                <div>
+                                  <p className="font-medium text-green-600">{confirmedBookings.length} booking{confirmedBookings.length !== 1 ? 's' : ''}</p>
+                                  <p className="text-xs text-green-500">£{roomRevenue.toFixed(2)}</p>
+                                </div>
+                              ) : (
+                                <p className="font-medium text-gray-400">0</p>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="mt-3 grid grid-cols-4 gap-4 text-sm">
-                          <div><p className="text-gray-500">Capacity</p><p className="font-medium">{room.capacity} guests</p></div>
-                          <div><p className="text-gray-500">Total</p><p className="font-medium">{room.totalRooms}</p></div>
-                          <div><p className="text-gray-500">Available</p><p className="font-medium">{room.availableRooms}</p></div>
-                          <div><p className="text-gray-500">Price</p><p className="font-medium">${room.basePrice}/night</p></div>
-                        </div>
-                      </div>
-                    )) : <p className="text-gray-500 text-center py-8">No rooms configured</p>}
+                      );
+                    }) : <p className="text-gray-500 text-center py-8">No rooms configured</p>}
                   </div>
                 )}
 
@@ -304,7 +324,7 @@ export default function HotelDetailModal({
                       <div className="bg-gray-50 rounded-lg p-4"><p className="text-sm text-gray-600">Confirmed</p><p className="text-xl font-bold text-green-600">{hotel.bookingStats?.confirmedBookings || 0}</p></div>
                       <div className="bg-gray-50 rounded-lg p-4"><p className="text-sm text-gray-600">Pending</p><p className="text-xl font-bold text-yellow-600">{hotel.bookingStats?.pendingBookings || 0}</p></div>
                       <div className="bg-gray-50 rounded-lg p-4"><p className="text-sm text-gray-600">Cancelled</p><p className="text-xl font-bold text-red-600">{hotel.bookingStats?.cancelledBookings || 0}</p></div>
-                      <div className="bg-gray-50 rounded-lg p-4"><p className="text-sm text-gray-600">Avg Value</p><p className="text-xl font-bold text-indigo-600">${(hotel.bookingStats?.averageBookingValue || 0).toFixed(2)}</p></div>
+                      <div className="bg-gray-50 rounded-lg p-4"><p className="text-sm text-gray-600">Avg Value</p><p className="text-xl font-bold text-indigo-600">£{(hotel.bookingStats?.averageBookingValue || 0).toFixed(2)}</p></div>
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold mb-3">Recent Bookings</h3>
@@ -325,7 +345,7 @@ export default function HotelDetailModal({
                                 <td className="px-4 py-3 text-sm">{b.guestName || 'N/A'}</td>
                                 <td className="px-4 py-3 text-sm">{b.checkIn || 'N/A'}</td>
                                 <td className="px-4 py-3 text-sm">{b.checkOut || 'N/A'}</td>
-                                <td className="px-4 py-3 text-sm">${b.total?.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-sm">£{b.total?.toFixed(2)}</td>
                                 <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(b.status)}`}>{b.status}</span></td>
                               </tr>
                             ))}
@@ -395,7 +415,7 @@ export default function HotelDetailModal({
                         <div className="grid grid-cols-2 gap-4">
                           <div className="bg-green-50 rounded-lg p-4">
                             <p className="text-sm text-green-600">Total Amount</p>
-                            <p className="text-2xl font-bold text-green-900">${transactions.totalAmount?.toFixed(2) || '0.00'}</p>
+                            <p className="text-2xl font-bold text-green-900">£{transactions.totalAmount?.toFixed(2) || '0.00'}</p>
                           </div>
                           <div className="bg-blue-50 rounded-lg p-4">
                             <p className="text-sm text-blue-600">Total Transactions</p>
@@ -422,7 +442,7 @@ export default function HotelDetailModal({
                                     <td className="px-4 py-3 text-sm font-mono">{t.id.slice(0, 8)}...</td>
                                     <td className="px-4 py-3 text-sm">{t.guestName}</td>
                                     <td className="px-4 py-3 text-sm">{t.type}</td>
-                                    <td className="px-4 py-3 text-sm font-medium">${t.amount?.toFixed(2)} {t.currency}</td>
+                                    <td className="px-4 py-3 text-sm font-medium">£{t.amount?.toFixed(2)} {t.currency}</td>
                                     <td className="px-4 py-3"><span className={`px-2 py-1 rounded-full text-xs font-semibold ${getStatusBadgeColor(t.status)}`}>{t.status}</span></td>
                                     <td className="px-4 py-3 text-sm">{new Date(t.createdAt).toLocaleDateString()}</td>
                                   </tr>

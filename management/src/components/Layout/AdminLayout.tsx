@@ -58,12 +58,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
       <Sidebar />
 
       {/* Main Content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top Bar */}
         <TopBar />
 
         {/* Page Content */}
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto min-w-0">
           <div className="p-6 md:p-8">
             {children}
           </div>

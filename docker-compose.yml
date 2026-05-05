@@ -127,7 +127,7 @@ services:
     container_name: booking_management
     restart: always
     environment:
-      NEXT_PUBLIC_API_URL: http://api:3001
+      NEXT_PUBLIC_API_URL: http://localhost:3001
       NEXT_PUBLIC_API_TIMEOUT: 30000
       NEXT_PUBLIC_JWT_EXPIRY: 86400
       NEXT_PUBLIC_SESSION_TIMEOUT: 86400
@@ -137,8 +137,14 @@ services:
       NEXT_PUBLIC_ENABLE_ANALYTICS: "true"
       NEXT_PUBLIC_ENABLE_AUDIT_LOG: "true"
       NEXT_PUBLIC_LOG_LEVEL: info
+      WATCHPACK_POLLING: "true"
     ports:
       - "3002:3000"
+    volumes:
+      - ./management:/app:delegated
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
     networks:
       - booking_network
 

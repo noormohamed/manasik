@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getPool } from '../database/connection';
 import { paymentLinkService } from './payment-link.service';
 import { emailService } from './email/email.service';
+import { getManasikFeePercent, calculateManasikFee } from '../utils/manasik-fee';
 
 export interface RoomAllocation {
   roomTypeId: string;
@@ -106,6 +107,10 @@ export class BookingService {
       const total = Math.round((subtotal + tax) * 100) / 100;
       const totalRooms = roomDetails.reduce((sum, rd) => sum + rd.quantity, 0);
 
+      // Calculate Manasik Fee (platform commission)
+      const feePercent = await getManasikFeePercent(pool);
+      const { manasikFeePercent, manasikFeeAmount } = calculateManasikFee(subtotal, feePercent);
+
       // Get hotel details
       const [hotels] = await pool.query<any>(
         `SELECT name, address, city, country, company_id FROM hotels WHERE id = ?`,
@@ -143,8 +148,8 @@ export class BookingService {
       // Insert booking
       await pool.query(
         `INSERT INTO bookings
-         (id, company_id, customer_id, service_type, status, currency, subtotal, tax, total, metadata, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
+         (id, company_id, customer_id, service_type, status, currency, subtotal, tax, total, manasik_fee_percent, manasik_fee_amount, metadata, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())`,
         [
           bookingId,
           hotel.company_id,
@@ -155,6 +160,8 @@ export class BookingService {
           subtotal,
           tax,
           total,
+          manasikFeePercent,
+          manasikFeeAmount,
           JSON.stringify(metadata),
         ]
       );

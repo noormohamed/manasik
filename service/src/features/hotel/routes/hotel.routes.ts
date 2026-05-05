@@ -18,7 +18,9 @@ import {
   ScoringWeights,
 } from '../services/scoring.service';
 import { getPool } from '../../../database/connection';
+import { getManasikFeePercent, calculateManasikFee } from '../../../utils/manasik-fee';
 import * as haramGatesService from '../../../services/haram-gates.service';
+import { AnalyticsEventEmitter } from '../../../websocket/analytics-events';
 
 export const createHotelRoutes = () => {
   const router = new Router({ prefix: '/hotels' });
@@ -606,6 +608,10 @@ export const createHotelRoutes = () => {
           b.hold_expires_at,
           b.created_at,
           b.updated_at,
+          b.broker_fee,
+          b.broker_notes,
+          b.manasik_fee_percent,
+          b.manasik_fee_amount,
           u.first_name as customer_first_name,
           u.last_name as customer_last_name,
           u.email as customer_email,
@@ -815,6 +821,12 @@ export const createHotelRoutes = () => {
           agentId: booking.agent_id,
           agentName: booking.agent_name,
           agentEmail: booking.agent_email,
+          // Broker info
+          brokerFee: booking.broker_fee ? parseFloat(booking.broker_fee) : 0,
+          brokerNotes: booking.broker_notes || null,
+          // Manasik Fee (platform commission)
+          manasikFeePercent: booking.manasik_fee_percent ? parseFloat(booking.manasik_fee_percent) : 0,
+          manasikFeeAmount: booking.manasik_fee_amount ? parseFloat(booking.manasik_fee_amount) : 0,
           // Provider info
           providerName: booking.provider_name,
           providerReference: booking.provider_reference,
@@ -1203,6 +1215,21 @@ export const createHotelRoutes = () => {
         return;
       }
 
+      // Emit analytics event for booking status change if fully refunded
+      try {
+        if (isFullRefund && booking.status !== 'REFUNDED') {
+          const wasActive = ['CONFIRMED', 'COMPLETED'].includes(booking.status);
+          AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+            bookingId: bookingId as any,
+            previousStatus: booking.status,
+            newStatus: 'REFUNDED',
+            revenueImpact: wasActive ? -bookingTotal : 0,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to emit booking:statusChanged analytics event for refund:', e);
+      }
+
       ctx.body = {
         success: true,
         message: 'Refund processed successfully',
@@ -1295,6 +1322,34 @@ export const createHotelRoutes = () => {
         return;
       }
 
+      // Emit analytics events for payment and status change
+      try {
+        if (paymentStatus === 'PAID') {
+          AnalyticsEventEmitter.getInstance().emitPaymentReceived({
+            paymentId: 0,
+            bookingId: bookingId as any,
+            amount: parseFloat(booking.total) || 0,
+          });
+        }
+        if (newStatus !== booking.status) {
+          const bookingTotal = parseFloat(booking.total) || 0;
+          const wasActive = ['CONFIRMED', 'COMPLETED'].includes(booking.status);
+          const isNowActive = ['CONFIRMED', 'COMPLETED'].includes(newStatus);
+          let revenueImpact = 0;
+          if (!wasActive && isNowActive) revenueImpact = bookingTotal;
+          else if (wasActive && !isNowActive) revenueImpact = -bookingTotal;
+
+          AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+            bookingId: bookingId as any,
+            previousStatus: booking.status,
+            newStatus,
+            revenueImpact,
+          });
+        }
+      } catch (e) {
+        console.error('Failed to emit analytics event for payment status update:', e);
+      }
+
       ctx.body = {
         success: true,
         message: 'Payment status updated successfully',
@@ -1374,6 +1429,26 @@ export const createHotelRoutes = () => {
         ctx.status = 500;
         ctx.body = { error: 'Failed to update booking status' };
         return;
+      }
+
+      // Emit analytics event for booking status change
+      try {
+        const previousStatus = booking.status;
+        const bookingTotal = parseFloat(booking.total) || 0;
+        const wasActive = ['CONFIRMED', 'COMPLETED'].includes(previousStatus);
+        const isNowActive = ['CONFIRMED', 'COMPLETED'].includes(status);
+        let revenueImpact = 0;
+        if (!wasActive && isNowActive) revenueImpact = bookingTotal;
+        else if (wasActive && !isNowActive) revenueImpact = -bookingTotal;
+
+        AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+          bookingId: bookingId as any,
+          previousStatus,
+          newStatus: status,
+          revenueImpact,
+        });
+      } catch (e) {
+        console.error('Failed to emit booking:statusChanged analytics event:', e);
       }
 
       ctx.body = {
@@ -1810,6 +1885,10 @@ export const createHotelRoutes = () => {
       const tax = subtotal * taxRate;
       const total = subtotal + tax;
 
+      // Calculate Manasik Fee (platform commission)
+      const feePercent = await getManasikFeePercent(pool);
+      const { manasikFeePercent, manasikFeeAmount } = calculateManasikFee(subtotal, feePercent);
+
       // Create booking
       const bookingId = require('uuid').v4();
       
@@ -1857,8 +1936,8 @@ export const createHotelRoutes = () => {
 
       const insertQuery = `
         INSERT INTO bookings (
-          id, company_id, customer_id, service_type, booking_source, status, currency, subtotal, tax, total, payment_status, metadata, guest_details, created_at, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+          id, company_id, customer_id, service_type, booking_source, status, currency, subtotal, tax, total, manasik_fee_percent, manasik_fee_amount, payment_status, metadata, guest_details, created_at, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
       `;
 
       await pool.execute(insertQuery, [
@@ -1872,6 +1951,8 @@ export const createHotelRoutes = () => {
         subtotal,
         tax,
         total,
+        manasikFeePercent,
+        manasikFeeAmount,
         'PENDING',
         JSON.stringify(metadata),
         JSON.stringify(processedGuestDetails),
@@ -1928,6 +2009,18 @@ export const createHotelRoutes = () => {
         isLeadPassenger: g.is_lead_passenger === 1,
       }));
 
+      // Emit analytics event for booking creation
+      try {
+        AnalyticsEventEmitter.getInstance().emitBookingCreated({
+          bookingId: bookingId as any,
+          source: 'DIRECT',
+          amount: total,
+          status: 'PENDING',
+        });
+      } catch (e) {
+        console.error('Failed to emit booking:created analytics event:', e);
+      }
+
       ctx.status = 201;
       ctx.body = {
         message: 'Booking created successfully',
@@ -1938,6 +2031,8 @@ export const createHotelRoutes = () => {
           subtotal: parseFloat(bookingRow.subtotal),
           tax: parseFloat(bookingRow.tax),
           total: parseFloat(bookingRow.total),
+          manasikFeePercent: bookingRow.manasik_fee_percent ? parseFloat(bookingRow.manasik_fee_percent) : 0,
+          manasikFeeAmount: bookingRow.manasik_fee_amount ? parseFloat(bookingRow.manasik_fee_amount) : 0,
           hotelId,
           hotelName: hotel.name,
           roomTypeId,

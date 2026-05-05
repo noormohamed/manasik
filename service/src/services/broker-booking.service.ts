@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { getPool } from '../database/connection';
 import { StripeCheckoutService } from './payments/stripe-checkout.service';
 import { emailService } from './email/email.service';
+import { getManasikFeePercent, calculateManasikFee } from '../utils/manasik-fee';
 
 export interface BrokerBookingParams {
   brokerId: string;
@@ -59,6 +60,10 @@ export class BrokerBookingService {
     const tax = subtotal * taxRate;
     const total = subtotal + tax;
 
+    // Calculate Manasik Fee (platform commission)
+    const feePercent = await getManasikFeePercent(pool);
+    const { manasikFeePercent, manasikFeeAmount } = calculateManasikFee(subtotal, feePercent);
+
     // Calculate hold expiry (1 hour from now)
     const holdExpiresAt = new Date();
     holdExpiresAt.setHours(holdExpiresAt.getHours() + HOLD_DURATION_HOURS);
@@ -82,9 +87,9 @@ export class BrokerBookingService {
     await pool.query(
       `INSERT INTO bookings (
         id, company_id, customer_id, service_type, booking_source, agent_id,
-        status, currency, subtotal, tax, total, metadata, payment_status,
+        status, currency, subtotal, tax, total, manasik_fee_percent, manasik_fee_amount, metadata, payment_status,
         hold_expires_at, broker_notes, created_at, updated_at
-      ) VALUES (?, ?, ?, 'HOTEL', 'AGENT', ?, 'PENDING', ?, ?, ?, ?, ?, 'PENDING', ?, ?, NOW(), NOW())`,
+      ) VALUES (?, ?, ?, 'HOTEL', 'AGENT', ?, 'PENDING', ?, ?, ?, ?, ?, ?, ?, 'PENDING', ?, ?, NOW(), NOW())`,
       [
         bookingId,
         'default-company',
@@ -94,6 +99,8 @@ export class BrokerBookingService {
         subtotal,
         tax,
         total,
+        manasikFeePercent,
+        manasikFeeAmount,
         JSON.stringify(metadata),
         holdExpiresAt,
         params.brokerNotes || null,

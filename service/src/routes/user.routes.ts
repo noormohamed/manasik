@@ -3,6 +3,7 @@ import { Context } from 'koa';
 import { authMiddleware } from '../middleware/auth.middleware';
 import { UserRepository } from '../database/repositories/user.repository';
 import { getPool } from '../database/connection';
+import { AnalyticsEventEmitter } from '../websocket/analytics-events';
 
 export const userRoutes = new Router({ prefix: '/users' });
 
@@ -310,6 +311,21 @@ userRoutes.post('/me/bookings/:bookingId/cancel', authMiddleware, async (ctx: Co
       [refundAmount, reason || 'Customer requested cancellation', bookingId]
     );
 
+    // Emit analytics event for booking cancellation
+    try {
+      const previousStatus = booking.status;
+      const bookingTotal = parseFloat(booking.total) || 0;
+      const wasActive = ['CONFIRMED', 'COMPLETED'].includes(previousStatus);
+      AnalyticsEventEmitter.getInstance().emitBookingStatusChanged({
+        bookingId: bookingId as any,
+        previousStatus,
+        newStatus: 'CANCELLED',
+        revenueImpact: wasActive ? -bookingTotal : 0,
+      });
+    } catch (e) {
+      console.error('Failed to emit booking:statusChanged analytics event for user cancel:', e);
+    }
+
     ctx.body = {
       success: true,
       message: 'Booking cancelled successfully',
@@ -363,9 +379,14 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
       h.country as hotelCountry,
       h.check_in_time as checkInTime,
       h.check_out_time as checkOutTime,
-      h.star_rating as starRating
+      h.star_rating as starRating,
+      b.booking_source as bookingSource,
+      b.agent_id as agentId,
+      a.name as agentName,
+      a.email as agentEmail
     FROM bookings b
     LEFT JOIN hotels h ON h.id = JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId'))
+    LEFT JOIN agents a ON b.agent_id = a.id
     WHERE b.customer_id = ?`
 
     const params: any[] = [userId];
@@ -522,6 +543,10 @@ userRoutes.get('/me/bookings', authMiddleware, async (ctx: Context) => {
         nights: metadata.nights,
         guests: metadata.guests,
         guestDetails: guests,
+        bookingSource: booking.bookingSource || null,
+        agentId: booking.agentId || null,
+        agentName: booking.agentName || null,
+        agentEmail: booking.agentEmail || null,
         metadata,
         createdAt: booking.createdAt,
         updatedAt: booking.updatedAt,
@@ -605,6 +630,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         b.total,
         b.payment_status as paymentStatus,
         b.payment_method as paymentMethod,
+        b.manasik_fee_amount as manasikFeeAmount,
         b.metadata,
         b.created_at as createdAt
       FROM bookings b
@@ -628,6 +654,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
     let availableManualCredits = 0;
     let availableStripeBookings = 0;
     let availableManualBookings = 0;
+    let totalManasikFees = 0;
 
     // Process bookings and calculate credits
     // Count all PAID bookings in earnings totals (both Stripe and manually marked)
@@ -638,6 +665,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
       
       const amount = parseFloat(booking.total) || 0;
       const currency = booking.currency || 'USD';
+      const manasikFee = parseFloat(booking.manasikFeeAmount) || 0;
       
       // Convert to GBP then to credits
       let gbpAmount = amount;
@@ -672,6 +700,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         if (isPaid) {
           availableCredits += credits;
           completedBookings++;
+          totalManasikFees += manasikFee;
           if (isStripe) {
             availableStripeCredits += credits;
             availableStripeBookings++;
@@ -684,6 +713,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         if (isPaid) {
           pendingCredits += credits;
           pendingBookings++;
+          totalManasikFees += manasikFee;
           if (isStripe) {
             pendingStripeCredits += credits;
             pendingStripeBookings++;
@@ -707,6 +737,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         originalAmount: amount,
         originalCurrency: currency,
         credits,
+        manasikFeeAmount: manasikFee,
         status,
         createdAt: booking.createdAt,
       };
@@ -720,6 +751,7 @@ userRoutes.get('/me/earnings', authMiddleware, async (ctx: Context) => {
         availableCredits,
         pendingBookings,
         completedBookings,
+        totalManasikFees,
         // Breakdown by payment method
         pendingStripeCredits,
         pendingManualCredits,

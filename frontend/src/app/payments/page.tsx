@@ -19,6 +19,7 @@ interface CreditSummary {
   availableGBP: number;
   exchangeRate: number;
   recentTransactions: CreditTransaction[];
+  totalManasikFees: number;
   // Breakdown by payment method
   pendingStripeCredits: number;
   pendingManualCredits: number;
@@ -36,6 +37,7 @@ interface CreditTransaction {
   credits: number;
   originalAmount: number;
   originalCurrency: string;
+  manasikFeeAmount: number;
   status: string;
   checkInDate?: string;
   checkOutDate?: string;
@@ -57,6 +59,7 @@ export default function PaymentsPage() {
     availableGBP: 0,
     exchangeRate: 0.79,
     recentTransactions: [],
+    totalManasikFees: 0,
     pendingStripeCredits: 0,
     pendingManualCredits: 0,
     pendingStripeBookings: 0,
@@ -104,6 +107,7 @@ export default function PaymentsPage() {
       let availableManualCredits = 0;
       let availableStripeBookings = 0;
       let availableManualBookings = 0;
+      let totalManasikFees = 0;
       const transactions: CreditTransaction[] = [];
       const today = new Date();
 
@@ -116,6 +120,7 @@ export default function PaymentsPage() {
             availableCredits: number,
             pendingBookings: number,
             completedBookings: number,
+            totalManasikFees?: number,
             pendingStripeCredits?: number,
             pendingManualCredits?: number,
             pendingStripeBookings?: number,
@@ -140,6 +145,7 @@ export default function PaymentsPage() {
           availableManualCredits = earningsResponse.summary?.availableManualCredits || 0;
           availableStripeBookings = earningsResponse.summary?.availableStripeBookings || 0;
           availableManualBookings = earningsResponse.summary?.availableManualBookings || 0;
+          totalManasikFees = earningsResponse.summary?.totalManasikFees || 0;
           
           earningsResponse.earnings.forEach((earning: any) => {
             transactions.push({
@@ -148,6 +154,7 @@ export default function PaymentsPage() {
               credits: earning.credits,
               originalAmount: earning.originalAmount,
               originalCurrency: earning.originalCurrency,
+              manasikFeeAmount: earning.manasikFeeAmount || 0,
               status: earning.status,
               checkInDate: earning.checkInDate,
               checkOutDate: earning.checkOutDate,
@@ -206,6 +213,7 @@ export default function PaymentsPage() {
             credits,
             originalAmount: amount,
             originalCurrency: currency,
+            manasikFeeAmount: 0,
             status: isCancelled ? 'CANCELLED' : (isCheckedOut && isConfirmed ? 'AVAILABLE' : 'PENDING'),
             checkInDate: booking.metadata?.checkInDate || booking.checkInDate,
             checkOutDate: booking.metadata?.checkOutDate || booking.checkOutDate,
@@ -228,6 +236,7 @@ export default function PaymentsPage() {
         availableGBP: availableCredits / 100,
         exchangeRate,
         recentTransactions: transactions.slice(0, 10),
+        totalManasikFees,
         pendingStripeCredits,
         pendingManualCredits,
         pendingStripeBookings,
@@ -683,6 +692,23 @@ export default function PaymentsPage() {
                     )}
                   </div>
                 )}
+
+                {summary.totalManasikFees > 0 && (
+                  <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: '12px', marginTop: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '13px' }}>
+                      <span style={{ color: '#6f42c1', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                        🏛️ Manasik Fees
+                      </span>
+                      <span style={{ fontWeight: 600, color: '#6f42c1' }}>-{displayCurrency === 'credits' ? `${Math.round(summary.totalManasikFees * 0.79 * 100).toLocaleString()} cr` : displayCurrency === 'gbp' ? `£${(summary.totalManasikFees * 0.79).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${summary.totalManasikFees.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0', fontSize: '13px', fontWeight: 600 }}>
+                      <span style={{ color: '#155724' }}>
+                        Net Earnings
+                      </span>
+                      <span style={{ color: '#155724' }}>{displayCurrency === 'credits' ? `${Math.round((summary.availableCredits / 100 - summary.totalManasikFees * 0.79) * 100).toLocaleString()} cr` : displayCurrency === 'gbp' ? `£${(summary.availableCredits / 100 - summary.totalManasikFees * 0.79).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : `$${(summary.availableCredits / 100 / 0.79 - summary.totalManasikFees).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -709,6 +735,17 @@ export default function PaymentsPage() {
                   }`}>
                     {tx.status}
                   </span>
+                  {summary.totalManasikFees > 0 && (
+                    <div style={{ minWidth: '80px', textAlign: 'right', marginRight: '15px' }}>
+                      <div style={{ fontSize: '11px', color: '#6f42c1', fontWeight: 600 }}>
+                        {tx.manasikFeeAmount > 0 
+                          ? `-$${tx.manasikFeeAmount.toFixed(2)}`
+                          : '$0.00'
+                        }
+                      </div>
+                      <div style={{ fontSize: '10px', color: '#999' }}>Manasik Fee</div>
+                    </div>
+                  )}
                   <div className="transaction-credits">
                     {formatAmount(tx.credits)}
                   </div>

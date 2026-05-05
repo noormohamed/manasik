@@ -1,26 +1,14 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useAppDispatch, useAppSelector } from '@/hooks';
-import { setLoading, setError, setList, setPagination, setFilters } from '@/store/slices/bookingsSlice';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { bookingsService } from '@/services/bookingsService';
 import DataTable, { Column } from '@/components/DataTable/DataTable';
 import { LoadingSpinner, ErrorMessage } from '@/components/Common';
-
-// Helper to calculate time remaining for hold expiry
-const getHoldTimeRemaining = (holdExpiresAt?: string) => {
-  if (!holdExpiresAt) return null;
-  const expiry = new Date(holdExpiresAt);
-  const now = new Date();
-  const diff = expiry.getTime() - now.getTime();
-  if (diff <= 0) return { text: 'Expired', isExpired: true };
-  const minutes = Math.floor(diff / 60000);
-  const seconds = Math.floor((diff % 60000) / 1000);
-  return { text: `${minutes}m ${seconds}s`, isExpired: false };
-};
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 
 interface BookingRow {
   id: string;
+  bookingRef?: string;
   customerName: string;
   serviceType: string;
   serviceName: string;
@@ -30,157 +18,230 @@ interface BookingRow {
   totalAmount: number;
   currency: string;
   bookingSource?: string;
-  holdExpiresAt?: string;
   agentName?: string;
+  hotelName?: string;
+  hotelCity?: string;
+  hotelCountry?: string;
+  starRating?: number;
+  checkInDate?: string;
+  checkOutDate?: string;
+  nights?: number;
+  roomType?: string;
 }
 
 export default function BookingsPage() {
-  const dispatch = useAppDispatch();
-  const { list, isLoading, error, pagination, filters } = useAppSelector((state) => state.bookings);
+  const [confirmedBookings, setConfirmedBookings] = useState<BookingRow[]>([]);
+  const [completedBookings, setCompletedBookings] = useState<BookingRow[]>([]);
+  const [expiredBookings, setExpiredBookings] = useState<BookingRow[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchInput, setSearchInput] = useState('');
-  const [, setTick] = useState(0); // For timer updates
+
+  const [confirmedPage, setConfirmedPage] = useState(1);
+  const [confirmedTotal, setConfirmedTotal] = useState(0);
+  const [completedPage, setCompletedPage] = useState(1);
+  const [completedTotal, setCompletedTotal] = useState(0);
+  const [expiredPage, setExpiredPage] = useState(1);
+  const [expiredTotal, setExpiredTotal] = useState(0);
+  const [showExpired, setShowExpired] = useState(false);
+  const pageSize = 15;
+  const [chartData, setChartData] = useState<any[]>([]);
+
+  // Fetch all bookings for the chart (90 day window)
+  const fetchChartData = useCallback(async () => {
+    try {
+      const res = await bookingsService.getBookings({ page: 1, limit: 200 });
+      if (!res.success) return;
+
+      const allBookings = res.data as BookingRow[];
+      const now = new Date();
+      const ninetyDaysAgo = new Date(now);
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+      // Find the earliest check-in date within the 90-day window
+      const bookingDates = allBookings
+        .map((b) => b.checkInDate ? new Date(b.checkInDate) : null)
+        .filter((d): d is Date => d !== null && d >= ninetyDaysAgo && d <= now);
+
+      // Determine chart start: earliest booking date or 30 days ago, whichever is earlier
+      // Minimum 30 days, maximum 90 days
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      
+      let chartStart: Date;
+      if (bookingDates.length === 0) {
+        chartStart = thirtyDaysAgo;
+      } else {
+        const earliestBooking = new Date(Math.min(...bookingDates.map((d) => d.getTime())));
+        // Go back to at least 30 days, but no more than 90
+        chartStart = earliestBooking < thirtyDaysAgo ? earliestBooking : thirtyDaysAgo;
+        if (chartStart < ninetyDaysAgo) chartStart = ninetyDaysAgo;
+      }
+
+      // Build a map of date -> { confirmed, completed, expired }
+      const dateMap: Record<string, { confirmed: number; completed: number; expired: number }> = {};
+
+      // Pre-fill days from chartStart to now
+      for (let d = new Date(chartStart); d <= now; d.setDate(d.getDate() + 1)) {
+        const key = d.toISOString().split('T')[0];
+        dateMap[key] = { confirmed: 0, completed: 0, expired: 0 };
+      }
+
+      // Count bookings by their stay range — each booking counts for every day between check-in and check-out
+      allBookings.forEach((b) => {
+        if (!b.checkInDate || !b.checkOutDate) return;
+        const checkIn = new Date(b.checkInDate);
+        const checkOut = new Date(b.checkOutDate);
+        
+        for (let d = new Date(checkIn); d < checkOut; d.setDate(d.getDate() + 1)) {
+          const key = d.toISOString().split('T')[0];
+          if (dateMap[key]) {
+            if (b.status === 'CONFIRMED') dateMap[key].confirmed++;
+            else if (b.status === 'COMPLETED') dateMap[key].completed++;
+            else if (b.status === 'EXPIRED') dateMap[key].expired++;
+          }
+        }
+      });
+
+      // Convert to array sorted by date
+      const data = Object.entries(dateMap)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, counts]) => ({
+          date: new Date(date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }),
+          ...counts,
+        }));
+
+      setChartData(data);
+    } catch (err) {
+      // Chart is non-critical, don't block the page
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchChartData();
+  }, [fetchChartData]);
+
+  const fetchBookings = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+
+      const requests: Promise<any>[] = [
+        bookingsService.getBookings({
+          page: confirmedPage,
+          limit: pageSize,
+          status: 'CONFIRMED',
+          search: searchInput || undefined,
+        }),
+        bookingsService.getBookings({
+          page: completedPage,
+          limit: pageSize,
+          status: 'COMPLETED',
+          search: searchInput || undefined,
+        }),
+      ];
+
+      if (showExpired) {
+        requests.push(
+          bookingsService.getBookings({
+            page: expiredPage,
+            limit: pageSize,
+            status: 'EXPIRED',
+            search: searchInput || undefined,
+          })
+        );
+      }
+
+      const results = await Promise.all(requests);
+
+      if (results[0].success) {
+        setConfirmedBookings(results[0].data);
+        setConfirmedTotal(results[0].pagination.total);
+      }
+      if (results[1].success) {
+        setCompletedBookings(results[1].data);
+        setCompletedTotal(results[1].pagination.total);
+      }
+      if (showExpired && results[2]?.success) {
+        setExpiredBookings(results[2].data);
+        setExpiredTotal(results[2].pagination.total);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [confirmedPage, completedPage, expiredPage, searchInput, showExpired]);
 
   useEffect(() => {
     fetchBookings();
-  }, [pagination.page, filters.status, filters.serviceType, filters.bookingSource]);
-
-  // Timer for updating hold expiry countdowns
-  useEffect(() => {
-    const hasPendingPayment = list.some(
-      (b: any) => b.status === 'PENDING' && b.paymentStatus !== 'PAID' && b.holdExpiresAt
-    );
-    
-    if (hasPendingPayment) {
-      const interval = setInterval(() => {
-        setTick((t) => t + 1);
-      }, 1000);
-      return () => clearInterval(interval);
-    }
-  }, [list]);
-
-  const fetchBookings = async () => {
-    try {
-      dispatch(setLoading(true));
-      dispatch(setError(null));
-
-      const response = await bookingsService.getBookings({
-        page: pagination.page,
-        limit: pagination.limit,
-        search: filters.search || undefined,
-        status: filters.status || undefined,
-        serviceType: filters.serviceType || undefined,
-        bookingSource: filters.bookingSource || undefined,
-        dateRangeStart: filters.dateRange.from || undefined,
-        dateRangeEnd: filters.dateRange.to || undefined,
-        amountRangeMin: filters.amountRange.min || undefined,
-        amountRangeMax: filters.amountRange.max || undefined,
-      });
-
-      if (response.success) {
-        dispatch(setList(response.data));
-        dispatch(
-          setPagination({
-            page: response.pagination.page,
-            limit: response.pagination.limit,
-            total: response.pagination.total,
-            totalPages: response.pagination.totalPages,
-          })
-        );
-      } else {
-        dispatch(setError('Failed to fetch bookings'));
-      }
-    } catch (err) {
-      dispatch(setError(err instanceof Error ? err.message : 'An error occurred'));
-    } finally {
-      dispatch(setLoading(false));
-    }
-  };
-
-  const handleSearch = (value: string) => {
-    setSearchInput(value);
-    dispatch(setFilters({ search: value }));
-  };
-
-  const handleStatusFilter = (status: string | null) => {
-    dispatch(setFilters({ status }));
-    dispatch(setPagination({ page: 1 }));
-  };
-
-  const handleServiceTypeFilter = (serviceType: string | null) => {
-    dispatch(setFilters({ serviceType }));
-    dispatch(setPagination({ page: 1 }));
-  };
-
-  const handleBookingSourceFilter = (bookingSource: string | null) => {
-    dispatch(setFilters({ bookingSource }));
-    dispatch(setPagination({ page: 1 }));
-  };
-
-  // Count broker bookings pending payment
-  const brokerPendingPayment = list.filter(
-    (b: any) => b.bookingSource === 'AGENT' && b.status === 'PENDING' && b.paymentStatus !== 'PAID'
-  ).length;
+  }, [fetchBookings]);
 
   const columns: Column<BookingRow>[] = [
-    { key: 'id', label: 'Booking ID', sortable: true },
+    { 
+      key: 'id', 
+      label: 'Booking Ref', 
+      sortable: true,
+      render: (value, row) => (
+        <span className="font-mono text-sm font-medium">{row.bookingRef || value}</span>
+      ),
+    },
     { key: 'customerName', label: 'Customer', sortable: true },
-    { key: 'serviceType', label: 'Service Type', sortable: true },
-    { key: 'serviceName', label: 'Service Name', sortable: true },
-    { 
-      key: 'bookingDate', 
-      label: 'Booking Date', 
+    {
+      key: 'serviceName',
+      label: 'Hotel',
       sortable: true,
-      render: (value) => new Date(value).toLocaleDateString()
+      render: (value, row) => (
+        <div>
+          <div className="font-medium">{row.hotelName || value}</div>
+          {row.hotelCity && (
+            <div className="text-xs text-gray-500">{row.hotelCity}, {row.hotelCountry}</div>
+          )}
+        </div>
+      ),
     },
-    { 
-      key: 'status', 
-      label: 'Status', 
+    {
+      key: 'status',
+      label: 'Status',
       sortable: true,
-      render: (value, row) => {
-        const isPendingPayment = row.status === 'PENDING' && row.paymentStatus !== 'PAID';
-        const holdTime = isPendingPayment ? getHoldTimeRemaining(row.holdExpiresAt) : null;
-
+      render: (value) => {
+        const statusConfig: Record<string, { label: string; className: string }> = {
+          CONFIRMED: { label: 'Confirmed', className: 'bg-blue-100 text-blue-800' },
+          COMPLETED: { label: 'Completed', className: 'bg-green-100 text-green-800' },
+          EXPIRED: { label: 'Expired', className: 'bg-gray-100 text-gray-600' },
+          PENDING: { label: 'Pending', className: 'bg-yellow-100 text-yellow-800' },
+          CANCELLED: { label: 'Cancelled', className: 'bg-red-100 text-red-800' },
+          REFUNDED: { label: 'Refunded', className: 'bg-purple-100 text-purple-800' },
+        };
+        const config = statusConfig[value] || { label: value, className: 'bg-gray-100 text-gray-800' };
         return (
-          <div>
-            <span
-              className={`px-2 py-1 rounded-full text-xs font-medium ${
-                row.status === 'COMPLETED'
-                  ? 'bg-green-100 text-green-800'
-                  : row.status === 'CANCELLED'
-                  ? 'bg-red-100 text-red-800'
-                  : row.status === 'PENDING'
-                  ? 'bg-yellow-100 text-yellow-800'
-                  : row.status === 'COMPLETED'
-                  ? 'bg-blue-100 text-blue-800'
-                  : 'bg-gray-100 text-gray-800'
-              }`}
-            >
-              {isPendingPayment ? 'Pending Payment' : row.status}
-            </span>
-            {holdTime && (
-              <div
-                className={`text-xs mt-1 flex items-center gap-1 ${
-                  holdTime.isExpired ? 'text-red-600' : 'text-orange-600'
-                }`}
-              >
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                {holdTime.isExpired ? 'Hold Expired' : `Hold: ${holdTime.text}`}
-              </div>
-            )}
-          </div>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.className}`}>
+            {config.label}
+          </span>
         );
-      }
+      },
     },
-    { 
-      key: 'paymentStatus', 
-      label: 'Payment', 
+    {
+      key: 'checkInDate',
+      label: 'Check-in',
+      sortable: true,
+      render: (value) => value ? new Date(value).toLocaleDateString() : '—',
+    },
+    {
+      key: 'checkOutDate',
+      label: 'Check-out',
+      sortable: true,
+      render: (value) => value ? new Date(value).toLocaleDateString() : '—',
+    },
+    {
+      key: 'nights',
+      label: 'Nights',
+      sortable: true,
+      render: (value) => value || '—',
+    },
+    {
+      key: 'paymentStatus',
+      label: 'Payment',
       sortable: true,
       render: (value) => {
         const status = value || 'PENDING';
@@ -189,7 +250,9 @@ export default function BookingsPage() {
             className={`px-2 py-1 rounded-full text-xs font-medium ${
               status === 'PAID'
                 ? 'bg-green-100 text-green-800'
-                : status === 'REFUNDED'
+                : status === 'PARTIAL_REFUND'
+                ? 'bg-purple-100 text-purple-800'
+                : status === 'FULLY_REFUNDED'
                 ? 'bg-purple-100 text-purple-800'
                 : status === 'FAILED'
                 ? 'bg-red-100 text-red-800'
@@ -199,127 +262,145 @@ export default function BookingsPage() {
             {status}
           </span>
         );
-      }
+      },
     },
-    { 
-      key: 'totalAmount', 
-      label: 'Amount', 
+    {
+      key: 'totalAmount',
+      label: 'Amount',
       sortable: true,
-      render: (value, row) => `${row.currency} ${Number(value).toFixed(2)}`
+      render: (value, row) => `${row.currency} ${Number(value).toFixed(2)}`,
     },
-    { 
-      key: 'bookingSource', 
-      label: 'Source', 
+    {
+      key: 'bookingSource',
+      label: 'Source',
       sortable: true,
-      render: (value, row) => {
+      render: (value) => {
         const source = value || 'DIRECT';
-        const sourceConfig: Record<string, { label: string; icon: string; className: string }> = {
-          AGENT: { label: 'Broker', icon: '🧑‍💼', className: 'bg-purple-100 text-purple-800' },
-          ADMIN: { label: 'Admin', icon: '👤', className: 'bg-blue-100 text-blue-800' },
-          API: { label: 'API', icon: '🔌', className: 'bg-orange-100 text-orange-800' },
-          DIRECT: { label: 'Direct', icon: '🌐', className: 'bg-gray-100 text-gray-800' },
+        const sourceConfig: Record<string, { label: string; className: string }> = {
+          BROKER: { label: 'Broker', className: 'bg-purple-100 text-purple-800' },
+          AGENT: { label: 'Broker', className: 'bg-purple-100 text-purple-800' },
+          STAFF_CREATED: { label: 'Staff', className: 'bg-blue-100 text-blue-800' },
+          DIRECT: { label: 'Direct', className: 'bg-gray-100 text-gray-800' },
         };
         const config = sourceConfig[source] || sourceConfig.DIRECT;
-
         return (
-          <div>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.className}`}>
-              {config.icon} {config.label}
-            </span>
-            {row.agentName && source === 'AGENT' && (
-              <div className="text-xs text-gray-500 mt-1">{row.agentName}</div>
-            )}
-          </div>
+          <span className={`px-2 py-1 rounded-full text-xs font-medium ${config.className}`}>
+            {config.label}
+          </span>
         );
-      }
+      },
     },
   ];
 
-  if (isLoading && list.length === 0) {
+  if (isLoading && confirmedBookings.length === 0 && completedBookings.length === 0) {
     return <LoadingSpinner />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8 min-w-0 w-full overflow-hidden">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Bookings Management</h1>
-        {brokerPendingPayment > 0 && (
-          <div className="bg-orange-100 text-orange-800 px-4 py-2 rounded-lg flex items-center gap-2">
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span className="font-medium">{brokerPendingPayment} broker booking(s) awaiting payment</span>
-          </div>
-        )}
       </div>
 
       {error && <ErrorMessage message={error} />}
 
-      <div className="bg-white rounded-lg shadow p-6">
-        <div className="space-y-4">
-          <div className="flex flex-wrap gap-4">
-            <input
-              type="text"
-              placeholder="Search bookings..."
-              value={searchInput}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="flex-1 min-w-[200px] px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <select
-              value={filters.status || ''}
-              onChange={(e) => handleStatusFilter(e.target.value || null)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="PENDING">Pending</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-              <option value="REFUNDED">Refunded</option>
-            </select>
-            <select
-              value={filters.serviceType || ''}
-              onChange={(e) => handleServiceTypeFilter(e.target.value || null)}
-              className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="">All Services</option>
-              <option value="HOTEL">Hotel</option>
-              <option value="TAXI">Taxi</option>
-              <option value="EXPERIENCE">Experience</option>
-              <option value="CAR">Car</option>
-              <option value="FOOD">Food</option>
-            </select>
-            <select
-              value={filters.bookingSource || ''}
-              onChange={(e) => handleBookingSourceFilter(e.target.value || null)}
-              className={`px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                filters.bookingSource === 'AGENT'
-                  ? 'border-purple-500 bg-purple-50'
-                  : 'border-gray-300'
-              }`}
-            >
-              <option value="">All Sources</option>
-              <option value="DIRECT">🌐 Direct (Customer)</option>
-              <option value="AGENT">🧑‍💼 Broker Bookings</option>
-              <option value="ADMIN">👤 Admin</option>
-              <option value="API">🔌 API</option>
-            </select>
-          </div>
+      {/* Search */}
+      <div>
+        <input
+          type="text"
+          placeholder="Search by booking ID, customer, or hotel..."
+          value={searchInput}
+          onChange={(e) => {
+            setSearchInput(e.target.value);
+            setConfirmedPage(1);
+            setCompletedPage(1);
+            setExpiredPage(1);
+          }}
+          className="w-full max-w-md px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
 
+      {/* Bookings Chart - 90 Day Overview */}
+      {chartData.length > 0 && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold">Active Bookings — Last {chartData.length} Days</h2>
+          </div>
+          <div className="p-6">
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={chartData} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  interval={Math.max(1, Math.floor(chartData.length / 12))}
+                  tickLine={false}
+                />
+                <YAxis
+                  tick={{ fontSize: 11, fill: '#9ca3af' }}
+                  tickLine={false}
+                  axisLine={false}
+                  allowDecimals={false}
+                />
+                <Tooltip
+                  contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb', fontSize: '13px' }}
+                />
+                <Legend
+                  wrapperStyle={{ fontSize: '13px', paddingTop: '8px' }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="confirmed"
+                  name="Confirmed"
+                  stroke="#3b82f6"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="completed"
+                  name="Completed"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="expired"
+                  name="Expired"
+                  stroke="#9ca3af"
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmed Bookings */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-blue-500 inline-block"></span>
+            Confirmed Bookings
+            <span className="text-sm font-normal text-gray-500">({confirmedTotal})</span>
+          </h2>
+        </div>
+        <div className="p-6 overflow-x-auto">
           <DataTable
             columns={columns}
-            data={list as BookingRow[]}
+            data={confirmedBookings}
             loading={isLoading}
             pagination={{
-              page: pagination.page,
-              limit: pagination.limit,
-              total: pagination.total,
-              onPageChange: (page) => dispatch(setPagination({ page })),
-              onLimitChange: (limit) => dispatch(setPagination({ limit, page: 1 })),
+              page: confirmedPage,
+              limit: pageSize,
+              total: confirmedTotal,
+              onPageChange: (page) => setConfirmedPage(page),
+              onLimitChange: () => {},
             }}
             onRowClick={(row) => {
               window.location.href = `/admin/bookings/${row.id}`;
@@ -327,6 +408,82 @@ export default function BookingsPage() {
             searchable={false}
           />
         </div>
+      </div>
+
+      {/* Completed Bookings */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
+            Completed Bookings
+            <span className="text-sm font-normal text-gray-500">({completedTotal})</span>
+          </h2>
+        </div>
+        <div className="p-6 overflow-x-auto">
+          <DataTable
+            columns={columns}
+            data={completedBookings}
+            loading={isLoading}
+            pagination={{
+              page: completedPage,
+              limit: pageSize,
+              total: completedTotal,
+              onPageChange: (page) => setCompletedPage(page),
+              onLimitChange: () => {},
+            }}
+            onRowClick={(row) => {
+              window.location.href = `/admin/bookings/${row.id}`;
+            }}
+            searchable={false}
+          />
+        </div>
+      </div>
+
+      {/* Expired Bookings - Collapsible */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div
+          className="px-6 py-4 border-b border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors"
+          onClick={() => setShowExpired(!showExpired)}
+        >
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-gray-400 inline-block"></span>
+            Expired Bookings
+            <span className="text-sm font-normal text-gray-500">
+              {showExpired ? `(${expiredTotal})` : '(click to show)'}
+            </span>
+            <svg
+              className={`w-5 h-5 text-gray-400 transition-transform ${showExpired ? 'rotate-180' : ''}`}
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Unpaid bookings past their check-in date
+          </p>
+        </div>
+        {showExpired && (
+          <div className="p-6 overflow-x-auto">
+            <DataTable
+              columns={columns}
+              data={expiredBookings}
+              loading={isLoading}
+              pagination={{
+                page: expiredPage,
+                limit: pageSize,
+                total: expiredTotal,
+                onPageChange: (page) => setExpiredPage(page),
+                onLimitChange: () => {},
+              }}
+              onRowClick={(row) => {
+                window.location.href = `/admin/bookings/${row.id}`;
+              }}
+              searchable={false}
+            />
+          </div>
+        )}
       </div>
     </div>
   );

@@ -10,12 +10,18 @@ import styles from './PaymentSummarySection.module.css';
 
 interface PaymentSummarySectionProps {
   booking: Booking;
+  isHotelManager?: boolean;
 }
 
-const PaymentSummarySection: React.FC<PaymentSummarySectionProps> = ({ booking }) => {
+const PaymentSummarySection: React.FC<PaymentSummarySectionProps> = ({ booking, isHotelManager = false }) => {
   // Calculate refund proportions for tax
   const refundTax = booking.refundAmount && booking.total > 0
     ? (booking.refundAmount / booking.total) * booking.tax
+    : 0;
+
+  const showManasikFee = isHotelManager && booking.manasikFeeAmount > 0;
+  const hotelPayout = showManasikFee
+    ? Math.round((booking.subtotal - booking.manasikFeeAmount) * 100) / 100
     : 0;
 
   return (
@@ -37,6 +43,28 @@ const PaymentSummarySection: React.FC<PaymentSummarySectionProps> = ({ booking }
             </span>
             <span style={{ color: '#dc3545' }}>-{formatCurrency(booking.refundAmount, booking.currency)}</span>
           </div>
+        )}
+
+        {/* Broker Fee (if present) */}
+        {booking.brokerFee && booking.brokerFee > 0 && (
+          <div className={styles.paymentRow}>
+            <span>Broker Fee</span>
+            <span>{formatCurrency(booking.brokerFee, booking.currency)}</span>
+          </div>
+        )}
+
+        {/* Manasik Fee - hotel manager only */}
+        {showManasikFee && (
+          <>
+            <div className={styles.paymentRow}>
+              <span>Manasik Fee ({booking.manasikFeePercent}%)</span>
+              <span style={{ color: '#6f42c1' }}>-{formatCurrency(booking.manasikFeeAmount, booking.currency)}</span>
+            </div>
+            <div className={styles.paymentRow}>
+              <span style={{ fontWeight: 600 }}>Hotel Payout</span>
+              <span style={{ fontWeight: 600, color: '#28a745' }}>{formatCurrency(hotelPayout, booking.currency)}</span>
+            </div>
+          </>
         )}
 
         <div className={styles.paymentRow}>

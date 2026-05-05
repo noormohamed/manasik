@@ -1,38 +1,52 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { hotelsService, Hotel } from '@/services/hotelsService';
 import { DataTable, Column } from '@/components/DataTable';
 import HotelDetailModal from '@/components/Hotels/HotelDetailModal';
 import HotelTransactionChart from '@/components/Hotels/HotelTransactionChart';
 
 export default function HotelsPage() {
-  const [hotels, setHotels] = useState<Hotel[]>([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 25,
-    total: 0,
-  });
-  const [filters, setFilters] = useState({
-    search: '',
-    status: '',
-    city: '',
-    country: '',
-  });
+  const [allHotels, setAllHotels] = useState<Hotel[]>([]);
+  const [pagination, setPagination] = useState({ page: 1, limit: 100, total: 0 });
+  const [filters, setFilters] = useState({ search: '', city: '', country: '' });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [cities, setCities] = useState<string[]>([]);
   const [countries, setCountries] = useState<string[]>([]);
-  
+  const [revenueRange, setRevenueRange] = useState<[number, number]>([0, 100000]);
+  const [maxRevenue, setMaxRevenue] = useState(100000);
+  const [hideZeroRevenue, setHideZeroRevenue] = useState(false);
+
   // Modal state
   const [selectedHotelId, setSelectedHotelId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalInitialTab, setModalInitialTab] = useState<'overview' | 'rooms' | 'bookings' | 'reviews' | 'transactions' | 'amenities'>('overview');
 
+  // Pagination for each list
+  const [enabledPage, setEnabledPage] = useState(1);
+  const [disabledPage, setDisabledPage] = useState(1);
+  const pageSize = 15;
+
+  // Split hotels into enabled and disabled, filtered by revenue
+  const filteredHotels = useMemo(() => {
+    return allHotels.filter((h) => {
+      const rev = Number(h.totalRevenue || 0);
+      if (hideZeroRevenue && rev === 0) return false;
+      return rev >= revenueRange[0] && rev <= revenueRange[1];
+    });
+  }, [allHotels, revenueRange, hideZeroRevenue]);
+
+  const enabledHotels = useMemo(() => filteredHotels.filter((h) => h.status === 'ACTIVE'), [filteredHotels]);
+  const disabledHotels = useMemo(() => filteredHotels.filter((h) => h.status !== 'ACTIVE'), [filteredHotels]);
+
+  const enabledPaged = useMemo(() => enabledHotels.slice((enabledPage - 1) * pageSize, enabledPage * pageSize), [enabledHotels, enabledPage]);
+  const disabledPaged = useMemo(() => disabledHotels.slice((disabledPage - 1) * pageSize, disabledPage * pageSize), [disabledHotels, disabledPage]);
+
   const columns: Column<Hotel>[] = [
-    { 
-      key: 'name', 
-      label: 'Hotel Name', 
+    {
+      key: 'name',
+      label: 'Hotel Name',
       sortable: true,
       render: (value, row) => (
         <div className="flex items-center gap-3">
@@ -48,20 +62,15 @@ export default function HotelsPage() {
         </div>
       ),
     },
-    { 
-      key: 'starRating', 
-      label: 'Stars', 
-      sortable: true, 
+    {
+      key: 'starRating',
+      label: 'Stars',
+      sortable: true,
       width: '100px',
       render: (value) => (
         <div className="flex items-center">
           {Array.from({ length: 5 }, (_, i) => (
-            <svg
-              key={i}
-              className={`w-4 h-4 ${i < value ? 'text-yellow-400' : 'text-gray-300'}`}
-              fill="currentColor"
-              viewBox="0 0 20 20"
-            >
+            <svg key={i} className={`w-4 h-4 ${i < value ? 'text-yellow-400' : 'text-gray-300'}`} fill="currentColor" viewBox="0 0 20 20">
               <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
             </svg>
           ))}
@@ -74,31 +83,15 @@ export default function HotelsPage() {
       sortable: true,
       width: '120px',
       render: (value) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-            value === 'ACTIVE'
-              ? 'bg-green-100 text-green-800'
-              : value === 'SUSPENDED'
-              ? 'bg-red-100 text-red-800'
-              : 'bg-gray-100 text-gray-800'
-          }`}
-        >
-          {value}
-        </span>
+        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+          value === 'ACTIVE' ? 'bg-green-100 text-green-800' :
+          value === 'SUSPENDED' ? 'bg-red-100 text-red-800' :
+          'bg-gray-100 text-gray-800'
+        }`}>{value}</span>
       ),
     },
-    { 
-      key: 'totalRooms', 
-      label: 'Rooms', 
-      sortable: true, 
-      width: '80px',
-    },
-    { 
-      key: 'totalBookings', 
-      label: 'Bookings', 
-      sortable: true, 
-      width: '100px',
-    },
+    { key: 'totalRooms', label: 'Rooms', sortable: true, width: '80px' },
+    { key: 'totalBookings', label: 'Bookings', sortable: true, width: '100px' },
     {
       key: 'totalRevenue',
       label: 'Revenue',
@@ -106,13 +99,10 @@ export default function HotelsPage() {
       width: '120px',
       render: (value, row) => (
         <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleRevenueClick(row);
-          }}
+          onClick={(e) => { e.stopPropagation(); handleRevenueClick(row); }}
           className="text-indigo-600 hover:text-indigo-800 hover:underline font-medium"
         >
-          ${Number(value).toFixed(2)}
+          £{Number(value).toFixed(2)}
         </button>
       ),
     },
@@ -131,50 +121,34 @@ export default function HotelsPage() {
         </div>
       ),
     },
-    { 
-      key: 'companyName', 
-      label: 'Company', 
-      sortable: true,
-    },
+    { key: 'companyName', label: 'Company', sortable: true },
   ];
 
-  // Load hotels on mount and when filters change
-  useEffect(() => {
-    loadHotels();
-  }, [pagination.page, pagination.limit, filters]);
-
-  // Load filter options on mount
-  useEffect(() => {
-    loadFilterOptions();
-  }, []);
+  useEffect(() => { loadHotels(); }, [filters]);
+  useEffect(() => { loadFilterOptions(); }, []);
 
   const loadHotels = async () => {
     setIsLoading(true);
     setError('');
-
     try {
       const response = await hotelsService.getHotels({
-        page: pagination.page,
-        limit: pagination.limit,
+        page: 1, limit: 500,
         search: filters.search || undefined,
-        status: filters.status || undefined,
         city: filters.city || undefined,
         country: filters.country || undefined,
       });
-
       if (response.success) {
-        setHotels(response.data);
-        setPagination({
-          page: response.pagination.page,
-          limit: response.pagination.limit,
-          total: response.pagination.total,
-        });
+        setAllHotels(response.data);
+        setPagination({ page: 1, limit: 500, total: response.pagination.total });
+        const max = Math.max(...response.data.map((h: Hotel) => Number(h.totalRevenue || 0)), 0);
+        const roundedMax = Math.ceil(max / 1000) * 1000 || 100000;
+        setMaxRevenue(roundedMax);
+        setRevenueRange([0, roundedMax]);
       } else {
         setError(response.error || 'Failed to load hotels');
       }
     } catch (err) {
       setError('An error occurred while loading hotels');
-      console.error('Load hotels error:', err);
     } finally {
       setIsLoading(false);
     }
@@ -182,180 +156,160 @@ export default function HotelsPage() {
 
   const loadFilterOptions = async () => {
     try {
-      const [citiesResponse, countriesResponse] = await Promise.all([
-        hotelsService.getCities(),
-        hotelsService.getCountries(),
-      ]);
-
-      if (citiesResponse.success) {
-        setCities(citiesResponse.data);
-      }
-      if (countriesResponse.success) {
-        setCountries(countriesResponse.data);
-      }
-    } catch (err) {
-      console.error('Load filter options error:', err);
-    }
+      const [citiesRes, countriesRes] = await Promise.all([hotelsService.getCities(), hotelsService.getCountries()]);
+      if (citiesRes.success) setCities(citiesRes.data);
+      if (countriesRes.success) setCountries(countriesRes.data);
+    } catch (err) { console.error(err); }
   };
 
-  const handleSearch = (searchTerm: string) => {
-    setFilters({ ...filters, search: searchTerm });
-    setPagination({ ...pagination, page: 1 });
-  };
-
-  const handleStatusFilter = (status: string) => {
-    setFilters({ ...filters, status: status || '' });
-    setPagination({ ...pagination, page: 1 });
-  };
-
-  const handleCityFilter = (city: string) => {
-    setFilters({ ...filters, city: city || '' });
-    setPagination({ ...pagination, page: 1 });
-  };
-
-  const handleCountryFilter = (country: string) => {
-    setFilters({ ...filters, country: country || '' });
-    setPagination({ ...pagination, page: 1 });
-  };
-
-  const handlePageChange = (page: number) => {
-    setPagination({ ...pagination, page });
-  };
-
-  const handleLimitChange = (limit: number) => {
-    setPagination({ ...pagination, page: 1, limit });
-  };
-
-  const handleRowClick = (hotel: Hotel) => {
-    setModalInitialTab('overview');
-    setSelectedHotelId(hotel.id);
-    setIsModalOpen(true);
-  };
-
-  const handleRevenueClick = (hotel: Hotel) => {
-    setModalInitialTab('transactions');
-    setSelectedHotelId(hotel.id);
-    setIsModalOpen(true);
-  };
-
-  const handleModalClose = () => {
-    setIsModalOpen(false);
-    setSelectedHotelId(null);
-  };
-
-  const handleStatusChange = () => {
-    // Reload hotels when status is changed in modal
-    loadHotels();
-  };
-
-  const handleExport = (format: 'csv' | 'json' | 'pdf') => {
-    console.log(`Export as ${format}`);
-  };
+  const handleRowClick = (hotel: Hotel) => { setModalInitialTab('overview'); setSelectedHotelId(hotel.id); setIsModalOpen(true); };
+  const handleRevenueClick = (hotel: Hotel) => { setModalInitialTab('transactions'); setSelectedHotelId(hotel.id); setIsModalOpen(true); };
+  const handleModalClose = () => { setIsModalOpen(false); setSelectedHotelId(null); };
+  const handleStatusChange = () => { loadHotels(); };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">Hotels Management</h1>
-          <p className="mt-2 text-gray-600">View and manage all hotels on the platform</p>
-        </div>
+    <div className="space-y-6 min-w-0 overflow-hidden">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Hotels Management</h1>
+        <p className="mt-2 text-gray-600">View and manage all hotels on the platform</p>
       </div>
 
-      {/* Transaction Charts */}
       <HotelTransactionChart />
 
       {/* Filters */}
       <div className="bg-white rounded-lg shadow p-6 space-y-4">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          {/* Search */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Search</label>
             <input
               type="text"
               placeholder="Hotel name or company..."
               value={filters.search}
-              onChange={(e) => handleSearch(e.target.value)}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
           </div>
-
-          {/* Status Filter */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
-            <select
-              value={filters.status}
-              onChange={(e) => handleStatusFilter(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="ACTIVE">Active</option>
-              <option value="INACTIVE">Inactive</option>
-              <option value="SUSPENDED">Suspended</option>
-            </select>
-          </div>
-
-          {/* City Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">City</label>
-            <select
-              value={filters.city}
-              onChange={(e) => handleCityFilter(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
+            <select value={filters.city} onChange={(e) => setFilters({ ...filters, city: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="">All Cities</option>
-              {cities.map((city) => (
-                <option key={city} value={city}>{city}</option>
-              ))}
+              {cities.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-
-          {/* Country Filter */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Country</label>
-            <select
-              value={filters.country}
-              onChange={(e) => handleCountryFilter(e.target.value)}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
+            <select value={filters.country} onChange={(e) => setFilters({ ...filters, country: e.target.value })} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
               <option value="">All Countries</option>
-              {countries.map((country) => (
-                <option key={country} value={country}>{country}</option>
-              ))}
+              {countries.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Revenue: £{revenueRange[0].toLocaleString()} — £{revenueRange[1].toLocaleString()}
+            </label>
+            <div className="flex items-center gap-3">
+              <input
+                type="range"
+                min={0}
+                max={maxRevenue}
+                step={Math.max(100, Math.floor(maxRevenue / 100))}
+                value={revenueRange[0]}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setRevenueRange([Math.min(val, revenueRange[1]), revenueRange[1]]);
+                }}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              <input
+                type="range"
+                min={0}
+                max={maxRevenue}
+                step={Math.max(100, Math.floor(maxRevenue / 100))}
+                value={revenueRange[1]}
+                onChange={(e) => {
+                  const val = Number(e.target.value);
+                  setRevenueRange([revenueRange[0], Math.max(val, revenueRange[0])]);
+                }}
+                className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+            </div>
+            <label className="flex items-center gap-2 mt-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hideZeroRevenue}
+                onChange={(e) => setHideZeroRevenue(e.target.checked)}
+                className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+              />
+              <span className="text-sm text-gray-600">Hide £0 revenue hotels</span>
+            </label>
           </div>
         </div>
       </div>
 
-      {/* Error Message */}
       {error && (
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-700 text-sm">{error}</p>
         </div>
       )}
 
-      {/* Data Table */}
-      <div className="bg-white rounded-lg shadow">
-        <DataTable
-          columns={columns}
-          data={hotels}
-          loading={isLoading}
-          error={error}
-          pagination={{
-            page: pagination.page,
-            limit: pagination.limit,
-            total: pagination.total,
-            onPageChange: handlePageChange,
-            onLimitChange: handleLimitChange,
-          }}
-          onRowClick={handleRowClick}
-          onExport={handleExport}
-          searchable={false}
-          filterable={true}
-        />
+      {/* Enabled Hotels */}
+      <div className="bg-white rounded-lg shadow overflow-hidden">
+        <div className="px-6 py-4 border-b border-gray-200">
+          <h2 className="text-xl font-semibold flex items-center gap-2">
+            <span className="w-3 h-3 rounded-full bg-green-500 inline-block"></span>
+            Active Hotels
+            <span className="text-sm font-normal text-gray-500">({enabledHotels.length})</span>
+          </h2>
+        </div>
+        <div className="p-4 overflow-x-auto">
+          <DataTable
+            columns={columns}
+            data={enabledPaged}
+            loading={isLoading}
+            pagination={{
+              page: enabledPage,
+              limit: pageSize,
+              total: enabledHotels.length,
+              onPageChange: (p) => setEnabledPage(p),
+              onLimitChange: () => {},
+            }}
+            onRowClick={handleRowClick}
+            searchable={false}
+            filterable={false}
+          />
+        </div>
       </div>
 
-      {/* Hotel Detail Modal */}
+      {/* Disabled Hotels */}
+      {disabledHotels.length > 0 && (
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-xl font-semibold flex items-center gap-2">
+              <span className="w-3 h-3 rounded-full bg-gray-400 inline-block"></span>
+              Inactive / Suspended Hotels
+              <span className="text-sm font-normal text-gray-500">({disabledHotels.length})</span>
+            </h2>
+          </div>
+          <div className="p-4 overflow-x-auto">
+            <DataTable
+              columns={columns}
+              data={disabledPaged}
+              loading={isLoading}
+              pagination={{
+                page: disabledPage,
+                limit: pageSize,
+                total: disabledHotels.length,
+                onPageChange: (p) => setDisabledPage(p),
+                onLimitChange: () => {},
+              }}
+              onRowClick={handleRowClick}
+              searchable={false}
+            filterable={false}
+            />
+          </div>
+        </div>
+      )}
+
       <HotelDetailModal
         hotelId={selectedHotelId}
         isOpen={isModalOpen}

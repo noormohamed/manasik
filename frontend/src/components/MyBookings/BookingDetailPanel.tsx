@@ -87,6 +87,38 @@ const BookingDetailPanel: React.FC<BookingDetailPanelProps> = ({
 
           {/* Guest Information Section */}
           <GuestInformationSection booking={booking} />
+
+          {/* Broker Attribution Section */}
+          {booking.bookingSource === 'BROKER' && booking.agentName && (
+            <div style={{
+              marginTop: 20,
+              padding: 16,
+              background: '#f0f7ff',
+              borderRadius: 10,
+              border: '1px solid #bfdbfe',
+            }}>
+              <h4 style={{
+                margin: '0 0 10px',
+                fontSize: 14,
+                fontWeight: 600,
+                color: '#1e40af',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}>
+                <i className="ri-user-shared-line" style={{ fontSize: 16 }}></i>
+                Booked by
+              </h4>
+              <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 500, color: '#1e3a5f' }}>
+                {booking.agentName}
+              </p>
+              {booking.agentEmail && (
+                <p style={{ margin: 0, fontSize: 13, color: '#4b7bb5' }}>
+                  {booking.agentEmail}
+                </p>
+              )}
+            </div>
+          )}
         </div>
 
         <div className={styles.rightColumn}>

@@ -81,6 +81,10 @@ export interface Booking {
   agentId?: string;
   agentName?: string;
   agentEmail?: string;
+  brokerFee?: number;
+  brokerNotes?: string;
+  manasikFeePercent: number;
+  manasikFeeAmount: number;
   createdAt: string;
   updatedAt: string;
 }

@@ -9,6 +9,7 @@ import { authMiddleware } from '../middleware/auth.middleware';
 import { bookingService } from '../services/booking.service';
 import { paymentLinkService } from '../services/payment-link.service';
 import { getPool } from '../database/connection';
+import { AnalyticsEventEmitter } from '../websocket/analytics-events';
 
 export const staffBookingRoutes = new Router({ prefix: '/staff-bookings' });
 
@@ -133,6 +134,18 @@ staffBookingRoutes.post('/create-on-behalf', authMiddleware, async (ctx: Context
         message: 'Booking created successfully',
       },
     };
+
+    // Emit analytics event for staff booking creation
+    try {
+      AnalyticsEventEmitter.getInstance().emitBookingCreated({
+        bookingId: result.bookingId as any,
+        source: 'STAFF_CREATED',
+        amount: 0, // Amount will be determined when payment is processed
+        status: 'PENDING',
+      });
+    } catch (e) {
+      console.error('Failed to emit booking:created analytics event for staff booking:', e);
+    }
   } catch (error: any) {
     console.error('Error creating booking on behalf:', error);
 

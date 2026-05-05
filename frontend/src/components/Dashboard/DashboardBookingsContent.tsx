@@ -72,6 +72,8 @@ interface Booking {
   agentEmail?: string;
   brokerFee?: number;
   brokerNotes?: string;
+  manasikFeePercent?: number;
+  manasikFeeAmount?: number;
   visibleDates?: string[];
   createdAt: string;
   updatedAt: string;
@@ -224,6 +226,8 @@ const DashboardBookingsContent: React.FC = () => {
         agentEmail: b.agentEmail,
         brokerFee: b.brokerFee || 0,
         brokerNotes: b.brokerNotes || null,
+        manasikFeePercent: b.manasikFeePercent || 0,
+        manasikFeeAmount: b.manasikFeeAmount || 0,
         visibleDates: b.visibleDates || [],
         createdAt: b.createdAt,
         updatedAt: b.updatedAt,
@@ -911,6 +915,16 @@ const DashboardBookingsContent: React.FC = () => {
               <span>Tax</span>
               <span>${formatCurrency(selectedBooking.tax, selectedBooking.currency)}</span>
             </div>
+            ${(selectedBooking as any).manasikFeeAmount > 0 ? `
+            <div class="payment-row" style="background: #f3e8ff; margin: 0 -12px; padding: 8px 12px; border-radius: 4px;">
+              <span style="color: #6f42c1;">🏛️ Manasik Fee (${(selectedBooking as any).manasikFeePercent}%)</span>
+              <span style="color: #6f42c1; font-weight: bold;">-${formatCurrency((selectedBooking as any).manasikFeeAmount, selectedBooking.currency)}</span>
+            </div>
+            <div class="payment-row" style="background: #d4edda; margin: 0 -12px; padding: 8px 12px; border-radius: 4px;">
+              <span style="color: #155724; font-weight: 600;">Hotel Payout</span>
+              <span style="color: #155724; font-weight: bold;">${formatCurrency(selectedBooking.subtotal - (selectedBooking as any).manasikFeeAmount, selectedBooking.currency)}</span>
+            </div>
+            ` : ''}
             <div class="payment-row total">
               <span>Total</span>
               <span style="color: ${selectedBooking.status === 'CANCELLED' || selectedBooking.status === 'REFUNDED' ? '#dc3545' : '#0d6efd'}; ${selectedBooking.refundAmount && selectedBooking.refundAmount >= selectedBooking.total ? 'text-decoration: line-through;' : ''}">
@@ -1604,6 +1618,18 @@ const DashboardBookingsContent: React.FC = () => {
                           <span style={{ color: '#92400e' }}>💼 Broker Fee</span>
                           <strong style={{ color: '#92400e' }}>{formatCurrency((selectedBooking as any).brokerFee, selectedBooking.currency)}</strong>
                         </div>
+                      )}
+                      {(selectedBooking as any).manasikFeeAmount > 0 && (
+                        <>
+                          <div className="d-flex justify-content-between mb-2" style={{ background: '#f3e8ff', margin: '0 -12px', padding: '8px 12px', borderRadius: 4 }}>
+                            <span style={{ color: '#6f42c1' }}>🏛️ Manasik Fee ({(selectedBooking as any).manasikFeePercent}%)</span>
+                            <strong style={{ color: '#6f42c1' }}>-{formatCurrency((selectedBooking as any).manasikFeeAmount, selectedBooking.currency)}</strong>
+                          </div>
+                          <div className="d-flex justify-content-between mb-2" style={{ background: '#d4edda', margin: '0 -12px', padding: '8px 12px', borderRadius: 4 }}>
+                            <span style={{ color: '#155724', fontWeight: 600 }}>Hotel Payout</span>
+                            <strong style={{ color: '#155724' }}>{formatCurrency(selectedBooking.subtotal - (selectedBooking as any).manasikFeeAmount, selectedBooking.currency)}</strong>
+                          </div>
+                        </>
                       )}
                       <hr />
                       <div className="d-flex justify-content-between">

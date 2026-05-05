@@ -10,6 +10,8 @@ import { createApiRouter } from './routes/api.routes';
 import { initializeDatabase } from './database/connection';
 import adminRouter, { initializeAdminRoutes } from './routes/admin.routes';
 import checkoutRouter, { initializeCheckoutRoutes } from './routes/checkout.routes';
+import { createAnalyticsRouter } from './routes/admin-analytics.routes';
+import { AnalyticsWebSocketServer } from './websocket/analytics-ws.server';
 
 dotenv.config();
 
@@ -79,6 +81,11 @@ dbPromise
     app.use(checkoutRouter.routes());
     app.use(checkoutRouter.allowedMethods());
     
+    // Mount analytics router
+    const analyticsRouter = createAnalyticsRouter(db);
+    app.use(analyticsRouter.routes());
+    app.use(analyticsRouter.allowedMethods());
+    
     console.error('🔴 Mounting API router...');
     // Mount API router
     console.error('🔴 About to call createApiRouter with db:', !!db);
@@ -90,6 +97,9 @@ dbPromise
     console.error('🔴 Creating server...');
     // Create server AFTER mounting all routers
     server = http.createServer(app.callback());
+    
+    // Initialize WebSocket server for real-time analytics
+    const analyticsWs = new AnalyticsWebSocketServer(server);
     
     server.listen(PORT, () => {
       console.log(`🚀 API server started on port ${PORT}`);

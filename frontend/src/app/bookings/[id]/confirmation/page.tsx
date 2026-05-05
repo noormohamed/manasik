@@ -100,6 +100,10 @@ const BookingConfirmationPage: React.FC = () => {
         providerName: b.providerName,
         providerReference: b.providerReference,
         providerPhone: b.providerPhone,
+        brokerFee: b.brokerFee || 0,
+        brokerNotes: b.brokerNotes || null,
+        manasikFeePercent: b.manasikFeePercent || 0,
+        manasikFeeAmount: b.manasikFeeAmount || 0,
         createdAt: b.createdAt,
         updatedAt: b.updatedAt,
       };
@@ -558,6 +562,17 @@ const BookingConfirmationPage: React.FC = () => {
                 )}
               </span>
             </div>
+            {booking.brokerFee && booking.brokerFee > 0 && (
+              <div className={styles.paymentRow} style={{ background: '#fef3c7', margin: '0 -16px', padding: '8px 16px', borderRadius: '4px' }}>
+                <span style={{ color: '#92400e' }}>Broker Fee</span>
+                <span style={{ color: '#92400e', fontWeight: 600 }}>
+                  {new Intl.NumberFormat('en-US', {
+                    style: 'currency',
+                    currency: booking.currency || 'USD',
+                  }).format(booking.brokerFee)}
+                </span>
+              </div>
+            )}
             <div className={`${styles.paymentRow} ${styles.total}`}>
               <span>Total</span>
               <span>

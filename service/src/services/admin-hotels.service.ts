@@ -136,6 +136,7 @@ export class AdminHotelsService {
           SUM(total) as total_revenue
         FROM bookings
         WHERE service_type = 'HOTEL'
+          AND status IN ('CONFIRMED', 'COMPLETED')
         GROUP BY JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.hotelId'))
       ) bs ON bs.hotel_id = h.id
       WHERE ${whereClause}
@@ -218,15 +219,15 @@ export class AdminHotelsService {
       [hotelId]
     );
 
-    // Get booking stats
+    // Get booking stats (only count confirmed/completed for revenue)
     const [bookingStats] = await pool.query<any>(
       `SELECT 
         COUNT(*) as totalBookings,
         SUM(CASE WHEN status = 'CONFIRMED' THEN 1 ELSE 0 END) as confirmedBookings,
         SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pendingBookings,
         SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelledBookings,
-        COALESCE(SUM(total), 0) as totalRevenue,
-        COALESCE(AVG(total), 0) as averageBookingValue
+        COALESCE(SUM(CASE WHEN status IN ('CONFIRMED', 'COMPLETED') THEN total ELSE 0 END), 0) as totalRevenue,
+        COALESCE(AVG(CASE WHEN status IN ('CONFIRMED', 'COMPLETED') THEN total ELSE NULL END), 0) as averageBookingValue
       FROM bookings
       WHERE service_type = 'HOTEL'
         AND JSON_UNQUOTE(JSON_EXTRACT(metadata, '$.hotelId')) = ?`,
@@ -374,7 +375,7 @@ export class AdminHotelsService {
         dateFormat = '%Y-%m-%d'; // Year-Month-Day
     }
 
-    // Get revenue by date
+    // Get revenue by date (only confirmed/completed)
     const [revenueByDate] = await pool.query<any>(
       `SELECT 
         DATE_FORMAT(b.created_at, ?) as date,
@@ -382,13 +383,14 @@ export class AdminHotelsService {
         COUNT(*) as bookings
       FROM bookings b
       WHERE b.service_type = 'HOTEL'
+        AND b.status IN ('CONFIRMED', 'COMPLETED')
         AND b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
       GROUP BY DATE_FORMAT(b.created_at, ?)
       ORDER BY date ASC`,
       [dateFormat, days, dateFormat]
     );
 
-    // Get revenue by hotel (top 10)
+    // Get revenue by hotel (top 10, only confirmed/completed)
     const [revenueByHotel] = await pool.query<any>(
       `SELECT 
         COALESCE(h.name, 'Unknown Hotel') as hotelName,
@@ -397,6 +399,7 @@ export class AdminHotelsService {
       FROM bookings b
       LEFT JOIN hotels h ON JSON_UNQUOTE(JSON_EXTRACT(b.metadata, '$.hotelId')) = h.id
       WHERE b.service_type = 'HOTEL'
+        AND b.status IN ('CONFIRMED', 'COMPLETED')
         AND b.created_at >= DATE_SUB(NOW(), INTERVAL ? DAY)
       GROUP BY h.id, h.name
       ORDER BY revenue DESC
@@ -407,9 +410,9 @@ export class AdminHotelsService {
     // Get summary statistics
     const [summaryResult] = await pool.query<any>(
       `SELECT 
-        COALESCE(SUM(total), 0) as totalRevenue,
+        COALESCE(SUM(CASE WHEN status IN ('CONFIRMED', 'COMPLETED') THEN total ELSE 0 END), 0) as totalRevenue,
         COUNT(*) as totalBookings,
-        COALESCE(AVG(total), 0) as averageBookingValue,
+        COALESCE(AVG(CASE WHEN status IN ('CONFIRMED', 'COMPLETED') THEN total ELSE NULL END), 0) as averageBookingValue,
         SUM(CASE WHEN status = 'CONFIRMED' THEN 1 ELSE 0 END) as confirmedBookings,
         SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) as pendingBookings,
         SUM(CASE WHEN status = 'CANCELLED' THEN 1 ELSE 0 END) as cancelledBookings
