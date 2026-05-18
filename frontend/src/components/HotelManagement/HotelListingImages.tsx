@@ -18,10 +18,10 @@ interface HotelListingImagesProps {
   onError?: (error: string) => void;
 }
 
-export const HotelListingImages: React.FC<HotelListingImagesProps> = ({
+export const HotelListingImages = ({
   hotelIdsMd5,
   onError,
-}) => {
+}: HotelListingImagesProps) => {
   const [imagesMap, setImagesMap] = useState<Record<string, HotelImage[]>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

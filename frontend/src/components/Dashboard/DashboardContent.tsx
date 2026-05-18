@@ -12,6 +12,7 @@ import Experiences from "./Experiences";
 import CarForRent from "./CarForRent";
 import Link from "next/link";
 import {usePathname} from "next/navigation";
+import AuthorSidebar from "./AuthorSidebar";
 
 const DashboardContent: React.FC = () => {
   const { user } = useAuth();
