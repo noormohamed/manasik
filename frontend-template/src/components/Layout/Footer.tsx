@@ -137,7 +137,7 @@ const Footer = () => {
                         <i className="ri-mail-fill"></i>
                         <div className="ms-3">
                           <h4>Email:</h4>
-                          <a href="mailto:hello@sado.com">hello@sado.com</a>
+                          <a href="mailto:hello@manasik.co.uk">hello@manasik.co.uk</a>
                         </div>
                       </li>
                       <li className="d-flex">
@@ -159,7 +159,7 @@ const Footer = () => {
       <div className="copy-right-area">
         <div className="container">
           <p>
-            © <span>Sado</span> is Proudly Owned by{" "}
+            © <span>Manasik</span> is Proudly Owned by{" "}
             <a href="https://hibootstrap.com/" target="_blank">
               HiBootstrap
             </a>

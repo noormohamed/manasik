@@ -16,7 +16,7 @@ const WhyChooseUs = () => {
               <div 
                 className="choose-content"
               >
-                <span className="top-title">WHY CHOOSE SADO</span>
+                <span className="top-title">WHY CHOOSE MANASIK</span>
                 <h2>We Recommend Beautiful Destination Every Month</h2>
                 <p>
                   Lorem ipsum dolor sit amet, consectetur adipiscing elit, do

@@ -9,7 +9,7 @@ const ContactUsForm = () => {
         <div className="container">
           <div className="section-title">
             <span className="top-title">CONTACT US</span>
-            <h2>Stay Connected With Sado</h2>
+            <h2>Stay Connected With Manasik</h2>
           </div>
 
           <div className="row">

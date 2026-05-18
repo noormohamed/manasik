@@ -57,17 +57,6 @@ const Welcome = () => {
                   </li>
                 </ul>
 
-                <div className="destination-content-btn">
-                  <Link href="/stay" className="default-btn active">
-                    Browse More
-                  </Link>
-                  <Link
-                    href="/subscription"
-                    className="default-btn text-dark bg-transparent"
-                  >
-                    <span>Get A Free Quote</span>
-                  </Link>
-                </div>
               </div>
             </div>
 

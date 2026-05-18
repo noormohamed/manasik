@@ -61,6 +61,7 @@ export default function RevenueSection({ data }: RevenueSectionProps) {
           label="Average Booking Value"
           value={data.average}
           isCurrency
+          subtitle={`Based on ${data.activeCount || 0} booking${(data.activeCount || 0) !== 1 ? 's' : ''}`}
         />
         <KPICard
           label="Broker Fees"

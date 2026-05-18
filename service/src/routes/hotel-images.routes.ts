@@ -177,19 +177,37 @@ export const createHotelImagesRouter = () => {
 
       const hotelId = (hotelRows as any[])[0].id;
 
-      // Get images
-      const { images, total } = await hotelImagesService.getHotelImages(hotelId, limitNum, offsetNum);
+      // Get total count
+      const [countRows] = await pool.query(
+        'SELECT COUNT(*) as total FROM hotel_images WHERE hotel_id = ?',
+        [hotelId]
+      );
+      const total = (countRows as any[])[0].total;
+
+      // Get images - handle both legacy schema (image_url) and new schema (cdn_url)
+      const [rows] = await pool.query(
+        `SELECT * FROM hotel_images 
+         WHERE hotel_id = ? 
+         ORDER BY display_order ASC
+         LIMIT ? OFFSET ?`,
+        [hotelId, limitNum, offsetNum]
+      );
+
+      const images = (rows as any[]).map(row => ({
+        id: String(row.id),
+        hotelId: row.hotel_id,
+        cdnUrl: row.cdn_url || row.image_url || '',
+        fileName: row.file_name || row.image_url?.split('/').pop() || `image-${row.id}`,
+        fileSize: row.file_size || 0,
+        mimeType: row.mime_type || 'image/jpeg',
+        isPrimary: row.is_primary === 1 || row.is_primary === true || row.display_order === 1,
+        imageNumber: row.image_number || row.display_order || 0,
+        displayOrder: row.display_order || 0,
+        createdAt: row.created_at,
+      }));
 
       ctx.body = {
-        images: images.map(img => ({
-          id: img.id,
-          cdnUrl: img.cdnUrl,
-          fileName: img.fileName,
-          fileSize: img.fileSize,
-          mimeType: img.mimeType,
-          isPrimary: img.isPrimary,
-          createdAt: img.createdAt,
-        })),
+        images,
         pagination: {
           limit: limitNum,
           offset: offsetNum,

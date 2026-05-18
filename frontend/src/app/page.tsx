@@ -1,6 +1,5 @@
 import Navbar from "@/components/Layout/Navbar";
 import DiscoverGreatPlaces from "@/components/Common/DiscoverGreatPlaces";
-import NewsletterForm from "@/components/Common/NewsletterForm";
 import TestimonialSlider from "@/components/Common/TestimonialSlider";
 import TopAuthor from "@/components/Common/TopAuthor";
 import Benefits from "@/components/HomeThree/Benefits";
@@ -25,8 +24,6 @@ export default function Home() {
       <MostPopularPlaces />
 
       <TestimonialSlider />
-
-      <NewsletterForm />
 
       <Footer />
     </>

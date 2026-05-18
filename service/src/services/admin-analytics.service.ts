@@ -19,6 +19,7 @@ export interface AnalyticsResponse {
     bySource: Array<{ source: string; revenue: number }>;
     brokerFees: number;
     totalManasikFees: number;
+    activeCount: number;
   };
   bookings: {
     total: number;
@@ -477,6 +478,7 @@ export class AnalyticsService {
         bySource,
         brokerFees,
         totalManasikFees,
+        activeCount,
       },
       bookings: {
         total: bookingTotal,

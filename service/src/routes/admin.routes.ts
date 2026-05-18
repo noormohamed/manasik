@@ -8,6 +8,7 @@ import { Database } from '../database/connection';
 import { adminAuthService } from '../services/admin-auth.service';
 import { createAdminAuditService } from '../services/admin-audit.service';
 import { AnalyticsEventEmitter } from '../websocket/analytics-events';
+import { taxService } from '../services/payments/tax.service';
 
 const router = new Router({ prefix: '/api/admin' });
 
@@ -1727,6 +1728,145 @@ router.put('/settings/rebate', async (ctx: any) => {
       success: false,
       error: 'Internal server error',
     };
+  }
+});
+
+// ─── Tax Rates Management ─────────────────────────────────────────────────────
+
+/**
+ * GET /api/admin/settings/tax-rates
+ * Get all territory-based tax rates
+ */
+router.get('/settings/tax-rates', async (ctx: any) => {
+  try {
+    const rates = taxService.getAllTaxRates();
+    ctx.body = {
+      success: true,
+      data: { taxRates: rates },
+    };
+  } catch (error) {
+    console.error('Get tax rates error:', error);
+    ctx.status = 500;
+    ctx.body = { success: false, error: 'Internal server error' };
+  }
+});
+
+/**
+ * PUT /api/admin/settings/tax-rates
+ * Update a tax rate for a specific territory (or create if it doesn't exist)
+ */
+router.put('/settings/tax-rates', async (ctx: any) => {
+  try {
+    const { territory, rate, description } = ctx.request.body as {
+      territory: string;
+      rate: number;
+      description?: string;
+    };
+
+    if (!territory || typeof territory !== 'string' || territory.trim().length === 0) {
+      ctx.status = 400;
+      ctx.body = { success: false, error: 'Territory code is required' };
+      return;
+    }
+
+    if (rate === undefined || rate < 0 || rate > 1) {
+      ctx.status = 400;
+      ctx.body = { success: false, error: 'Rate must be between 0 and 1 (e.g., 0.20 for 20%)' };
+      return;
+    }
+
+    taxService.setTaxRate(territory.trim().toUpperCase(), rate, description);
+
+    // Persist to platform_settings as JSON
+    const allRates = taxService.getAllTaxRates();
+    await db.query(
+      `INSERT INTO platform_settings (setting_key, setting_value, updated_at)
+       VALUES ('tax_rates', ?, NOW())
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()`,
+      [JSON.stringify(allRates)]
+    );
+
+    // Audit log
+    const authHeader = ctx.get('authorization');
+    const token = adminAuthService.extractToken(authHeader);
+    const payload = token ? adminAuthService.verifyAccessToken(token) : null;
+
+    if (payload && auditService) {
+      await auditService.logAction({
+        admin_user_id: payload.adminUserId,
+        action_type: 'UPDATE',
+        entity_type: 'SETTING',
+        entity_id: `tax_rate_${territory.trim().toUpperCase()}`,
+        reason: `Tax rate for ${territory.trim().toUpperCase()} updated to ${(rate * 100).toFixed(2)}%`,
+        ip_address: ctx.ip,
+        user_agent: ctx.get('user-agent'),
+      });
+    }
+
+    ctx.body = {
+      success: true,
+      data: { territory: territory.trim().toUpperCase(), rate, description },
+    };
+  } catch (error) {
+    console.error('Update tax rate error:', error);
+    ctx.status = 500;
+    ctx.body = { success: false, error: 'Internal server error' };
+  }
+});
+
+/**
+ * DELETE /api/admin/settings/tax-rates/:territory
+ * Remove a tax rate for a specific territory
+ */
+router.delete('/settings/tax-rates/:territory', async (ctx: any) => {
+  try {
+    const territory = ctx.params.territory?.toUpperCase();
+
+    if (!territory) {
+      ctx.status = 400;
+      ctx.body = { success: false, error: 'Territory code is required' };
+      return;
+    }
+
+    const removed = taxService.removeTaxRate(territory);
+
+    if (!removed) {
+      ctx.status = 404;
+      ctx.body = { success: false, error: `No tax rate found for territory: ${territory}` };
+      return;
+    }
+
+    // Persist to platform_settings
+    const allRates = taxService.getAllTaxRates();
+    await db.query(
+      `INSERT INTO platform_settings (setting_key, setting_value, updated_at)
+       VALUES ('tax_rates', ?, NOW())
+       ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value), updated_at = NOW()`,
+      [JSON.stringify(allRates)]
+    );
+
+    // Audit log
+    const authHeader = ctx.get('authorization');
+    const token = adminAuthService.extractToken(authHeader);
+    const payload = token ? adminAuthService.verifyAccessToken(token) : null;
+
+    if (payload && auditService) {
+      await auditService.logAction({
+        admin_user_id: payload.adminUserId,
+        action_type: 'DELETE',
+        entity_type: 'SETTING',
+        entity_id: `tax_rate_${territory}`,
+        reason: `Tax rate for ${territory} removed`,
+        ip_address: ctx.ip,
+        user_agent: ctx.get('user-agent'),
+      });
+    }
+
+    ctx.body = { success: true, data: { territory, removed: true } };
+  } catch (error) {
+    console.error('Delete tax rate error:', error);
+    ctx.status = 500;
+    ctx.body = { success: false, error: 'Internal server error' };
   }
 });
 

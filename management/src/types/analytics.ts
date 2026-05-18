@@ -28,6 +28,7 @@ export interface RevenueMetrics {
   bySource: SourceRevenue[];
   brokerFees: number;
   totalManasikFees: number;
+  activeCount: number;
 }
 
 export interface DailyRevenue {

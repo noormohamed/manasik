@@ -36,7 +36,7 @@ const Benefits: React.FC = () => {
             className="section-title"
           >
             <span className="top-title">BENEFITS</span>
-            <h2>Sado is a World Leading Online Booking Platform</h2>
+            <h2>Manasik is a World Leading Online Booking Platform</h2>
           </div>
 
           {benefitsData && (

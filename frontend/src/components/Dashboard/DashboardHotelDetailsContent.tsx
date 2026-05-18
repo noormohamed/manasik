@@ -9,6 +9,7 @@ import Link from 'next/link';
 import HotelRulesEditor from './HotelRulesEditor';
 import HotelScoringEditor from './HotelScoringEditor';
 import BookingStatistics from './BookingStatistics';
+import HotelImagesTab from './HotelImagesTab';
 import { CustomPolicy } from '@/types/hotel-policies';
 import { ScoringData, defaultScoringData, walkingTimeToScore } from '@/types/scoring';
 
@@ -70,7 +71,7 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
   const [rooms, setRooms] = useState<Room[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'rooms' | 'bookings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'rooms' | 'bookings' | 'images'>('overview');
   
   // Edit room modal state
   const [showEditModal, setShowEditModal] = useState(false);
@@ -509,6 +510,14 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
                   Bookings
                 </button>
               </li>
+              <li className="nav-item">
+                <button
+                  className={`nav-link ${activeTab === 'images' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('images')}
+                >
+                  Images
+                </button>
+              </li>
             </ul>
 
             {/* Tab Content */}
@@ -649,6 +658,10 @@ const DashboardHotelDetailsContent: React.FC<DashboardHotelDetailsContentProps> 
                   <BookingStatistics hotelId={hotelId} />
                 </div>
               </div>
+            )}
+
+            {activeTab === 'images' && (
+              <HotelImagesTab hotelId={hotelId} />
             )}
           </div>
         </div>

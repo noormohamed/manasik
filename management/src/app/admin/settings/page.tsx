@@ -21,6 +21,12 @@ interface Weights {
   userReviews: number;
 }
 
+interface TaxRate {
+  territory: string;
+  rate: number;
+  description?: string;
+}
+
 const DEFAULT_WEIGHTS: Weights = {
   location: 35,
   pilgrimSuitability: 25,
@@ -53,6 +59,18 @@ export default function SettingsPage() {
   const [weightsError, setWeightsError] = useState<string | null>(null);
   const [weightsSaved, setWeightsSaved] = useState(false);
 
+  // Tax rates state
+  const [taxRates, setTaxRates] = useState<TaxRate[]>([]);
+  const [taxLoading, setTaxLoading] = useState(true);
+  const [taxSaving, setTaxSaving] = useState(false);
+  const [taxError, setTaxError] = useState<string | null>(null);
+  const [taxSaved, setTaxSaved] = useState(false);
+  const [newTaxTerritory, setNewTaxTerritory] = useState('');
+  const [newTaxRate, setNewTaxRate] = useState('');
+  const [newTaxDescription, setNewTaxDescription] = useState('');
+  const [editingTerritory, setEditingTerritory] = useState<string | null>(null);
+  const [editRate, setEditRate] = useState('');
+
   const weightTotal = Object.values(weights).reduce((a, b) => a + b, 0);
   const weightsValid = Math.abs(weightTotal - 100) < 0.01;
 
@@ -81,6 +99,19 @@ export default function SettingsPage() {
       }
     };
     fetchRebate();
+
+    const fetchTaxRates = async () => {
+      try {
+        const res: any = await apiClient.get('/api/admin/settings/tax-rates');
+        const rates = res?.taxRates ?? res?.data?.taxRates;
+        if (rates) setTaxRates(rates);
+      } catch {
+        // Use empty array if fetch fails
+      } finally {
+        setTaxLoading(false);
+      }
+    };
+    fetchTaxRates();
   }, []);
 
   const handleWeightChange = (key: WeightKey, value: string) => {
@@ -127,6 +158,97 @@ export default function SettingsPage() {
       setWeightsError(err?.message || 'Failed to save weights');
     } finally {
       setWeightsSaving(false);
+    }
+  };
+
+  const handleAddTaxRate = async () => {
+    const territory = newTaxTerritory.trim().toUpperCase();
+    const rate = parseFloat(newTaxRate);
+
+    if (!territory) {
+      setTaxError('Territory code is required (e.g., GB, US-NY)');
+      return;
+    }
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      setTaxError('Rate must be between 0 and 100');
+      return;
+    }
+
+    setTaxSaving(true);
+    setTaxError(null);
+    setTaxSaved(false);
+    try {
+      await apiClient.put('/api/admin/settings/tax-rates', {
+        territory,
+        rate: rate / 100, // Convert percentage to decimal
+        description: newTaxDescription.trim() || undefined,
+      });
+      // Update local state
+      setTaxRates(prev => {
+        const existing = prev.findIndex(t => t.territory === territory);
+        if (existing >= 0) {
+          const updated = [...prev];
+          updated[existing] = { territory, rate: rate / 100, description: newTaxDescription.trim() || undefined };
+          return updated;
+        }
+        return [...prev, { territory, rate: rate / 100, description: newTaxDescription.trim() || undefined }];
+      });
+      setNewTaxTerritory('');
+      setNewTaxRate('');
+      setNewTaxDescription('');
+      setTaxSaved(true);
+      setTimeout(() => setTaxSaved(false), 3000);
+    } catch (err: any) {
+      setTaxError(err?.message || 'Failed to save tax rate');
+    } finally {
+      setTaxSaving(false);
+    }
+  };
+
+  const handleUpdateTaxRate = async (territory: string) => {
+    const rate = parseFloat(editRate);
+    if (isNaN(rate) || rate < 0 || rate > 100) {
+      setTaxError('Rate must be between 0 and 100');
+      return;
+    }
+
+    setTaxSaving(true);
+    setTaxError(null);
+    try {
+      const existing = taxRates.find(t => t.territory === territory);
+      await apiClient.put('/api/admin/settings/tax-rates', {
+        territory,
+        rate: rate / 100,
+        description: existing?.description,
+      });
+      setTaxRates(prev => prev.map(t =>
+        t.territory === territory ? { ...t, rate: rate / 100 } : t
+      ));
+      setEditingTerritory(null);
+      setEditRate('');
+      setTaxSaved(true);
+      setTimeout(() => setTaxSaved(false), 3000);
+    } catch (err: any) {
+      setTaxError(err?.message || 'Failed to update tax rate');
+    } finally {
+      setTaxSaving(false);
+    }
+  };
+
+  const handleDeleteTaxRate = async (territory: string) => {
+    if (!confirm(`Remove tax rate for ${territory}?`)) return;
+
+    setTaxSaving(true);
+    setTaxError(null);
+    try {
+      await apiClient.delete(`/api/admin/settings/tax-rates/${territory}`);
+      setTaxRates(prev => prev.filter(t => t.territory !== territory));
+      setTaxSaved(true);
+      setTimeout(() => setTaxSaved(false), 3000);
+    } catch (err: any) {
+      setTaxError(err?.message || 'Failed to delete tax rate');
+    } finally {
+      setTaxSaving(false);
     }
   };
 
@@ -408,6 +530,165 @@ export default function SettingsPage() {
                 {weightsSaving ? 'Saving…' : 'Save Weights'}
               </button>
             </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── Territory Tax Rates ────────────────────────────────────────── */}
+      <div className="border rounded-lg p-6">
+        <div className="mb-4">
+          <h2 className="text-xl font-semibold">Territory Tax Rates</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Configure tax rates applied to bookings based on the hotel&apos;s territory.
+            Rates are matched by exact territory code first (e.g., US-NY), then fall back to country code (e.g., US).
+          </p>
+        </div>
+
+        {taxLoading ? (
+          <p className="text-sm text-gray-400">Loading tax rates…</p>
+        ) : (
+          <div className="space-y-4">
+            {/* Current rates table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left">
+                    <th className="pb-2 font-medium text-gray-600">Territory</th>
+                    <th className="pb-2 font-medium text-gray-600">Description</th>
+                    <th className="pb-2 font-medium text-gray-600 text-right">Rate</th>
+                    <th className="pb-2 font-medium text-gray-600 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {taxRates.map((tr) => (
+                    <tr key={tr.territory} className="border-b border-gray-100">
+                      <td className="py-2 font-mono text-xs font-medium">{tr.territory}</td>
+                      <td className="py-2 text-gray-500">{tr.description || '—'}</td>
+                      <td className="py-2 text-right">
+                        {editingTerritory === tr.territory ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              step={0.01}
+                              value={editRate}
+                              onChange={(e) => setEditRate(e.target.value)}
+                              className="w-20 px-2 py-1 border rounded text-right text-xs"
+                              autoFocus
+                            />
+                            <span className="text-xs text-gray-500">%</span>
+                          </div>
+                        ) : (
+                          <span className="font-medium">{(tr.rate * 100).toFixed(2)}%</span>
+                        )}
+                      </td>
+                      <td className="py-2 text-right">
+                        {editingTerritory === tr.territory ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => handleUpdateTaxRate(tr.territory)}
+                              disabled={taxSaving}
+                              className="text-xs text-green-600 hover:text-green-800 font-medium"
+                            >
+                              Save
+                            </button>
+                            <button
+                              onClick={() => { setEditingTerritory(null); setEditRate(''); }}
+                              className="text-xs text-gray-500 hover:text-gray-700"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => { setEditingTerritory(tr.territory); setEditRate((tr.rate * 100).toFixed(2)); }}
+                              className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDeleteTaxRate(tr.territory)}
+                              disabled={taxSaving}
+                              className="text-xs text-red-600 hover:text-red-800 font-medium"
+                            >
+                              Remove
+                            </button>
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                  {taxRates.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="py-4 text-center text-gray-400">
+                        No tax rates configured
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Add new rate */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Add / Update Territory Rate</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Territory Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., GB, US-NY"
+                    value={newTaxTerritory}
+                    onChange={(e) => setNewTaxTerritory(e.target.value.toUpperCase())}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Rate (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={0.01}
+                    placeholder="e.g., 20"
+                    value={newTaxRate}
+                    onChange={(e) => setNewTaxRate(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Description (optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g., United Kingdom"
+                    value={newTaxDescription}
+                    onChange={(e) => setNewTaxDescription(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-md text-sm"
+                  />
+                </div>
+                <div className="flex items-end">
+                  <button
+                    onClick={handleAddTaxRate}
+                    disabled={taxSaving || !newTaxTerritory || !newTaxRate}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                  >
+                    {taxSaving ? 'Saving…' : 'Add Rate'}
+                  </button>
+                </div>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                If a territory already exists, it will be updated with the new rate.
+              </p>
+            </div>
+
+            {taxError && (
+              <p className="text-sm text-red-600">{taxError}</p>
+            )}
+            {taxSaved && (
+              <p className="text-sm text-green-600">Tax rate saved successfully.</p>
+            )}
           </div>
         )}
       </div>

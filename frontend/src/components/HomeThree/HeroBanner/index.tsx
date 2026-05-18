@@ -66,17 +66,6 @@ const HeroBanner = () => {
                     ipsum nec sagittis sem nibh id elit dolore
                   </p>
 
-                  <div className="banner-btn">
-                    <Link href="/stay" className="default-btn active rounded-10">
-                      Start Your Search
-                    </Link>
-                    <Link
-                      href="/subscription"
-                      className="default-btn rounded-10 bg-transparent"
-                    >
-                      <span>Get Price</span>
-                    </Link>
-                  </div>
                 </div>
 
                 {/* BookingSearchForm */}

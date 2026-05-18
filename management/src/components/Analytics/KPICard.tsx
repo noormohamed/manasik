@@ -17,6 +17,8 @@ export interface KPICardProps {
   decimals?: number;
   /** Show a loading skeleton instead of the value */
   loading?: boolean;
+  /** Optional subtitle text shown in light grey below the value */
+  subtitle?: string;
 }
 
 export default function KPICard({
@@ -27,6 +29,7 @@ export default function KPICard({
   trend,
   decimals = 1,
   loading = false,
+  subtitle,
 }: KPICardProps) {
   const formattedValue = isCurrency
     ? formatGBP(value)
@@ -63,6 +66,9 @@ export default function KPICard({
           )}
           <span className="ml-1 text-gray-400">vs prev. period</span>
         </div>
+      )}
+      {subtitle && (
+        <p className="text-xs text-gray-400 mt-2">{subtitle}</p>
       )}
     </div>
   );

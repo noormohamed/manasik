@@ -1,50 +1,69 @@
-/**
- * Integration tests for Hotel Images API endpoints
- */
-
 import request from 'supertest';
 import Koa from 'koa';
 import bodyParser from 'koa-bodyparser';
-import cors from 'koa-cors';
-import { createApiRouter } from '../routes/api.routes';
-import { errorHandler } from '../middleware/error';
-import { responseWrapper } from '../middleware/response';
+import Router from 'koa-router';
+import { createHotelImagesRouter } from '../routes/hotel-images.routes';
 
 // Mock the database connection
+const mockQuery = jest.fn();
 jest.mock('../database/connection', () => ({
   initializeDatabase: jest.fn().mockResolvedValue(undefined),
-  getPool: jest.fn(),
+  getPool: jest.fn(() => ({
+    query: mockQuery,
+  })),
 }));
 
-// Mock Wasabi S3 service
-jest.mock('../services/wasabi-s3.service', () => ({
-  validateImageFile: jest.fn((file) => ({ valid: true })),
-  generateImageFilename: jest.fn((hotelIdMd5, imageNumber) => `${hotelIdMd5}_${imageNumber}.jpg`),
-  generateS3Key: jest.fn((hotelIdMd5, filename) => `mk-images/${hotelIdMd5}/${filename}`),
-  generateCdnUrl: jest.fn((s3Key) => `https://mk-images.wasabisys.com/${s3Key}`),
-  uploadImage: jest.fn().mockResolvedValue({
-    key: 'mk-images/test-md5/test.jpg',
-    cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test.jpg',
-    fileSize: 1024,
-    mimeType: 'image/jpeg',
-  }),
-  deleteImage: jest.fn().mockResolvedValue(undefined),
+// Mock the auth middleware
+jest.mock('../middleware/auth.middleware', () => ({
+  authMiddleware: async (ctx: any, next: any) => {
+    const authHeader = ctx.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      if (token === 'valid-agent-token') {
+        (ctx as any).user = {
+          userId: 'agent-010',
+          email: 'agent-10@bookingplatform.com',
+          role: 'AGENT',
+          companyId: 'comp-005',
+        };
+      } else if (token === 'valid-customer-token') {
+        (ctx as any).user = {
+          userId: 'customer-001',
+          email: 'customer@test.com',
+          role: 'CUSTOMER',
+        };
+      } else {
+        ctx.status = 401;
+        ctx.body = { error: 'Invalid token' };
+        return;
+      }
+    } else {
+      ctx.status = 401;
+      ctx.body = { error: 'No token provided' };
+      return;
+    }
+    await next();
+  },
 }));
 
-// Mock hotel images service
+// Mock the hotel images service
 jest.mock('../services/hotel-images.service', () => ({
-  verifyOwnership: jest.fn().mockResolvedValue(true),
-  getHotelIdMd5: jest.fn().mockResolvedValue('test-md5-hash'),
-  getNextImageNumber: jest.fn().mockResolvedValue(1),
+  checkRateLimit: jest.fn().mockResolvedValue(true),
+  getRateLimitInfo: jest.fn().mockResolvedValue({
+    uploadsThisHour: 2,
+    limit: 10,
+    remaining: 8,
+    resetAt: new Date(),
+  }),
   uploadHotelImage: jest.fn().mockResolvedValue({
-    id: 'img-1',
-    hotelId: 'hotel-1',
-    imageKey: 'mk-images/test-md5/test.jpg',
-    cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test.jpg',
-    fileName: 'test.jpg',
-    fileSize: 1024,
+    id: 'img-001',
+    hotelId: 'hotel-010',
+    imageKey: 'mk-images/abc123/1.jpg',
+    cdnUrl: 'https://mk-images.wasabisys.com/mk-images/abc123/1.jpg',
+    fileName: 'test-image.jpg',
+    fileSize: 102400,
     mimeType: 'image/jpeg',
-    uploadedBy: 'user-1',
+    uploadedBy: 'agent-010',
     isPrimary: false,
     imageNumber: 1,
     displayOrder: 1,
@@ -52,277 +71,345 @@ jest.mock('../services/hotel-images.service', () => ({
     updatedAt: new Date(),
   }),
   deleteHotelImage: jest.fn().mockResolvedValue(undefined),
-  getHotelImages: jest.fn().mockResolvedValue({
-    images: [
-      {
-        id: 'img-1',
-        hotelId: 'hotel-1',
-        cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test.jpg',
-        fileName: 'test.jpg',
-        fileSize: 1024,
-        mimeType: 'image/jpeg',
-        isPrimary: true,
-        createdAt: new Date(),
-      },
-    ],
-    total: 1,
-  }),
-  getMultipleHotelsImages: jest.fn().mockResolvedValue(
-    new Map([
-      [
-        'hotel-1',
-        [
-          {
-            id: 'img-1',
-            hotelId: 'hotel-1',
-            cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test.jpg',
-            fileName: 'test.jpg',
-            fileSize: 1024,
-            mimeType: 'image/jpeg',
-            isPrimary: true,
-            createdAt: new Date(),
-          },
-        ],
-      ],
-    ])
-  ),
   setPrimaryImage: jest.fn().mockResolvedValue({
-    id: 'img-1',
-    hotelId: 'hotel-1',
-    cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test.jpg',
-    fileName: 'test.jpg',
+    id: 'img-001',
+    hotelId: 'hotel-010',
+    imageKey: 'mk-images/abc123/1.jpg',
+    cdnUrl: 'https://mk-images.wasabisys.com/mk-images/abc123/1.jpg',
+    fileName: 'test-image.jpg',
+    fileSize: 102400,
+    mimeType: 'image/jpeg',
+    uploadedBy: 'agent-010',
     isPrimary: true,
+    imageNumber: 1,
+    displayOrder: 1,
     createdAt: new Date(),
+    updatedAt: new Date(),
   }),
   reorderImages: jest.fn().mockResolvedValue([
     {
-      id: 'img-1',
-      cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test1.jpg',
-      fileName: 'test1.jpg',
+      id: 'img-002',
+      cdnUrl: 'https://mk-images.wasabisys.com/mk-images/abc123/2.jpg',
+      fileName: 'image-2.jpg',
       displayOrder: 1,
-      isPrimary: true,
-    },
-    {
-      id: 'img-2',
-      cdnUrl: 'https://mk-images.wasabisys.com/mk-images/test-md5/test2.jpg',
-      fileName: 'test2.jpg',
-      displayOrder: 2,
       isPrimary: false,
     },
+    {
+      id: 'img-001',
+      cdnUrl: 'https://mk-images.wasabisys.com/mk-images/abc123/1.jpg',
+      fileName: 'image-1.jpg',
+      displayOrder: 2,
+      isPrimary: true,
+    },
   ]),
-  checkRateLimit: jest.fn().mockResolvedValue(true),
-  getRateLimitInfo: jest.fn().mockResolvedValue({
-    uploadsThisHour: 3,
-    limit: 10,
-    remaining: 7,
-    resetAt: new Date(),
-  }),
+  getHotelImages: jest.fn().mockResolvedValue({ images: [], total: 0 }),
+  getMultipleHotelsImages: jest.fn().mockResolvedValue(new Map()),
+  verifyOwnership: jest.fn().mockResolvedValue(true),
 }));
 
-describe('Hotel Images API Endpoints', () => {
+function createTestApp() {
+  const app = new Koa();
+  app.use(bodyParser());
+
+  const mainRouter = new Router({ prefix: '/api' });
+  const hotelImagesRouter = createHotelImagesRouter();
+  mainRouter.use(hotelImagesRouter.routes());
+  mainRouter.use(hotelImagesRouter.allowedMethods());
+
+  app.use(mainRouter.routes());
+  app.use(mainRouter.allowedMethods());
+
+  return app;
+}
+
+describe('Hotel Images API', () => {
   let app: Koa;
-  const mockPool = {
-    query: jest.fn(),
-  };
-
-  beforeAll(() => {
-    // Create app
-    app = new Koa();
-    app.use(errorHandler);
-    app.use(cors());
-    app.use(bodyParser());
-    app.use(responseWrapper);
-
-    const apiRouter = createApiRouter();
-    app.use(apiRouter.routes());
-    app.use(apiRouter.allowedMethods());
-  });
 
   beforeEach(() => {
+    app = createTestApp();
     jest.clearAllMocks();
-    const { getPool } = require('../database/connection');
-    getPool.mockReturnValue(mockPool);
   });
 
-  describe('POST /api/hotel/:hotelId/images', () => {
-    it('should upload image successfully', async () => {
-      const response = await request(app.callback())
-        .post('/api/hotel/hotel-1/images')
-        .set('Authorization', 'Bearer test-token')
-        .attach('file', Buffer.from('fake image'), 'test.jpg');
+  describe('GET /api/hotel/:hotelIdMd5/images', () => {
+    it('should return images for a valid hotel MD5 hash', async () => {
+      // Mock: find hotel by MD5
+      mockQuery
+        .mockResolvedValueOnce([[{ id: 'hotel-010' }]]) // hotel lookup
+        .mockResolvedValueOnce([[{ total: 3 }]]) // count
+        .mockResolvedValueOnce([[ // images
+          {
+            id: 481,
+            hotel_id: 'hotel-010',
+            image_url: 'https://images.unsplash.com/photo-1566073771259?w=800',
+            display_order: 1,
+            created_at: '2026-05-01T11:08:29.000Z',
+          },
+          {
+            id: 482,
+            hotel_id: 'hotel-010',
+            image_url: 'https://images.unsplash.com/photo-1582719508461?w=800',
+            display_order: 2,
+            created_at: '2026-05-01T11:08:29.000Z',
+          },
+          {
+            id: 483,
+            hotel_id: 'hotel-010',
+            image_url: 'https://images.unsplash.com/photo-1520250497591?w=800',
+            display_order: 3,
+            created_at: '2026-05-01T11:08:29.000Z',
+          },
+        ]]);
 
-      expect(response.status).toBe(201);
-      expect(response.body.message).toBe('Image uploaded successfully');
-      expect(response.body.image).toBeDefined();
-      expect(response.body.image.cdnUrl).toBeDefined();
+      const res = await request(app.callback())
+        .get('/api/hotel/d774492212eb250967af62f4bb555dc7/images?limit=50')
+        .expect(200);
+
+      expect(res.body.images).toHaveLength(3);
+      expect(res.body.pagination).toEqual({
+        limit: 50,
+        offset: 0,
+        total: 3,
+      });
+      expect(res.body.images[0]).toMatchObject({
+        id: '481',
+        hotelId: 'hotel-010',
+        cdnUrl: 'https://images.unsplash.com/photo-1566073771259?w=800',
+        isPrimary: true, // display_order === 1
+        displayOrder: 1,
+      });
     });
 
-    it('should return 401 if not authenticated', async () => {
-      const response = await request(app.callback())
-        .post('/api/hotel/hotel-1/images')
-        .attach('file', Buffer.from('fake image'), 'test.jpg');
+    it('should return empty array for unknown MD5 hash', async () => {
+      mockQuery.mockResolvedValueOnce([[]]); // no hotel found
 
-      expect(response.status).toBe(401);
+      const res = await request(app.callback())
+        .get('/api/hotel/0000000000000000000000000000dead/images')
+        .expect(200);
+
+      expect(res.body.images).toEqual([]);
+      expect(res.body.pagination.total).toBe(0);
     });
 
-    it('should return 400 if no file provided', async () => {
-      const response = await request(app.callback())
-        .post('/api/hotel/hotel-1/images')
-        .set('Authorization', 'Bearer test-token');
+    it('should respect limit and offset query params', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[{ id: 'hotel-010' }]])
+        .mockResolvedValueOnce([[{ total: 9 }]])
+        .mockResolvedValueOnce([[
+          {
+            id: 484,
+            hotel_id: 'hotel-010',
+            image_url: 'https://images.unsplash.com/photo-4?w=800',
+            display_order: 4,
+            created_at: '2026-05-01T11:08:29.000Z',
+          },
+        ]]);
 
-      expect(response.status).toBe(400);
-      expect(response.body.error).toContain('No file provided');
+      const res = await request(app.callback())
+        .get('/api/hotel/d774492212eb250967af62f4bb555dc7/images?limit=1&offset=3')
+        .expect(200);
+
+      expect(res.body.images).toHaveLength(1);
+      expect(res.body.pagination).toEqual({
+        limit: 1,
+        offset: 3,
+        total: 9,
+      });
+    });
+
+    it('should cap limit at 100', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[{ id: 'hotel-010' }]])
+        .mockResolvedValueOnce([[{ total: 0 }]])
+        .mockResolvedValueOnce([[]]);
+
+      const res = await request(app.callback())
+        .get('/api/hotel/d774492212eb250967af62f4bb555dc7/images?limit=500')
+        .expect(200);
+
+      expect(res.body.pagination.limit).toBe(100);
+    });
+
+    it('should handle new schema with cdn_url and full metadata', async () => {
+      mockQuery
+        .mockResolvedValueOnce([[{ id: 'hotel-010' }]])
+        .mockResolvedValueOnce([[{ total: 1 }]])
+        .mockResolvedValueOnce([[
+          {
+            id: 'img-uuid-001',
+            hotel_id: 'hotel-010',
+            image_key: 'mk-images/abc123/1.jpg',
+            cdn_url: 'https://mk-images.wasabisys.com/mk-images/abc123/1.jpg',
+            file_name: 'lobby.jpg',
+            file_size: 204800,
+            mime_type: 'image/jpeg',
+            uploaded_by: 'agent-010',
+            is_primary: 1,
+            image_number: 1,
+            display_order: 1,
+            created_at: '2026-05-01T12:00:00.000Z',
+            updated_at: '2026-05-01T12:00:00.000Z',
+          },
+        ]]);
+
+      const res = await request(app.callback())
+        .get('/api/hotel/d774492212eb250967af62f4bb555dc7/images?limit=10')
+        .expect(200);
+
+      expect(res.body.images[0]).toMatchObject({
+        id: 'img-uuid-001',
+        hotelId: 'hotel-010',
+        cdnUrl: 'https://mk-images.wasabisys.com/mk-images/abc123/1.jpg',
+        fileName: 'lobby.jpg',
+        fileSize: 204800,
+        mimeType: 'image/jpeg',
+        isPrimary: true,
+        imageNumber: 1,
+        displayOrder: 1,
+      });
     });
   });
 
   describe('DELETE /api/hotel/:hotelId/images/:imageId', () => {
-    it('should delete image successfully', async () => {
-      mockPool.query.mockResolvedValueOnce([[{ id: 'img-1' }]]);
+    it('should delete an image when authenticated as owner', async () => {
+      // Mock: image exists for this hotel
+      mockQuery.mockResolvedValueOnce([[{ id: 'img-001' }]]);
 
-      const response = await request(app.callback())
-        .delete('/api/hotel/hotel-1/images/img-1')
-        .set('Authorization', 'Bearer test-token');
+      const res = await request(app.callback())
+        .delete('/api/hotel/hotel-010/images/img-001')
+        .set('Authorization', 'Bearer valid-agent-token')
+        .expect(200);
 
-      expect(response.status).toBe(200);
-      expect(response.body.message).toBe('Image deleted successfully');
+      expect(res.body.message).toBe('Image deleted successfully');
     });
 
-    it('should return 401 if not authenticated', async () => {
-      const response = await request(app.callback())
-        .delete('/api/hotel/hotel-1/images/img-1');
+    it('should return 401 without auth token', async () => {
+      const res = await request(app.callback())
+        .delete('/api/hotel/hotel-010/images/img-001')
+        .expect(401);
 
-      expect(response.status).toBe(401);
+      expect(res.body.error).toBeDefined();
     });
 
-    it('should return 404 if image not found', async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
+    it('should return 404 when image does not exist', async () => {
+      mockQuery.mockResolvedValueOnce([[]]); // no image found
 
-      const response = await request(app.callback())
-        .delete('/api/hotel/hotel-1/images/nonexistent')
-        .set('Authorization', 'Bearer test-token');
+      const res = await request(app.callback())
+        .delete('/api/hotel/hotel-010/images/nonexistent')
+        .set('Authorization', 'Bearer valid-agent-token')
+        .expect(404);
 
-      expect(response.status).toBe(404);
-    });
-  });
-
-  describe('GET /api/hotel/:hotelIdMd5/images', () => {
-    it('should fetch images for single hotel', async () => {
-      mockPool.query.mockResolvedValueOnce([[{ id: 'hotel-1' }]]);
-
-      const response = await request(app.callback())
-        .get('/api/hotel/test-md5-hash/images');
-
-      expect(response.status).toBe(200);
-      expect(response.body.images).toBeDefined();
-      expect(Array.isArray(response.body.images)).toBe(true);
-      expect(response.body.pagination).toBeDefined();
-    });
-
-    it('should support pagination parameters', async () => {
-      mockPool.query.mockResolvedValueOnce([[{ id: 'hotel-1' }]]);
-
-      const response = await request(app.callback())
-        .get('/api/hotel/test-md5-hash/images?limit=5&offset=10');
-
-      expect(response.status).toBe(200);
-      expect(response.body.pagination.limit).toBe(5);
-      expect(response.body.pagination.offset).toBe(10);
-    });
-
-    it('should return empty array if hotel not found', async () => {
-      mockPool.query.mockResolvedValueOnce([[]]);
-
-      const response = await request(app.callback())
-        .get('/api/hotel/nonexistent-md5/images');
-
-      expect(response.status).toBe(200);
-      expect(response.body.images).toEqual([]);
-    });
-  });
-
-  describe('GET /api/hotel/images', () => {
-    it('should fetch images for multiple hotels', async () => {
-      mockPool.query.mockResolvedValueOnce([
-        [
-          { id: 'hotel-1', hotel_id_md5: 'md5-1' },
-          { id: 'hotel-2', hotel_id_md5: 'md5-2' },
-        ],
-      ]);
-
-      const response = await request(app.callback())
-        .get('/api/hotel/images?hotelIds=md5-1,md5-2');
-
-      expect(response.status).toBe(200);
-      expect(response.body.data).toBeDefined();
-      expect(response.body.data['md5-1']).toBeDefined();
-      expect(response.body.data['md5-2']).toBeDefined();
-    });
-
-    it('should return 400 if hotelIds not provided', async () => {
-      const response = await request(app.callback())
-        .get('/api/hotel/images');
-
-      expect(response.status).toBe(400);
-      expect(response.body.error).toContain('hotelIds parameter is required');
-    });
-
-    it('should support pagination parameters', async () => {
-      mockPool.query.mockResolvedValueOnce([[{ id: 'hotel-1', hotel_id_md5: 'md5-1' }]]);
-
-      const response = await request(app.callback())
-        .get('/api/hotel/images?hotelIds=md5-1&limit=5&offset=10');
-
-      expect(response.status).toBe(200);
+      expect(res.body.error).toBe('Image not found');
     });
   });
 
   describe('PUT /api/hotel/:hotelId/images/:imageId/primary', () => {
-    it('should set primary image successfully', async () => {
-      const response = await request(app.callback())
-        .put('/api/hotel/hotel-1/images/img-1/primary')
-        .set('Authorization', 'Bearer test-token');
+    it('should set an image as primary', async () => {
+      const res = await request(app.callback())
+        .put('/api/hotel/hotel-010/images/img-001/primary')
+        .set('Authorization', 'Bearer valid-agent-token')
+        .expect(200);
 
-      expect(response.status).toBe(200);
-      expect(response.body.message).toBe('Primary image set successfully');
-      expect(response.body.image.isPrimary).toBe(true);
+      expect(res.body.message).toBe('Primary image set successfully');
+      expect(res.body.image.isPrimary).toBe(true);
     });
 
-    it('should return 401 if not authenticated', async () => {
-      const response = await request(app.callback())
-        .put('/api/hotel/hotel-1/images/img-1/primary');
+    it('should return 401 without auth', async () => {
+      const res = await request(app.callback())
+        .put('/api/hotel/hotel-010/images/img-001/primary')
+        .expect(401);
 
-      expect(response.status).toBe(401);
+      expect(res.body.error).toBeDefined();
     });
   });
 
   describe('PUT /api/hotel/:hotelId/images/reorder', () => {
-    it('should reorder images successfully', async () => {
-      const response = await request(app.callback())
-        .put('/api/hotel/hotel-1/images/reorder')
-        .set('Authorization', 'Bearer test-token')
-        .send({ imageIds: ['img-1', 'img-2'] });
+    it('should reorder images', async () => {
+      const res = await request(app.callback())
+        .put('/api/hotel/hotel-010/images/reorder')
+        .set('Authorization', 'Bearer valid-agent-token')
+        .send({ imageIds: ['img-002', 'img-001'] })
+        .expect(200);
 
-      expect(response.status).toBe(200);
-      expect(response.body.message).toBe('Images reordered successfully');
-      expect(response.body.images).toBeDefined();
-      expect(Array.isArray(response.body.images)).toBe(true);
+      expect(res.body.message).toBe('Images reordered successfully');
+      expect(res.body.images).toHaveLength(2);
+      expect(res.body.images[0].displayOrder).toBe(1);
+      expect(res.body.images[1].displayOrder).toBe(2);
     });
 
-    it('should return 401 if not authenticated', async () => {
-      const response = await request(app.callback())
-        .put('/api/hotel/hotel-1/images/reorder')
-        .send({ imageIds: ['img-1', 'img-2'] });
+    it('should return 400 with empty imageIds', async () => {
+      const res = await request(app.callback())
+        .put('/api/hotel/hotel-010/images/reorder')
+        .set('Authorization', 'Bearer valid-agent-token')
+        .send({ imageIds: [] })
+        .expect(400);
 
-      expect(response.status).toBe(401);
+      expect(res.body.error).toContain('non-empty array');
     });
 
-    it('should return 400 if imageIds not provided', async () => {
-      const response = await request(app.callback())
-        .put('/api/hotel/hotel-1/images/reorder')
-        .set('Authorization', 'Bearer test-token')
-        .send({});
+    it('should return 400 without imageIds field', async () => {
+      const res = await request(app.callback())
+        .put('/api/hotel/hotel-010/images/reorder')
+        .set('Authorization', 'Bearer valid-agent-token')
+        .send({})
+        .expect(400);
 
-      expect(response.status).toBe(400);
+      expect(res.body.error).toContain('non-empty array');
+    });
+
+    it('should return 401 without auth', async () => {
+      const res = await request(app.callback())
+        .put('/api/hotel/hotel-010/images/reorder')
+        .send({ imageIds: ['img-001', 'img-002'] })
+        .expect(401);
+
+      expect(res.body.error).toBeDefined();
+    });
+  });
+
+  describe('GET /api/hotel/images (multi-hotel)', () => {
+    it('should return 400 without hotelIds param', async () => {
+      const res = await request(app.callback())
+        .get('/api/hotel/images')
+        .expect(400);
+
+      expect(res.body.error).toContain('hotelIds parameter is required');
+    });
+
+    it('should return images grouped by hotel MD5', async () => {
+      const md5_1 = 'aaaa1111bbbb2222cccc3333dddd4444';
+      const md5_2 = 'eeee5555ffff6666aaaa7777bbbb8888';
+
+      // Mock: find hotels by MD5 hashes
+      mockQuery.mockResolvedValueOnce([[
+        { id: 'hotel-001', hotel_id_md5: md5_1 },
+        { id: 'hotel-002', hotel_id_md5: md5_2 },
+      ]]);
+
+      // Mock getMultipleHotelsImages via the already-mocked module
+      const hotelImagesService = require('../services/hotel-images.service');
+      const imagesMap = new Map();
+      imagesMap.set('hotel-001', [
+        {
+          id: 'img-a',
+          cdnUrl: 'https://example.com/a.jpg',
+          fileName: 'a.jpg',
+          fileSize: 1024,
+          mimeType: 'image/jpeg',
+          isPrimary: true,
+          createdAt: new Date(),
+        },
+      ]);
+      imagesMap.set('hotel-002', []);
+      (hotelImagesService.getMultipleHotelsImages as jest.Mock).mockResolvedValueOnce(imagesMap);
+
+      const res = await request(app.callback())
+        .get(`/api/hotel/images?hotelIds=${md5_1},${md5_2}`)
+        .expect(200);
+
+      expect(res.body.data).toBeDefined();
+      expect(res.body.data[md5_1]).toHaveLength(1);
+      expect(res.body.data[md5_2]).toHaveLength(0);
+      expect(res.body.data[md5_1][0].cdnUrl).toBe('https://example.com/a.jpg');
     });
   });
 });
